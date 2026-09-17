@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import {
   Bot,
   Copy,
@@ -6,44 +6,50 @@ import {
   Sparkles,
   Terminal,
   Send,
-  Layers,
   Code,
   Zap,
   RefreshCw,
   Cpu
 } from 'lucide-react';
 import { SpecKitProject } from '../../types/speckit';
+import { EditorHeader } from '../common/EditorHeader';
+import { useClipboard } from '../../hooks/useClipboard';
 
 interface PromptStudioProps {
   project: SpecKitProject;
   initialTaskId?: string;
 }
 
-export const PromptStudio: React.FC<PromptStudioProps> = ({
+const AGENT_FRAMEWORKS = [
+  { name: 'Claude 3.7 Sonnet / Cursor', desc: 'Optimized for Cursor & Anthropic Sonnet' },
+  { name: 'Gemini 3.1 Pro / Flash', desc: 'Optimized for Google AI Studio & Gemini CLI' },
+  { name: 'GitHub Copilot Workspace', desc: 'Optimized for Copilot spec task execution' },
+  { name: 'Windsurf Cascade', desc: 'Optimized for Codeium Windsurf flow' },
+  { name: 'Aider / Terminal CLI', desc: 'Optimized for git-integrated command line agents' },
+];
+
+export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   project,
   initialTaskId,
 }) => {
   const [selectedAgent, setSelectedAgent] = useState<string>('Claude 3.7 Sonnet / Cursor');
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || project.tasks.tasks[0]?.id || 'TASK-101');
-  const [isCopied, setIsCopied] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(
+    initialTaskId || project.tasks.tasks[0]?.id || 'TASK-101'
+  );
   const [customNotes, setCustomNotes] = useState('');
+  const { copied, copy } = useClipboard();
 
   // AI Simulation State
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiSimulationOutput, setAiSimulationOutput] = useState<string | null>(null);
 
-  const selectedTask = project.tasks.tasks.find((t) => t.id === selectedTaskId) || project.tasks.tasks[0];
-
-  const agentFrameworks = [
-    { name: 'Claude 3.7 Sonnet / Cursor', desc: 'Optimized for Cursor & Anthropic Sonnet' },
-    { name: 'Gemini 3.1 Pro / Flash', desc: 'Optimized for Google AI Studio & Gemini CLI' },
-    { name: 'GitHub Copilot Workspace', desc: 'Optimized for Copilot spec task execution' },
-    { name: 'Windsurf Cascade', desc: 'Optimized for Codeium Windsurf flow' },
-    { name: 'Aider / Terminal CLI', desc: 'Optimized for git-integrated command line agents' },
-  ];
+  const selectedTask = useMemo(() => {
+    return project.tasks.tasks.find((t) => t.id === selectedTaskId) || project.tasks.tasks[0];
+  }, [project.tasks.tasks, selectedTaskId]);
 
   // Generated Master Prompt String
-  const masterPrompt = `You are a Senior Principal AI Software Engineer assigned to implement task ${selectedTask?.id || 'TASK'} for project "${project.name}".
+  const masterPrompt = useMemo(() => {
+    return `You are a Senior Principal AI Software Engineer assigned to implement task ${selectedTask?.id || 'TASK'} for project "${project.name}".
 
 === 1. GOVERNING CONSTITUTION & RULES ===
 ${project.constitution.rules.map((r) => `- [${r.strictness}] ${r.title}: ${r.ruleStatement}`).join('\n')}
@@ -68,12 +74,7 @@ ${customNotes ? `\n=== ADDITIONAL INSTRUCTIONS ===\n${customNotes}\n` : ''}
 2. Adhere strictly to the project constitution rules.
 3. Ensure zero hallucinated APIs and complete error handling.
 4. Verify task completion against acceptance criteria before ending your session.`;
-
-  const handleCopyPrompt = () => {
-    navigator.clipboard.writeText(masterPrompt);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
+  }, [project, selectedTask, customNotes]);
 
   const handleRunAiSimulation = async () => {
     setIsGenerating(true);
@@ -100,7 +101,7 @@ ${customNotes ? `\n=== ADDITIONAL INSTRUCTIONS ===\n${customNotes}\n` : ''}
         setAiSimulationOutput('Error: ' + (data.error || 'Failed to simulate AI prompt.'));
       }
     } catch (err: any) {
-      setAiSimulationOutput('Error communicating with Gemini server proxy.');
+      setAiSimulationOutput('Failed to connect to AI server route: ' + err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -108,144 +109,156 @@ ${customNotes ? `\n=== ADDITIONAL INSTRUCTIONS ===\n${customNotes}\n` : ''}
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80">
-        <div>
-          <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-purple-400" />
-            <h2 className="text-lg font-bold text-zinc-100">AI Coding Agent Prompt Studio</h2>
-            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              Agent Workflows
-            </span>
-          </div>
-          <p className="text-xs text-zinc-400 mt-1">
-            Generate context-rich, hallucination-free master prompts for Claude, Gemini, Cursor, Copilot, or Windsurf.
-          </p>
-        </div>
+      {/* Unified Editor Header */}
+      <EditorHeader
+        icon={Bot}
+        iconColor="text-purple-400"
+        title="AI Agent Prompt Studio"
+        subtitle="Compile mathematically grounded, multi-file context prompts tailored to Claude, Gemini, Copilot, and Cursor."
+        badgeLabel="Context Grounding"
+        badgeColor="bg-purple-500/10 text-purple-400 border-purple-500/20"
+      />
 
-        <button
-          onClick={handleCopyPrompt}
-          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-purple-600/20 transition-all shrink-0"
-        >
-          {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-          <span>{isCopied ? 'Copied Master Prompt!' : 'Copy Master Prompt'}</span>
-        </button>
-      </div>
+      {/* Target Task and Agent Configuration Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        {/* Task Selection */}
+        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+          <label className="font-bold text-zinc-200 block">Select Target Task to Implement</label>
+          <select
+            value={selectedTaskId}
+            onChange={(e) => setSelectedTaskId(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-medium focus:outline-none focus:border-purple-500/50"
+          >
+            {project.tasks.tasks.map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.id} [{task.phase}]: {task.title}
+              </option>
+            ))}
+          </select>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (1/3): Agent & Task Selectors */}
-        <div className="space-y-6">
-          {/* Target Agent Selector */}
-          <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3 text-xs">
-            <h3 className="font-bold text-zinc-100 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-purple-400" />
-              <span>Select AI Coding Agent</span>
-            </h3>
-
-            <div className="space-y-2">
-              {agentFrameworks.map((agent) => (
-                <button
-                  key={agent.name}
-                  onClick={() => setSelectedAgent(agent.name)}
-                  className={`w-full p-3 rounded-xl border text-left transition-all ${
-                    selectedAgent === agent.name
-                      ? 'bg-purple-500/10 border-purple-500/40 text-purple-200 font-semibold shadow-xs'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <div className="text-xs">{agent.name}</div>
-                  <div className="text-[10px] opacity-75 font-normal">{agent.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Target Task Selector */}
-          <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3 text-xs">
-            <h3 className="font-bold text-zinc-100 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span>Target Task to Prompt</span>
-            </h3>
-
-            <select
-              value={selectedTaskId}
-              onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none"
-            >
-              {project.tasks.tasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.id}: {task.title} ({task.phase})
-                </option>
-              ))}
-            </select>
-
-            {selectedTask && (
-              <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1 text-xs">
-                <div className="font-semibold text-zinc-200">{selectedTask.title}</div>
-                <p className="text-[11px] text-zinc-400">{selectedTask.description}</p>
-                {selectedTask.mappedRequirementId && (
-                  <div className="text-[10px] text-indigo-400 font-mono pt-1">
-                    Mapped Req: {selectedTask.mappedRequirementId}
-                  </div>
-                )}
+          {selectedTask && (
+            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5 text-[11px]">
+              <div className="text-zinc-400">
+                Phase: <strong className="text-zinc-200">{selectedTask.phase}</strong>
               </div>
-            )}
-
-            <div>
-              <label className="block text-zinc-400 font-medium mb-1">Additional Prompt Focus (Optional)</label>
-              <textarea
-                rows={3}
-                placeholder="e.g. Focus on offline IndexedDB sync boundary conditions..."
-                value={customNotes}
-                onChange={(e) => setCustomNotes(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column (2/3): Formatted Prompt Output & Gemini Simulator */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Formatted Prompt Terminal */}
-          <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-5 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-mono text-purple-400 font-semibold flex items-center gap-2">
-                <Terminal className="w-4 h-4" />
-                <span>Master Prompt Output ({selectedAgent})</span>
-              </span>
-
-              <button
-                onClick={handleRunAiSimulation}
-                disabled={isGenerating}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-              >
-                {isGenerating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                <span>{isGenerating ? 'Simulating AI Response...' : 'Simulate Gemini Response'}</span>
-              </button>
-            </div>
-
-            <textarea
-              rows={18}
-              readOnly
-              value={masterPrompt}
-              className="w-full p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 text-purple-300 font-mono text-xs focus:outline-none leading-relaxed"
-            />
-          </div>
-
-          {/* AI Simulation Output Window */}
-          {aiSimulationOutput && (
-            <div className="p-5 rounded-2xl bg-zinc-900/80 border border-purple-500/30 space-y-3 text-xs">
-              <div className="flex items-center gap-2 font-bold text-purple-300">
-                <Zap className="w-4 h-4 text-purple-400" />
-                <span>Gemini 3.8 Flash AI Simulation Execution Output</span>
+              <div className="text-zinc-400">
+                Mapped Requirement:{' '}
+                <strong className="text-cyan-400 font-mono">
+                  {selectedTask.mappedRequirementId || 'None'}
+                </strong>
               </div>
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 font-mono whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
-                {aiSimulationOutput}
-              </div>
+              <p className="text-zinc-300 leading-snug">{selectedTask.description}</p>
             </div>
           )}
         </div>
+
+        {/* Agent Profile Selector */}
+        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+          <label className="font-bold text-zinc-200 block">Target Agent Architecture</label>
+          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+            {AGENT_FRAMEWORKS.map((agent) => (
+              <div
+                key={agent.name}
+                onClick={() => setSelectedAgent(agent.name)}
+                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                  selectedAgent === agent.name
+                    ? 'bg-purple-500/10 border-purple-500/40 text-purple-300'
+                    : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <div>
+                  <div className="font-semibold text-zinc-200">{agent.name}</div>
+                  <div className="text-[10px] text-zinc-500">{agent.desc}</div>
+                </div>
+                {selectedAgent === agent.name && (
+                  <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Additional Instructions */}
+      <div className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2 text-xs">
+        <label className="font-bold text-zinc-300 block">
+          Custom Directives & Extra Task Instructions (Optional)
+        </label>
+        <input
+          type="text"
+          placeholder="e.g. Ensure strict type narrowing and provide Jest unit tests."
+          value={customNotes}
+          onChange={(e) => setCustomNotes(e.target.value)}
+          className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-purple-500/50"
+        />
+      </div>
+
+      {/* Compiled Master Prompt Output */}
+      <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-5 space-y-3">
+        <div className="flex items-center justify-between text-xs text-zinc-400 font-mono pb-2 border-b border-zinc-900">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-purple-400" />
+            <span className="font-semibold text-zinc-200">
+              Compiled Task Prompt ({selectedAgent})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => copy(masterPrompt)}
+              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 flex items-center gap-1.5 text-xs font-medium transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied to Clipboard' : 'Copy Full Prompt'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRunAiSimulation}
+              disabled={isGenerating}
+              className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
+            >
+              {isGenerating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>{isGenerating ? 'Simulating...' : 'Simulate with Gemini'}</span>
+            </button>
+          </div>
+        </div>
+
+        <textarea
+          rows={14}
+          readOnly
+          value={masterPrompt}
+          className="w-full p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 text-cyan-300 font-mono text-xs focus:outline-none leading-relaxed resize-y cursor-text"
+          spellCheck={false}
+        />
+      </div>
+
+      {/* Simulated AI Output Panel */}
+      {aiSimulationOutput && (
+        <div className="p-5 rounded-2xl bg-zinc-900/90 border border-purple-500/40 space-y-3 text-xs">
+          <div className="flex items-center justify-between font-bold text-purple-300">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Simulated AI Response Output (Server-side Gemini Pro)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => copy(aiSimulationOutput)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 flex items-center gap-1 text-[11px] font-medium"
+            >
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              <span>Copy Response</span>
+            </button>
+          </div>
+
+          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+            {aiSimulationOutput}
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+});
+
+PromptStudio.displayName = 'PromptStudio';

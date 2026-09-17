@@ -190,6 +190,16 @@ Includes an automated spec health auditor that scores specifications across 5 cr
 * **Architecture Drift Protection**: Identifies conflicts between chosen packages and architecture plans.
 * **Governance Checklist**: Ensures non-negotiable security invariants in `rules.md` are enforced.
 
+### 9. Modular Plug-and-Play Component Architecture
+The frontend is architected as an ultra-modular, decoupled component library engineered for high-performance enterprise applications:
+* **Reusable Primitives (`src/components/common/`)**: Shared, zero-dependency components including `EditorHeader`, `ViewToggle`, `TanStackTable`, `Badge`, `StatCard`, `EmptyState`, and `MarkdownSourceView`.
+* **Decoupled Domain Orchestrators**: Every major editor (`SpecEditor`, `PlanEditor`, `TaskBoard`, `ConstitutionEditor`, `OverviewDashboard`) is composed of lightweight, single-responsibility sub-components (e.g., `TaskCard`, `UserStoryCard`, `RequirementCard`, `TechStackSection`, `ApiContractsSection`, `TraceabilityMatrix`, `RuleCard`).
+* **Performance Tuning & Render Budget**:
+  - Extensive memoization via `React.memo` across all leaf items and cards.
+  - Stable callback references via `useCallback` to prevent cascading render trees.
+  - Computed matrix filters and grouping memoized with `useMemo`.
+  - Custom composable hooks (`useClipboard`, `useKeyboardShortcut`) for frictionless plug-and-play reuse.
+
 ---
 
 ## ⚡ Tech Stack Independence & Capability Matrix

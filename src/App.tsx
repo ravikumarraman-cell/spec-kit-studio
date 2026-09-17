@@ -25,6 +25,7 @@ function AppContent() {
   const [projects, setProjects] = useState<SpecKitProject[]>([]);
   const [activeProject, setActiveProject] = useState<SpecKitProject | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
   // Modals State
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState<boolean>(false);
@@ -204,31 +205,37 @@ function AppContent() {
   const unmappedTasks = activeProject.tasks.tasks.filter((t) => !t.mappedRequirementId).length;
 
   return (
-    <div className="min-h-screen theme-canvas font-sans antialiased flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Top Navigation */}
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden theme-canvas font-sans antialiased flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
+      {/* Clean Single-Row Top Navigation Bar */}
       <Navbar
         projects={projects}
         activeProject={activeProject}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         onSelectProject={handleSelectProject}
         onCreateProject={() => setIsNewProjectModalOpen(true)}
         onOpenImportStudio={() => setActiveTab('import')}
         onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
         onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
         onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
+        onOpenAiSpecModal={() => setIsAiSpecModalOpen(true)}
         isDarkMode={isDark}
         onToggleTheme={() => {}}
         onResetSampleData={handleResetSampleData}
         onSelectVersion={handleSelectVersion}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
       {/* Studio Workspace Layout */}
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
-        {/* Sidebar Drawer Navigation */}
+        {/* Left Workflow Menu Navigation */}
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
           auditScore={activeProject.audit?.overallScore || 94}
           unmappedTaskCount={unmappedTasks}
+          isCollapsed={!isSidebarOpen}
         />
 
         {/* Main Content Viewport */}

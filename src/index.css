@@ -1,85 +1,62 @@
 @import "tailwindcss";
 
 @layer base {
-  :root[data-theme="obsidian"], :root:not([data-theme]) {
-    --bg-canvas: #09090b;
-    --bg-surface: #18181b;
-    --bg-surface-hover: #27272a;
-    --bg-card: #18181b;
-    --bg-input: #09090b;
-    --border-subtle: #27272a;
-    --border-strong: #3f3f46;
-    --text-main: #f4f4f5;
-    --text-muted: #a1a1aa;
-    --text-faint: #71717a;
-    --accent-primary: #22d3ee;
-    --accent-indigo: #818cf8;
-    --accent-purple: #c084fc;
-    --accent-emerald: #34d399;
+  /* Default / Obsidian Dark (GitHub / Linear dark standard) */
+  :root[data-theme="obsidian"], :root.dark {
+    --bg-canvas: #090d16;
+    --bg-surface: #0f172a;
+    --bg-surface-hover: #1e293b;
+    --bg-card: #0f172a;
+    --bg-input: #0b0f19;
+    --border-subtle: #1e293b;
+    --border-strong: #334155;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --accent-primary: #06b6d4;
+    --accent-indigo: #6366f1;
+    --accent-purple: #a855f7;
+    --accent-emerald: #10b981;
 
     color-scheme: dark;
   }
 
-  :root[data-theme="nordic-light"] {
-    /* Cool Porcelain / Sky Blue Studio */
-    --bg-canvas: #f1f5f9;
+  /* Nordic Light (GitHub / Stripe clean light standard) */
+  :root[data-theme="nordic-light"], :root:not(.dark):not([data-theme="warm-paper"]) {
+    --bg-canvas: #f8fafc;
     --bg-surface: #ffffff;
-    --bg-surface-hover: #f8fafc;
+    --bg-surface-hover: #f1f5f9;
     --bg-card: #ffffff;
-    --bg-input: #f1f5f9;
-    --border-subtle: #cbd5e1;
-    --border-strong: #94a3b8;
+    --bg-input: #f8fafc;
+    --border-subtle: #e2e8f0;
+    --border-strong: #cbd5e1;
     --text-main: #0f172a;
-    --text-muted: #334155;
+    --text-muted: #475569;
     --text-faint: #64748b;
     --accent-primary: #0284c7;
     --accent-indigo: #4338ca;
     --accent-purple: #6d28d9;
     --accent-emerald: #059669;
 
-    /* Override Tailwind Zinc Palette for Nordic Light */
-    --color-zinc-950: #f1f5f9;
-    --color-zinc-900: #ffffff;
-    --color-zinc-800: #e2e8f0;
-    --color-zinc-700: #cbd5e1;
-    --color-zinc-600: #94a3b8;
-    --color-zinc-500: #64748b;
-    --color-zinc-400: #334155;
-    --color-zinc-300: #1e293b;
-    --color-zinc-200: #0f172a;
-    --color-zinc-100: #020617;
-
     color-scheme: light;
   }
 
+  /* Warm Paper (Substack / Notion Editorial warm paper standard) */
   :root[data-theme="warm-paper"] {
-    /* Warm Editorial Cream & Amber Stone Studio */
-    --bg-canvas: #f4efe6;
-    --bg-surface: #fffdfa;
-    --bg-surface-hover: #f0e9dd;
-    --bg-card: #fffdfa;
-    --bg-input: #eee7d9;
-    --border-subtle: #d6cebe;
-    --border-strong: #b8ac96;
+    --bg-canvas: #faf8f5;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #f5f0e8;
+    --bg-card: #ffffff;
+    --bg-input: #f5f0e8;
+    --border-subtle: #e7decb;
+    --border-strong: #d5c8b2;
     --text-main: #1c1917;
-    --text-muted: #44403c;
+    --text-muted: #57534e;
     --text-faint: #78716c;
     --accent-primary: #c2410c;
     --accent-indigo: #3730a3;
     --accent-purple: #7e22ce;
     --accent-emerald: #047857;
-
-    /* Override Tailwind Zinc Palette for Warm Paper */
-    --color-zinc-950: #eee7d9;
-    --color-zinc-900: #fffdfa;
-    --color-zinc-800: #d6cebe;
-    --color-zinc-700: #c2b6a2;
-    --color-zinc-600: #948670;
-    --color-zinc-500: #78716c;
-    --color-zinc-400: #44403c;
-    --color-zinc-300: #292524;
-    --color-zinc-200: #1c1917;
-    --color-zinc-100: #0c0a09;
 
     color-scheme: light;
   }
@@ -87,93 +64,127 @@
   html, body {
     background-color: var(--bg-canvas);
     color: var(--text-main);
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
 }
 
-/* Base Theme Overrides */
-[data-theme="nordic-light"] {
-  background-color: #f1f5f9 !important;
+/* Light Mode Overrides */
+:root:not(.dark) {
+  background-color: #f8fafc !important;
   color: #0f172a !important;
 }
 
-[data-theme="warm-paper"] {
-  background-color: #f4efe6 !important;
+:root[data-theme="warm-paper"]:not(.dark) {
+  background-color: #faf8f5 !important;
   color: #1c1917 !important;
 }
 
 /* Universal High Contrast Card, Border & Background Rules for Light Mode */
-:root[data-theme="nordic-light"] .border-zinc-800,
-:root[data-theme="nordic-light"] .border-zinc-800\/80,
-:root[data-theme="nordic-light"] .border-zinc-800\/60,
-:root[data-theme="nordic-light"] .border-zinc-700 {
+:root:not(.dark) .border-zinc-800,
+:root:not(.dark) .border-zinc-800\/80,
+:root:not(.dark) .border-zinc-800\/60,
+:root:not(.dark) .border-zinc-700,
+:root:not(.dark) .border-zinc-700\/60,
+:root:not(.dark) .border-zinc-700\/80,
+:root:not(.dark) .border-slate-800 {
   border-color: #cbd5e1 !important;
 }
 
-:root[data-theme="warm-paper"] .border-zinc-800,
-:root[data-theme="warm-paper"] .border-zinc-800\/80,
-:root[data-theme="warm-paper"] .border-zinc-800\/60,
-:root[data-theme="warm-paper"] .border-zinc-700 {
-  border-color: #d6cebe !important;
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800\/80,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800\/60,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700\/60,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700\/80 {
+  border-color: #e5dec9 !important;
 }
 
-:root[data-theme="nordic-light"] .bg-zinc-900,
-:root[data-theme="nordic-light"] .bg-zinc-900\/60,
-:root[data-theme="nordic-light"] .bg-zinc-900\/80 {
+/* Cards & Surfaces in Light Mode (Crisp white with sharp contrast against background) */
+:root:not(.dark) .bg-zinc-900,
+:root:not(.dark) .bg-zinc-900\/60,
+:root:not(.dark) .bg-zinc-900\/80,
+:root:not(.dark) .bg-zinc-900\/90 {
   background-color: #ffffff !important;
   color: #0f172a !important;
 }
 
-:root[data-theme="warm-paper"] .bg-zinc-900,
-:root[data-theme="warm-paper"] .bg-zinc-900\/60,
-:root[data-theme="warm-paper"] .bg-zinc-900\/80 {
-  background-color: #fffdfa !important;
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/90 {
+  background-color: #ffffff !important;
   color: #1c1917 !important;
 }
 
-:root[data-theme="nordic-light"] .bg-zinc-950,
-:root[data-theme="nordic-light"] .bg-zinc-950\/80,
-:root[data-theme="nordic-light"] .bg-zinc-950\/60 {
+/* Secondary Inset Surface / Badges / Input fields in Light Mode */
+:root:not(.dark) .bg-zinc-950,
+:root:not(.dark) .bg-zinc-950\/60,
+:root:not(.dark) .bg-zinc-950\/80,
+:root:not(.dark) .bg-zinc-950\/90 {
   background-color: #f1f5f9 !important;
-}
-
-:root[data-theme="warm-paper"] .bg-zinc-950,
-:root[data-theme="warm-paper"] .bg-zinc-950\/80,
-:root[data-theme="warm-paper"] .bg-zinc-950\/60 {
-  background-color: #eee7d9 !important;
-}
-
-:root[data-theme="nordic-light"] .text-zinc-100,
-:root[data-theme="nordic-light"] .text-zinc-200 {
   color: #0f172a !important;
 }
 
-:root[data-theme="warm-paper"] .text-zinc-100,
-:root[data-theme="warm-paper"] .text-zinc-200 {
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/90 {
+  background-color: #f5f0e8 !important;
   color: #1c1917 !important;
 }
 
-:root[data-theme="nordic-light"] .text-zinc-300 {
+/* Interactive Hover States in Light Mode */
+:root:not(.dark) .hover\:bg-zinc-800:hover,
+:root:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root:not(.dark) .hover\:bg-zinc-800\/90:hover,
+:root:not(.dark) .hover\:bg-zinc-900:hover,
+:root:not(.dark) .hover\:bg-zinc-900\/80:hover {
+  background-color: #e2e8f0 !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800\/90:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-900\/80:hover {
+  background-color: #ece4d5 !important;
+}
+
+/* Text Contrast Corrections in Light Mode (Deep high contrast charcoal/navy) */
+:root:not(.dark) .text-zinc-100,
+:root:not(.dark) .text-zinc-200 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-100,
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-200 {
+  color: #1c1917 !important;
+}
+
+:root:not(.dark) .text-zinc-300 {
   color: #1e293b !important;
 }
 
-:root[data-theme="warm-paper"] .text-zinc-300 {
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-300 {
   color: #292524 !important;
 }
 
-:root[data-theme="nordic-light"] .text-zinc-400 {
-  color: #334155 !important;
+:root:not(.dark) .text-zinc-400 {
+  color: #475569 !important;
 }
 
-:root[data-theme="warm-paper"] .text-zinc-400 {
-  color: #44403c !important;
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-400 {
+  color: #57534e !important;
 }
 
-:root[data-theme="nordic-light"] .text-zinc-500 {
+:root:not(.dark) .text-zinc-500 {
   color: #64748b !important;
 }
 
-:root[data-theme="warm-paper"] .text-zinc-500 {
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-500 {
   color: #78716c !important;
 }
 
@@ -264,12 +275,12 @@
   border-color: #cbd5e1 !important;
 }
 
-:root[data-theme="warm-paper"] input,
-:root[data-theme="warm-paper"] textarea,
-:root[data-theme="warm-paper"] select {
-  background-color: #fffdfa !important;
+:root[data-theme="warm-paper"]:not(.dark) input,
+:root[data-theme="warm-paper"]:not(.dark) textarea,
+:root[data-theme="warm-paper"]:not(.dark) select {
+  background-color: #ffffff !important;
   color: #1c1917 !important;
-  border-color: #d6cebe !important;
+  border-color: #e5dec9 !important;
 }
 
 /* Utility Classes */

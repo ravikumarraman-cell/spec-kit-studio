@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type ThemeId = 'obsidian' | 'nordic-light' | 'warm-paper';
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeId = 'system' | 'github-dark' | 'github-light' | 'warm-paper';
 
 export interface ThemeMeta {
   id: ThemeId;
   name: string;
-  mode: 'dark' | 'light';
+  mode: 'system' | 'dark' | 'light';
   description: string;
   bgHex: string;
   cardHex: string;
@@ -15,21 +16,31 @@ export interface ThemeMeta {
 
 export const THEME_PRESETS: ThemeMeta[] = [
   {
-    id: 'obsidian',
-    name: 'Obsidian Studio',
-    mode: 'dark',
-    description: 'Deep onyx dark canvas with crisp high-contrast neon accents.',
-    bgHex: '#09090b',
-    cardHex: '#18181b',
-    textHex: '#f4f4f5',
-    accentHex: '#22d3ee',
+    id: 'system',
+    name: 'System Default',
+    mode: 'system',
+    description: 'Automatically match your operating system appearance (macOS / Windows / Linux).',
+    bgHex: '#0d1117',
+    cardHex: '#161b22',
+    textHex: '#f0f6fc',
+    accentHex: '#38bdf8',
   },
   {
-    id: 'nordic-light',
+    id: 'github-dark',
+    name: 'Obsidian Dark',
+    mode: 'dark',
+    description: 'GitHub & Linear inspired dark canvas (#090d16) with high contrast text and cyan accents.',
+    bgHex: '#090d16',
+    cardHex: '#0f172a',
+    textHex: '#f8fafc',
+    accentHex: '#06b6d4',
+  },
+  {
+    id: 'github-light',
     name: 'Nordic Light',
     mode: 'light',
-    description: 'Cool porcelain slate canvas with crisp sky blue & midnight navy typography.',
-    bgHex: '#f1f5f9',
+    description: 'Crisp GitHub/Stripe clean light theme (#f8fafc) with pure white cards and midnight slate text.',
+    bgHex: '#f8fafc',
     cardHex: '#ffffff',
     textHex: '#0f172a',
     accentHex: '#0284c7',
@@ -38,9 +49,9 @@ export const THEME_PRESETS: ThemeMeta[] = [
     id: 'warm-paper',
     name: 'Warm Paper',
     mode: 'light',
-    description: 'Warm editorial cream canvas with terracotta accents & warm charcoal typography.',
-    bgHex: '#f4efe6',
-    cardHex: '#fffdfa',
+    description: 'Warm editorial cream canvas (#faf8f5) with terracotta accents and rich charcoal text.',
+    bgHex: '#faf8f5',
+    cardHex: '#ffffff',
     textHex: '#1c1917',
     accentHex: '#c2410c',
   },
@@ -49,8 +60,10 @@ export const THEME_PRESETS: ThemeMeta[] = [
 interface ThemeContextType {
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
+  resolvedMode: 'light' | 'dark';
   currentThemeMeta: ThemeMeta;
   isDark: boolean;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -58,30 +71,101 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeId>(() => {
     const saved = localStorage.getItem('speckit_theme_id') as ThemeId;
-    return saved && THEME_PRESETS.some((t) => t.id === saved) ? saved : 'obsidian';
+    if (saved && (saved === 'system' || saved === 'github-dark' || saved === 'github-light' || saved === 'warm-paper')) {
+      return saved;
+    }
+    // Backward compatibility for previously saved names
+    if (saved === ('obsidian' as any)) return 'github-dark';
+    if (saved === ('nordic-light' as any)) return 'github-light';
+    return 'system';
   });
+
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  // Listen to OS theme changes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemIsDark(e.matches);
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   const setTheme = (newTheme: ThemeId) => {
     setThemeState(newTheme);
     localStorage.setItem('speckit_theme_id', newTheme);
   };
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    if (theme === 'obsidian') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
+  // Determine effective mode
+  const resolvedMode: 'light' | 'dark' =
+    theme === 'system'
+      ? systemIsDark
+        ? 'dark'
+        : 'light'
+      : theme === 'github-dark'
+      ? 'dark'
+      : 'light';
+
+  const isDark = resolvedMode === 'dark';
+
+  const toggleTheme = () => {
+    if (theme === 'system') {
+      setTheme(resolvedMode === 'dark' ? 'github-light' : 'github-dark');
+    } else if (theme === 'github-dark') {
+      setTheme('github-light');
+    } else if (theme === 'github-light') {
+      setTheme('warm-paper');
     } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
+      setTheme('system');
     }
-  }, [theme]);
+  };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    // Map theme to data-theme attribute
+    const dataTheme =
+      theme === 'system'
+        ? systemIsDark
+          ? 'obsidian'
+          : 'nordic-light'
+        : theme === 'github-dark'
+        ? 'obsidian'
+        : theme === 'warm-paper'
+        ? 'warm-paper'
+        : 'nordic-light';
+
+    root.setAttribute('data-theme', dataTheme);
+    root.setAttribute('data-mode', resolvedMode);
+
+    if (resolvedMode === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+  }, [theme, resolvedMode, systemIsDark]);
 
   const currentThemeMeta = THEME_PRESETS.find((t) => t.id === theme) || THEME_PRESETS[0];
-  const isDark = currentThemeMeta.mode === 'dark';
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, currentThemeMeta, isDark }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        setTheme,
+        resolvedMode,
+        currentThemeMeta,
+        isDark,
+        toggleTheme,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

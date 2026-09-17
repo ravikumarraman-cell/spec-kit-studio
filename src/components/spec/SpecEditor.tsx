@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
 import {
   FileText,
   Plus,
@@ -11,9 +12,11 @@ import {
   Zap,
   Save,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  Table as TableIcon
 } from 'lucide-react';
 import { FeatureSpec, Priority, RequirementCategory, UserStory, FunctionalRequirement } from '../../types/speckit';
+import { TanStackTable } from '../common/TanStackTable';
 
 interface SpecEditorProps {
   spec: FeatureSpec;
@@ -28,7 +31,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   onTriggerAiGenerate,
   onOpenFeatureImport,
 }) => {
-  const [activeView, setActiveView] = useState<'visual' | 'markdown'>('visual');
+  const [activeView, setActiveView] = useState<'visual' | 'tanstack' | 'markdown'>('visual');
   const [currentSpec, setCurrentSpec] = useState<FeatureSpec>(spec);
   const [hasUnsaved, setHasUnsaved] = useState(false);
 
@@ -142,6 +145,15 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
             >
               <Eye className="w-3.5 h-3.5" />
               <span>Visual Editor</span>
+            </button>
+            <button
+              onClick={() => setActiveView('tanstack')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                activeView === 'tanstack' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5 text-purple-400" />
+              <span>TanStack Matrix</span>
             </button>
             <button
               onClick={() => setActiveView('markdown')}
@@ -466,6 +478,134 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      ) : activeView === 'tanstack' ? (
+        /* TanStack Table Matrix View */
+        <div className="space-y-6">
+          {/* User Stories TanStack Table */}
+          <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <TableIcon className="w-4 h-4 text-purple-400" />
+                <span>User Stories Matrix (@tanstack/react-table)</span>
+              </h3>
+            </div>
+
+            <TanStackTable
+              data={currentSpec.userStories}
+              placeholderText="Filter user stories by ID, role, or title..."
+              columns={[
+                {
+                  accessorKey: 'id',
+                  header: 'ID',
+                  cell: (info) => <span className="font-mono font-bold text-indigo-400">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'priority',
+                  header: 'Priority',
+                  cell: (info) => {
+                    const val = info.getValue();
+                    return (
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                          val === 'High'
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}
+                      >
+                        {val}
+                      </span>
+                    );
+                  },
+                },
+                {
+                  accessorKey: 'title',
+                  header: 'Story Title',
+                  cell: (info) => <span className="font-semibold text-zinc-100">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'asA',
+                  header: 'User Role',
+                  cell: (info) => <span className="text-zinc-300 font-mono text-[11px]">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'iWantTo',
+                  header: 'Goal / Capability',
+                  cell: (info) => <span className="text-zinc-300">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'soThat',
+                  header: 'Business Benefit',
+                  cell: (info) => <span className="text-zinc-400">{info.getValue() || '-'}</span>,
+                },
+                {
+                  id: 'actions',
+                  header: 'Actions',
+                  cell: (info) => (
+                    <button
+                      onClick={() => handleRemoveUserStory(info.row.original.id)}
+                      className="p-1 rounded text-zinc-500 hover:text-red-400 transition-colors"
+                      title="Remove Story"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          </div>
+
+          {/* Functional Requirements TanStack Table */}
+          <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+            <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+              <TableIcon className="w-4 h-4 text-cyan-400" />
+              <span>Functional Requirements Matrix (@tanstack/react-table)</span>
+            </h3>
+
+            <TanStackTable
+              data={currentSpec.functionalRequirements}
+              placeholderText="Filter requirements by title, category, or ID..."
+              columns={[
+                {
+                  accessorKey: 'id',
+                  header: 'ID',
+                  cell: (info) => <span className="font-mono font-bold text-cyan-400">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'category',
+                  header: 'Category',
+                  cell: (info) => (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700">
+                      {info.getValue()}
+                    </span>
+                  ),
+                },
+                {
+                  accessorKey: 'title',
+                  header: 'Requirement Title',
+                  cell: (info) => <span className="font-semibold text-zinc-100">{info.getValue()}</span>,
+                },
+                {
+                  accessorKey: 'description',
+                  header: 'Detailed Specification',
+                  cell: (info) => <span className="text-zinc-400">{info.getValue()}</span>,
+                },
+                {
+                  id: 'actions',
+                  header: 'Actions',
+                  cell: (info) => (
+                    <button
+                      onClick={() => handleRemoveFR(info.row.original.id)}
+                      className="p-1 rounded text-zinc-500 hover:text-red-400 transition-colors"
+                      title="Remove Requirement"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  ),
+                },
+              ]}
+            />
           </div>
         </div>
       ) : (

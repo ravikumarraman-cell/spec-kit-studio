@@ -806,6 +806,316 @@ Analyze this feature input thoroughly. Extract and auto-generate a comprehensive
   }
 });
 
+// ==========================================
+// GitHub & Jira Integration API Endpoints
+// ==========================================
+
+// GitHub: Fetch User Repositories or Repo Details
+app.post("/api/github/repos", async (req, res) => {
+  try {
+    const token = req.body.token || process.env.GITHUB_TOKEN;
+    if (!token) {
+      return res.status(400).json({ success: false, error: "GitHub Personal Access Token is required." });
+    }
+
+    const response = await fetch("https://api.github.com/user/repos?sort=updated&per_page=30", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "spec-kit-studio",
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`GitHub API error (${response.status}): ${errText}`);
+    }
+
+    const repos = await response.json();
+    const formatted = repos.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      fullName: r.full_name,
+      private: r.private,
+      description: r.description,
+      htmlUrl: r.html_url,
+      defaultBranch: r.default_branch,
+      language: r.language,
+      updatedAt: r.updated_at,
+    }));
+
+    res.json({ success: true, repos: formatted });
+  } catch (err: any) {
+    console.error("GitHub repos error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GitHub: Fetch Repo Issues
+app.post("/api/github/issues", async (req, res) => {
+  try {
+    const { token: reqToken, owner, repo } = req.body;
+    const token = reqToken || process.env.GITHUB_TOKEN;
+    if (!owner || !repo) {
+      return res.status(400).json({ success: false, error: "Owner and Repo name are required." });
+    }
+
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "spec-kit-studio",
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=30`, { headers });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`GitHub API error (${response.status}): ${errText}`);
+    }
+
+    const issues = await response.json();
+    const formatted = issues.map((i: any) => ({
+      id: i.id,
+      number: i.number,
+      title: i.title,
+      body: i.body,
+      state: i.state,
+      htmlUrl: i.html_url,
+      labels: i.labels.map((l: any) => l.name),
+      user: i.user?.login,
+      createdAt: i.created_at,
+    }));
+
+    res.json({ success: true, issues: formatted });
+  } catch (err: any) {
+    console.error("GitHub issues error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GitHub: Commit .spec-kit files directly to a repository branch
+app.post("/api/github/commit-spec", async (req, res) => {
+  try {
+    const { token: reqToken, owner, repo, branch, files, commitMessage } = req.body;
+    const token = reqToken || process.env.GITHUB_TOKEN;
+    if (!token) {
+      return res.status(400).json({ success: false, error: "GitHub PAT Token is required to commit files." });
+    }
+    if (!owner || !repo || !files || typeof files !== "object") {
+      return res.status(400).json({ success: false, error: "Owner, Repo, and files object are required." });
+    }
+
+    const targetBranch = branch || "main";
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "spec-kit-studio",
+    };
+
+    const commitedResults: any[] = [];
+
+    // For each file in the .spec-kit directory, check if it exists (to get sha) and commit it
+    for (const [filePath, content] of Object.entries(files)) {
+      const pathInRepo = filePath.startsWith(".spec-kit/") ? filePath : `.spec-kit/${filePath}`;
+      let existingSha: string | undefined = undefined;
+
+      // Check existing file
+      const getFileRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${pathInRepo}?ref=${targetBranch}`, { headers });
+      if (getFileRes.ok) {
+        const fileData = await getFileRes.json();
+        existingSha = fileData.sha;
+      }
+
+      // Create or update file
+      const bodyPayload: any = {
+        message: commitMessage || `docs(spec-kit): update ${pathInRepo} via Spec-Kit Studio`,
+        content: Buffer.from(content as string).toString("base64"),
+        branch: targetBranch,
+      };
+      if (existingSha) {
+        bodyPayload.sha = existingSha;
+      }
+
+      const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${pathInRepo}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(bodyPayload),
+      });
+
+      if (!putRes.ok) {
+        const errText = await putRes.text();
+        throw new Error(`Failed to commit ${pathInRepo}: ${errText}`);
+      }
+
+      const putData = await putRes.json();
+      commitedResults.push({ path: pathInRepo, sha: putData.content?.sha, htmlUrl: putData.content?.html_url });
+    }
+
+    res.json({ success: true, message: `Successfully committed ${commitedResults.length} files to ${owner}/${repo} (${targetBranch}).`, results: commitedResults });
+  } catch (err: any) {
+    console.error("GitHub commit error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Jira: Verify & Fetch Projects
+app.post("/api/jira/projects", async (req, res) => {
+  try {
+    const domain = req.body.domain || process.env.JIRA_DOMAIN;
+    const email = req.body.email || process.env.JIRA_EMAIL;
+    const apiToken = req.body.apiToken || process.env.JIRA_API_TOKEN;
+
+    if (!domain || !email || !apiToken) {
+      return res.status(400).json({ success: false, error: "Jira Domain, Email, and API Token are required." });
+    }
+
+    const normalizedDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`;
+
+    const response = await fetch(`https://${normalizedDomain}/rest/api/3/project`, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Jira API error (${response.status}): ${errText}`);
+    }
+
+    const projects = await response.json();
+    const formatted = projects.map((p: any) => ({
+      id: p.id,
+      key: p.key,
+      name: p.name,
+      projectTypeKey: p.projectTypeKey,
+      avatarUrl: p.avatarUrls?.["48x48"],
+    }));
+
+    res.json({ success: true, projects: formatted });
+  } catch (err: any) {
+    console.error("Jira projects error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Jira: Fetch Issues for a Project
+app.post("/api/jira/issues", async (req, res) => {
+  try {
+    const { domain: reqDomain, email: reqEmail, apiToken: reqToken, projectKey } = req.body;
+    const domain = reqDomain || process.env.JIRA_DOMAIN;
+    const email = reqEmail || process.env.JIRA_EMAIL;
+    const apiToken = reqToken || process.env.JIRA_API_TOKEN;
+
+    if (!domain || !email || !apiToken || !projectKey) {
+      return res.status(400).json({ success: false, error: "Jira Domain, Email, API Token, and Project Key are required." });
+    }
+
+    const normalizedDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`;
+
+    const jql = encodeURIComponent(`project = "${projectKey}" ORDER BY updated DESC`);
+    const response = await fetch(`https://${normalizedDomain}/rest/api/3/search?jql=${jql}&maxResults=30`, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Jira API error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const formatted = (data.issues || []).map((i: any) => ({
+      id: i.id,
+      key: i.key,
+      summary: i.fields.summary,
+      descriptionText: i.fields.description?.content?.[0]?.content?.[0]?.text || "No description",
+      status: i.fields.status?.name,
+      issueType: i.fields.issuetype?.name,
+      priority: i.fields.priority?.name,
+      assignee: i.fields.assignee?.displayName,
+      htmlUrl: `https://${normalizedDomain}/browse/${i.key}`,
+    }));
+
+    res.json({ success: true, issues: formatted });
+  } catch (err: any) {
+    console.error("Jira issues error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Jira: Create Issue from Spec-Kit User Story or Task
+app.post("/api/jira/create-issue", async (req, res) => {
+  try {
+    const { domain: reqDomain, email: reqEmail, apiToken: reqToken, projectKey, issueType, summary, description } = req.body;
+    const domain = reqDomain || process.env.JIRA_DOMAIN;
+    const email = reqEmail || process.env.JIRA_EMAIL;
+    const apiToken = reqToken || process.env.JIRA_API_TOKEN;
+
+    if (!domain || !email || !apiToken || !projectKey || !summary) {
+      return res.status(400).json({ success: false, error: "Jira Domain, Email, API Token, Project Key, and Summary are required." });
+    }
+
+    const normalizedDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`;
+
+    const bodyPayload = {
+      fields: {
+        project: { key: projectKey },
+        summary: summary,
+        description: {
+          type: "doc",
+          version: 1,
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: description || "Created via Spec-Kit Studio",
+                },
+              ],
+            },
+          ],
+        },
+        issuetype: { name: issueType || "Story" },
+      },
+    };
+
+    const response = await fetch(`https://${normalizedDomain}/rest/api/3/issue`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(bodyPayload),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Jira Create Issue API error (${response.status}): ${errText}`);
+    }
+
+    const issueData = await response.json();
+    res.json({
+      success: true,
+      key: issueData.key,
+      id: issueData.id,
+      htmlUrl: `https://${normalizedDomain}/browse/${issueData.key}`,
+    });
+  } catch (err: any) {
+    console.error("Jira create issue error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Spec-Kit v1.0.7 Native Core Engine API Endpoints
 const SPEC_KIT_VENDOR_PATH = path.join(process.cwd(), "vendor", "spec-kit");
 

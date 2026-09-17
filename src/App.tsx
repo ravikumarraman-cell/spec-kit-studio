@@ -12,6 +12,7 @@ import { AuditDashboard } from './components/audit/AuditDashboard';
 import { CliExporter } from './components/exporter/CliExporter';
 import { RepoImportStudio } from './components/import/RepoImportStudio';
 import { FeatureImportModal } from './components/import/FeatureImportModal';
+import { IntegrationsModal } from './components/integrations/IntegrationsModal';
 import { QuickSearchModal } from './components/common/QuickSearchModal';
 import { AiSpecModal } from './components/common/AiSpecModal';
 import { storageService } from './lib/storage';
@@ -30,6 +31,7 @@ function AppContent() {
   const [isAiSpecModalOpen, setIsAiSpecModalOpen] = useState<boolean>(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState<boolean>(false);
   const [isFeatureImportModalOpen, setIsFeatureImportModalOpen] = useState<boolean>(false);
+  const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState<boolean>(false);
 
   // New Project Form
   const [newProjName, setNewProjName] = useState('');
@@ -211,6 +213,7 @@ function AppContent() {
         onCreateProject={() => setIsNewProjectModalOpen(true)}
         onOpenImportStudio={() => setActiveTab('import')}
         onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
+        onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
         onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
         isDarkMode={isDark}
         onToggleTheme={() => {}}
@@ -345,6 +348,16 @@ function AppContent() {
         }}
         activeProject={activeProject}
         onMergeIntoActiveProject={handleMergeIntoActiveProject}
+      />
+
+      {/* GitHub & Jira Integration Sync Modal */}
+      <IntegrationsModal
+        isOpen={isIntegrationsModalOpen}
+        onClose={() => setIsIntegrationsModalOpen(false)}
+        specData={activeProject.spec}
+        planData={activeProject.plan}
+        tasksData={activeProject.tasks}
+        rulesData={activeProject.constitution}
       />
 
       {/* Create New Project Modal */}

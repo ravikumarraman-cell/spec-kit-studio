@@ -10,6 +10,11 @@
 
 ---
 
+> ⚡ **ENTERPRISE SCALE: Powered by TanStack & Deep GitHub/Jira Integrations**  
+> Spec-Kit Studio incorporates the **TanStack Stack** (`@tanstack/react-query` & `@tanstack/react-table`) for background caching, optimistic state updates, and high-density matrix views. It integrates directly with **GitHub REST APIs** (PAT authentication, repo browsing, direct `.spec-kit` commits) and **Jira Cloud** (project search, ticket creation, user story syncing).
+
+---
+
 ## 📖 Table of Contents
 1. [The Philosophy: Why Spec-Driven Development (SDD)?](#-the-philosophy-why-spec-driven-development-sdd)
 2. [Core Architecture: The 4 Pillars of SDD](#-core-architecture-the-4-pillars-of-sdd)

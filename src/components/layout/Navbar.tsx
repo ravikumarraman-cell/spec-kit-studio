@@ -14,7 +14,8 @@ import {
   Cpu,
   X,
   FileCode2,
-  Check
+  Check,
+  Github
 } from 'lucide-react';
 import { SpecKitProject } from '../../types/speckit';
 import { generateSpecKitZip, downloadBlob } from '../../lib/export';
@@ -28,6 +29,7 @@ interface NavbarProps {
   onCreateProject: () => void;
   onOpenImportStudio?: () => void;
   onOpenFeatureImport?: () => void;
+  onOpenIntegrations?: () => void;
   onOpenQuickSearch: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -42,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onCreateProject,
   onOpenImportStudio,
   onOpenFeatureImport,
+  onOpenIntegrations,
   onOpenQuickSearch,
   isDarkMode,
   onToggleTheme,
@@ -253,6 +256,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Search className="w-4 h-4 text-cyan-400" />
         </button>
+
+        {/* GitHub & Jira Sync Integration Button */}
+        {onOpenIntegrations && (
+          <button
+            onClick={onOpenIntegrations}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all shadow-xs"
+            title="Configure GitHub PAT & Jira Cloud integrations"
+          >
+            <Github className="w-3.5 h-3.5 text-purple-400" />
+            <span>GitHub & Jira Sync</span>
+          </button>
+        )}
 
         {/* Export Zip Button (Desktop) */}
         <button

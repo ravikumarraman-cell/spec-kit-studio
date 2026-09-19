@@ -22,6 +22,7 @@ import {
   GitHubConfig,
   JiraConfig,
 } from "../../lib/integrationsStore";
+import { integrationsApi } from "../../lib/api/integrations";
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -84,14 +85,7 @@ export function IntegrationsModal({
     queryKey: ["github-repos", ghToken],
     queryFn: async () => {
       if (!ghToken) return [];
-      const res = await fetch("/api/github/repos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: ghToken }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to load GitHub repositories.");
-      return data.repos || [];
+      return (await integrationsApi.listGitHubRepositories(ghToken)).repos;
     },
     enabled: Boolean(ghToken && activeTab === "github"),
   });
@@ -106,14 +100,7 @@ export function IntegrationsModal({
     queryKey: ["jira-projects", jiraDomain, jiraEmail, jiraApiToken],
     queryFn: async () => {
       if (!jiraDomain || !jiraEmail || !jiraApiToken) return [];
-      const res = await fetch("/api/jira/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: jiraDomain, email: jiraEmail, apiToken: jiraApiToken }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to load Jira projects.");
-      return data.projects || [];
+      return (await integrationsApi.listJiraProjects({ domain: jiraDomain, email: jiraEmail, apiToken: jiraApiToken })).projects;
     },
     enabled: Boolean(jiraDomain && jiraEmail && jiraApiToken && activeTab === "jira"),
   });
@@ -133,22 +120,10 @@ export function IntegrationsModal({
         "rules.md": typeof rulesData === "string" ? rulesData : JSON.stringify(rulesData || {}, null, 2),
       };
 
-      const res = await fetch("/api/github/commit-spec", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: ghToken,
-          owner: selectedRepo.owner,
-          repo: selectedRepo.name,
-          branch: targetBranch,
-          files: filesPayload,
-          commitMessage: `docs(spec-kit): update specification package via Spec-Kit Studio`,
-        }),
+      return integrationsApi.commitSpec({
+        token: ghToken, owner: selectedRepo.owner, repo: selectedRepo.name, branch: targetBranch,
+        files: filesPayload, commitMessage: 'docs(spec-kit): update specification package via Spec-Kit Studio',
       });
-
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to commit files to GitHub.");
-      return data;
     },
     onSuccess: (data) => {
       setCommitStatusMsg({ type: "success", text: data.message || "Successfully committed .spec-kit to repository!" });
@@ -172,23 +147,10 @@ export function IntegrationsModal({
         throw new Error("Please select a Jira project and configure credentials.");
       }
 
-      const res = await fetch("/api/jira/create-issue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: jiraDomain,
-          email: jiraEmail,
-          apiToken: jiraApiToken,
-          projectKey: selectedJiraProject,
-          issueType: "Story",
-          summary: story.title,
-          description: story.description,
-        }),
+      return integrationsApi.createJiraIssue({
+        domain: jiraDomain, email: jiraEmail, apiToken: jiraApiToken, projectKey: selectedJiraProject,
+        issueType: 'Story', summary: story.title, description: story.description,
       });
-
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to create Jira issue.");
-      return data;
     },
     onSuccess: (data) => {
       setJiraStatusMsg({ type: "success", text: `Created Jira Story: ${data.key}!` });

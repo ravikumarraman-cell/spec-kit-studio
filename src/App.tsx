@@ -1,29 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
-import { SpecEditor } from './components/spec/SpecEditor';
-import { PlanEditor } from './components/plan/PlanEditor';
-import { TaskBoard } from './components/tasks/TaskBoard';
-import { ConstitutionEditor } from './components/constitution/ConstitutionEditor';
-import { PromptStudio } from './components/prompt/PromptStudio';
-import { AuditDashboard } from './components/audit/AuditDashboard';
-import { CliExporter } from './components/exporter/CliExporter';
-import { RepoImportStudio } from './components/import/RepoImportStudio';
 import { FeatureImportModal } from './components/import/FeatureImportModal';
 import { IntegrationsModal } from './components/integrations/IntegrationsModal';
 import { QuickSearchModal } from './components/common/QuickSearchModal';
 import { AiSpecModal } from './components/common/AiSpecModal';
-import { storageService } from './lib/storage';
-import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown, ProjectConstitution, SpecAuditResult } from './types/speckit';
-import { Plus, X } from 'lucide-react';
+import { NewProjectModal } from './components/project/NewProjectModal';
+import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
+import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
+const OverviewDashboard = lazy(() => import('./components/dashboard/OverviewDashboard').then((module) => ({ default: module.OverviewDashboard })));
+const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
+const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
+const SpecEditor = lazy(() => import('./components/spec/SpecEditor').then((module) => ({ default: module.SpecEditor })));
+const PlanEditor = lazy(() => import('./components/plan/PlanEditor').then((module) => ({ default: module.PlanEditor })));
+const TaskBoard = lazy(() => import('./components/tasks/TaskBoard').then((module) => ({ default: module.TaskBoard })));
+const ConstitutionEditor = lazy(() => import('./components/constitution/ConstitutionEditor').then((module) => ({ default: module.ConstitutionEditor })));
+const PromptStudio = lazy(() => import('./components/prompt/PromptStudio').then((module) => ({ default: module.PromptStudio })));
+const AuditDashboard = lazy(() => import('./components/audit/AuditDashboard').then((module) => ({ default: module.AuditDashboard })));
+const CliExporter = lazy(() => import('./components/exporter/CliExporter').then((module) => ({ default: module.CliExporter })));
+
 function AppContent() {
-  const { isDark, theme } = useTheme();
-  const [projects, setProjects] = useState<SpecKitProject[]>([]);
-  const [activeProject, setActiveProject] = useState<SpecKitProject | null>(null);
+  const { isDark } = useTheme();
+  const {
+    projects, activeProject, selectProject, createProject, resetProjects,
+    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, selectVersion,
+  } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
@@ -34,27 +39,8 @@ function AppContent() {
   const [isFeatureImportModalOpen, setIsFeatureImportModalOpen] = useState<boolean>(false);
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState<boolean>(false);
 
-  // New Project Form
-  const [newProjName, setNewProjName] = useState('');
-  const [newProjDesc, setNewProjDesc] = useState('');
-
   // Selected Task for Prompt Studio
   const [targetPromptTaskId, setTargetPromptTaskId] = useState<string | undefined>(undefined);
-
-  // Load projects from Storage Service on mount
-  useEffect(() => {
-    const loadedProjects = storageService.getProjects();
-    setProjects(loadedProjects);
-    const active = storageService.getActiveProject();
-    setActiveProject(active);
-
-    const unsubscribe = storageService.subscribe(() => {
-      setProjects(storageService.getProjects());
-      setActiveProject(storageService.getActiveProject());
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   if (!activeProject) {
     return (
@@ -64,75 +50,14 @@ function AppContent() {
     );
   }
 
-  const handleSelectProject = (id: string) => {
-    storageService.setActiveProjectId(id);
-    const updated = storageService.getActiveProject();
-    if (updated) setActiveProject(updated);
-  };
-
-  const handleCreateNewProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjName.trim()) return;
-
-    const created = storageService.createNewProject(newProjName.trim(), newProjDesc.trim());
-    setProjects(storageService.getProjects());
-    setActiveProject(created);
+  const handleCreateNewProject = (name: string, description: string) => {
+    createProject(name, description);
     setIsNewProjectModalOpen(false);
-    setNewProjName('');
-    setNewProjDesc('');
     setActiveTab('overview');
   };
 
-  const handleResetSampleData = () => {
-    storageService.resetToSampleProjects();
-    const loadedProjects = storageService.getProjects();
-    setProjects(loadedProjects);
-    setActiveProject(loadedProjects[0]);
-    setActiveTab('overview');
-  };
-
-  const handleSaveSpec = (updatedSpec: FeatureSpec) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, spec: updatedSpec, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
-
-  const handleSavePlan = (updatedPlan: ImplementationPlan) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, plan: updatedPlan, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
-
-  const handleSaveTasks = (updatedTasks: TaskBreakdown) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, tasks: updatedTasks, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
-
-  const handleSaveConstitution = (updatedConstitution: ProjectConstitution) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, constitution: updatedConstitution, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
-
-  const handleUpdateAudit = (updatedAudit: SpecAuditResult) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, audit: updatedAudit, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
-
-  const handleApplyAiSpecData = (generatedSpec: FeatureSpec, generatedPlanData?: any, generatedTasksData?: any) => {
-    if (!activeProject) return;
-    const updated: SpecKitProject = {
-      ...activeProject,
-      spec: generatedSpec,
-      plan: generatedPlanData || activeProject.plan,
-      tasks: generatedTasksData || activeProject.tasks,
-      updatedAt: new Date().toISOString(),
-    };
-    storageService.updateActiveProject(updated);
-    setIsAiSpecModalOpen(false);
-  };
+  const handleResetSampleData = () => { resetProjects(); setActiveTab('overview'); };
+  const handleApplyAiSpecData = (spec: FeatureSpec, plan?: ImplementationPlan, tasks?: TaskBreakdown) => { applyAiSpecData(spec, plan, tasks); setIsAiSpecModalOpen(false); };
 
   const handleSelectTaskForPrompt = (taskId: string) => {
     setTargetPromptTaskId(taskId);
@@ -140,66 +65,10 @@ function AppContent() {
   };
 
   const handleImportRepoComplete = (newProject: SpecKitProject) => {
-    storageService.updateActiveProject(newProject);
-    setProjects(storageService.getProjects());
-    setActiveProject(newProject);
+    replaceFromImport(newProject);
     setActiveTab('overview');
   };
-
-  const handleMergeIntoActiveProject = (importedStories: any[], importedData: any) => {
-    if (!activeProject) return;
-
-    const currentStories = activeProject.spec.userStories || [];
-    const mergedStories = [...currentStories, ...importedStories];
-
-    const currentFrs = activeProject.spec.functionalRequirements || [];
-    const importedFrs = importedData.functionalRequirements || [];
-    const mergedFrs = [...currentFrs, ...importedFrs];
-
-    const updatedSpec = {
-      ...activeProject.spec,
-      userStories: mergedStories,
-      functionalRequirements: mergedFrs,
-      lastUpdated: new Date().toISOString(),
-    };
-
-    const currentTasks = activeProject.tasks.tasks || [];
-    const importedTasks = (importedData.tasks || []).map((t: any, idx: number) => ({
-      id: t.id || `TASK-${200 + idx}`,
-      title: t.title || `Task ${idx + 1}`,
-      phase: t.phase || 'Phase 2: Integration',
-      description: t.description || 'Task description',
-      status: 'todo',
-      estimatedHours: t.estimatedHours || 3,
-      mappedRequirementId: t.mappedRequirementId || 'FR-101',
-      dependencies: [],
-      targetAgentPromptSnippet: t.targetAgentPromptSnippet || `Implement ${t.title}`,
-    }));
-
-    const updatedTasks = {
-      ...activeProject.tasks,
-      tasks: [...currentTasks, ...importedTasks],
-      lastUpdated: new Date().toISOString(),
-    };
-
-    const updatedProject = {
-      ...activeProject,
-      spec: updatedSpec,
-      tasks: updatedTasks,
-      updatedAt: new Date().toISOString(),
-    };
-
-    storageService.updateActiveProject(updatedProject);
-    setActiveProject(updatedProject);
-    setProjects(storageService.getProjects());
-    setActiveTab('spec');
-  };
-
-  const handleSelectVersion = (version: string) => {
-    if (!activeProject) return;
-    const updated = { ...activeProject, version, updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-  };
+  const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => { mergeImportedFeature(stories, data); setActiveTab('spec'); };
 
   // Count unmapped tasks
   const unmappedTasks = activeProject.tasks.tasks.filter((t) => !t.mappedRequirementId).length;
@@ -212,7 +81,7 @@ function AppContent() {
         activeProject={activeProject}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onSelectProject={handleSelectProject}
+        onSelectProject={selectProject}
         onCreateProject={() => setIsNewProjectModalOpen(true)}
         onOpenImportStudio={() => setActiveTab('import')}
         onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
@@ -222,7 +91,7 @@ function AppContent() {
         isDarkMode={isDark}
         onToggleTheme={() => {}}
         onResetSampleData={handleResetSampleData}
-        onSelectVersion={handleSelectVersion}
+        onSelectVersion={selectVersion}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
@@ -240,7 +109,7 @@ function AppContent() {
 
         {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-          <AnimatePresence mode="wait">
+          <Suspense fallback={<div className="py-16 text-center text-xs theme-text-muted">Loading workspace…</div>}><AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
               initial={{ opacity: 0, y: 8 }}
@@ -253,7 +122,7 @@ function AppContent() {
                   project={activeProject}
                   onNavigateTab={setActiveTab}
                   onTriggerAiSpecModal={() => setIsAiSpecModalOpen(true)}
-                  onSelectVersion={handleSelectVersion}
+                  onSelectVersion={selectVersion}
                   onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
                 />
               )}
@@ -265,10 +134,14 @@ function AppContent() {
                 />
               )}
 
+              {activeTab === 'workspace' && (
+                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} />
+              )}
+
               {activeTab === 'spec' && (
                 <SpecEditor
                   spec={activeProject.spec}
-                  onSaveSpec={handleSaveSpec}
+                  onSaveSpec={saveSpec}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
                 />
@@ -277,7 +150,7 @@ function AppContent() {
               {activeTab === 'plan' && (
                 <PlanEditor
                   plan={activeProject.plan}
-                  onSavePlan={handleSavePlan}
+                  onSavePlan={savePlan}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   isDarkMode={isDark}
                 />
@@ -287,7 +160,7 @@ function AppContent() {
                 <TaskBoard
                   taskBreakdown={activeProject.tasks}
                   spec={activeProject.spec}
-                  onSaveTasks={handleSaveTasks}
+                  onSaveTasks={saveTasks}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   onSelectTaskForPrompt={handleSelectTaskForPrompt}
                 />
@@ -296,7 +169,7 @@ function AppContent() {
               {activeTab === 'constitution' && (
                 <ConstitutionEditor
                   constitution={activeProject.constitution}
-                  onSaveConstitution={handleSaveConstitution}
+                  onSaveConstitution={saveConstitution}
                 />
               )}
 
@@ -310,7 +183,7 @@ function AppContent() {
               {activeTab === 'audit' && (
                 <AuditDashboard
                   project={activeProject}
-                  onUpdateAudit={handleUpdateAudit}
+                  onUpdateAudit={saveAudit}
                 />
               )}
 
@@ -320,7 +193,7 @@ function AppContent() {
                 />
               )}
             </motion.div>
-          </AnimatePresence>
+          </AnimatePresence></Suspense>
         </main>
       </div>
 
@@ -348,9 +221,7 @@ function AppContent() {
         isOpen={isFeatureImportModalOpen}
         onClose={() => setIsFeatureImportModalOpen(false)}
         onImportComplete={(newProject) => {
-          storageService.updateActiveProject(newProject);
-          setProjects(storageService.getProjects());
-          setActiveProject(newProject);
+          replaceFromImport(newProject);
           setActiveTab('spec');
         }}
         activeProject={activeProject}
@@ -367,61 +238,7 @@ function AppContent() {
         rulesData={activeProject.constitution}
       />
 
-      {/* Create New Project Modal */}
-      {isNewProjectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 text-xs shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="text-sm font-bold text-zinc-100">Create New Spec Workspace</h3>
-              <button onClick={() => setIsNewProjectModalOpen(false)} className="p-1 text-zinc-500 hover:text-zinc-200">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateNewProject} className="space-y-3">
-              <div>
-                <label className="block font-semibold text-zinc-300 mb-1">Project Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. AI Code Reviewer Service"
-                  value={newProjName}
-                  onChange={(e) => setNewProjName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-300 mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  placeholder="Brief description of the specification scope..."
-                  value={newProjDesc}
-                  onChange={(e) => setNewProjDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewProjectModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Workspace</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} onCreate={handleCreateNewProject} />
     </div>
   );
 }

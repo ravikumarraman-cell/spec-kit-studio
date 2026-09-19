@@ -1,11 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-  memo
-} from 'react';
+import React, { useRef, useEffect, useMemo, memo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +16,7 @@ import {
 import { ViewTab, SpecKitProject } from '../../../types/speckit';
 import { HeaderMenuItem } from './types';
 import { AllMenusDropdown } from './AllMenusDropdown';
+import { useHorizontalScrollNavigation } from '../../../hooks/useHorizontalScrollNavigation';
 
 interface HorizontalMenuBarProps {
   activeTab: ViewTab;
@@ -39,20 +33,7 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
   onOpenAiSpecModal,
   onOpenQuickSearch,
 }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  // Scroll visibility states
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-
-  // Drag-to-scroll states
-  const isMouseDownRef = useRef(false);
-  const startXRef = useRef(0);
-  const scrollLeftStartRef = useRef(0);
-  const hasMovedRef = useRef(false);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Compute live contextual badges from active project
   const menuItems = useMemo<HeaderMenuItem[]>(() => {
@@ -193,68 +174,8 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
       },
     ];
   }, [project]);
-
-  // Update scroll bounds
-  const updateScrollBounds = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    const maxScroll = scrollWidth - clientWidth;
-
-    setCanScrollLeft(scrollLeft > 6);
-    setCanScrollRight(scrollLeft < maxScroll - 6);
-
-    if (maxScroll > 0) {
-      setScrollProgress(Math.min(100, Math.max(0, (scrollLeft / maxScroll) * 100)));
-    } else {
-      setScrollProgress(0);
-    }
-  }, []);
-
-  // Listen to container scroll and window/container resizing
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    updateScrollBounds();
-
-    const handleScroll = () => {
-      updateScrollBounds();
-    };
-
-    el.addEventListener('scroll', handleScroll, { passive: true });
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateScrollBounds();
-    });
-    resizeObserver.observe(el);
-
-    return () => {
-      el.removeEventListener('scroll', handleScroll);
-      resizeObserver.disconnect();
-    };
-  }, [updateScrollBounds]);
-
-  // Automatically scroll active tab into view when activeTab changes
-  useEffect(() => {
-    const activeEl = tabButtonRefs.current[activeTab];
-    const container = scrollContainerRef.current;
-
-    if (activeEl && container) {
-      // Calculate smooth center offset
-      const containerRect = container.getBoundingClientRect();
-      const tabRect = activeEl.getBoundingClientRect();
-
-      const relativeTabLeft = tabRect.left - containerRect.left + container.scrollLeft;
-      const targetScrollLeft = relativeTabLeft - containerRect.width / 2 + tabRect.width / 2;
-
-      container.scrollTo({
-        left: targetScrollLeft,
-        behavior: 'smooth',
-      });
-    }
-  }, [activeTab]);
+  const activeElement = tabButtonRefs.current[activeTab];
+  const navigation = useHorizontalScrollNavigation(activeElement);
 
   // Keyboard shortcut listener: Alt+1 through Alt+9
   useEffect(() => {
@@ -285,65 +206,8 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [menuItems, onSelectTab]);
 
-  // Smooth scroll handler for chevrons
-  const handleScrollBy = (direction: 'left' | 'right') => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const distance = 260;
-    el.scrollBy({
-      left: direction === 'left' ? -distance : distance,
-      behavior: 'smooth',
-    });
-  };
-
-  // Wheel horizontal translation: vertical wheel becomes horizontal gliding
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
-      // User is scrolling vertically with standard mouse wheel; translate to horizontal scroll
-      el.scrollLeft += e.deltaY;
-    }
-  };
-
-  // Mouse Drag-to-Scroll handlers
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    isMouseDownRef.current = true;
-    startXRef.current = e.pageX - el.offsetLeft;
-    scrollLeftStartRef.current = el.scrollLeft;
-    hasMovedRef.current = false;
-    setIsDragging(false);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isMouseDownRef.current) return;
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    e.preventDefault();
-    const x = e.pageX - el.offsetLeft;
-    const walk = (x - startXRef.current) * 1.5; // Drag sensitivity multiplier
-    if (Math.abs(walk) > 4) {
-      hasMovedRef.current = true;
-      setIsDragging(true);
-    }
-    el.scrollLeft = scrollLeftStartRef.current - walk;
-  };
-
-  const handleMouseUpOrLeave = () => {
-    isMouseDownRef.current = false;
-    setTimeout(() => {
-      setIsDragging(false);
-      hasMovedRef.current = false;
-    }, 50);
-  };
-
   const handleTabClick = (id: ViewTab) => {
-    if (hasMovedRef.current) return; // Ignore click if user was dragging
+    if (navigation.wasDragged()) return;
     onSelectTab(id);
   };
 
@@ -356,15 +220,15 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
         {/* Left Edge Gradient Mask & Smooth Scroll Chevron */}
         <div
           className={`absolute left-0 top-0 bottom-0 z-20 flex items-center pl-1 sm:pl-2 pointer-events-none transition-opacity duration-300 ${
-            canScrollLeft ? 'opacity-100' : 'opacity-0'
+            navigation.canScrollLeft ? 'opacity-100' : 'opacity-0'
           }`}
-          aria-hidden={!canScrollLeft}
+          aria-hidden={!navigation.canScrollLeft}
         >
           <div className="w-16 h-full bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent pointer-events-none absolute left-0" />
           <button
             type="button"
-            onClick={() => handleScrollBy('left')}
-            disabled={!canScrollLeft}
+            onClick={() => navigation.scrollBy('left')}
+            disabled={!navigation.canScrollLeft}
             aria-label="Scroll navigation menus left"
             className="relative z-10 w-7 h-7 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-300 border border-zinc-700/80 shadow-md flex items-center justify-center pointer-events-auto transition-all transform hover:scale-105 active:scale-95"
           >
@@ -374,14 +238,14 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
 
         {/* The Scrollable Horizontal Tab Track */}
         <div
-          ref={scrollContainerRef}
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUpOrLeave}
-          onMouseLeave={handleMouseUpOrLeave}
+          ref={navigation.containerRef}
+          onWheel={navigation.onWheel}
+          onMouseDown={navigation.onMouseDown}
+          onMouseMove={navigation.onMouseMove}
+          onMouseUp={navigation.onMouseUpOrLeave}
+          onMouseLeave={navigation.onMouseUpOrLeave}
           className={`flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth w-full h-full py-1 ${
-            isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
+            navigation.isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
           }`}
           role="tablist"
         >
@@ -443,15 +307,15 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
         {/* Right Edge Gradient Mask & Smooth Scroll Chevron */}
         <div
           className={`absolute right-14 sm:right-28 top-0 bottom-0 z-20 flex items-center pr-1 pointer-events-none transition-opacity duration-300 ${
-            canScrollRight ? 'opacity-100' : 'opacity-0'
+            navigation.canScrollRight ? 'opacity-100' : 'opacity-0'
           }`}
-          aria-hidden={!canScrollRight}
+          aria-hidden={!navigation.canScrollRight}
         >
           <div className="w-16 h-full bg-gradient-to-l from-zinc-950 via-zinc-950/80 to-transparent pointer-events-none absolute right-0" />
           <button
             type="button"
-            onClick={() => handleScrollBy('right')}
-            disabled={!canScrollRight}
+            onClick={() => navigation.scrollBy('right')}
+            disabled={!navigation.canScrollRight}
             aria-label="Scroll navigation menus right"
             className="relative z-10 w-7 h-7 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-300 border border-zinc-700/80 shadow-md flex items-center justify-center pointer-events-auto transition-all transform hover:scale-105 active:scale-95"
           >
@@ -475,7 +339,7 @@ export const HorizontalMenuBar: React.FC<HorizontalMenuBarProps> = memo(({
       <div className="w-full h-[1.5px] bg-zinc-900/40 relative overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 transition-all duration-100"
-          style={{ width: `${Math.max(5, scrollProgress)}%` }}
+          style={{ width: `${Math.max(5, navigation.scrollProgress)}%` }}
         />
       </div>
     </nav>

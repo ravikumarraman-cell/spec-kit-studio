@@ -1,5 +1,6 @@
 import { SpecKitProject } from '../types/speckit';
 import { SAMPLE_PROJECTS } from './sampleData';
+import { createProjectWorkspace } from './projectFactory';
 
 const STORAGE_KEY = 'speckit_studio_projects_v1';
 const ACTIVE_PROJECT_KEY = 'speckit_studio_active_project_id';
@@ -92,76 +93,7 @@ class StorageService {
   }
 
   public createNewProject(name: string, description: string): SpecKitProject {
-    const id = `proj-${Date.now()}`;
-    const now = new Date().toISOString();
-    const newProj: SpecKitProject = {
-      id,
-      name,
-      description,
-      createdAt: now,
-      updatedAt: now,
-      version: '1.0.7',
-      spec: {
-        id: `spec-${Date.now()}`,
-        title: name,
-        summary: description || 'New Specification for feature development.',
-        userStories: [],
-        functionalRequirements: [],
-        nonFunctionalRequirements: [],
-        userFlows: [],
-        edgeCases: [],
-        successMetrics: [],
-        markdown: `# ${name}\n\n${description}`,
-        lastUpdated: now,
-      },
-      plan: {
-        id: `plan-${Date.now()}`,
-        techStack: [
-          { category: 'Frontend', technology: 'React + TypeScript', justification: 'Type-safe interactive UI' },
-          { category: 'Backend', technology: 'Node.js Express', justification: 'RESTful API Services' },
-        ],
-        architectureSummary: 'Modular client-server architecture.',
-        components: [],
-        apiContracts: [],
-        dataSchemas: [],
-        adrs: [],
-        mermaidDiagram: 'graph TD\n    A[Client UI] --> B[API Server]',
-        markdown: `# Implementation Plan for ${name}`,
-        lastUpdated: now,
-      },
-      tasks: {
-        id: `task-${Date.now()}`,
-        tasks: [
-          {
-            id: 'TASK-001',
-            title: 'Project Setup & Dependency Installation',
-            phase: 'Phase 1: Setup',
-            description: 'Initialize directory layout and install base dependencies.',
-            status: 'todo',
-            estimatedHours: 2,
-            dependencies: [],
-          },
-        ],
-        markdown: `# Task List\n- [ ] TASK-001 Project Setup`,
-        lastUpdated: now,
-      },
-      constitution: {
-        id: `const-${Date.now()}`,
-        title: `${name} Constitution`,
-        rules: [
-          {
-            id: 'RULE-1',
-            title: 'Code Quality & Typing',
-            category: 'Coding Standard',
-            description: 'Strict TypeScript typing without explicit any.',
-            ruleStatement: 'All variables and parameters must be explicitly typed.',
-            strictness: 'Mandatory',
-          },
-        ],
-        markdown: `# Constitution for ${name}`,
-        lastUpdated: now,
-      },
-    };
+    const newProj = createProjectWorkspace(name, description);
 
     const projects = this.getProjects();
     projects.unshift(newProj);

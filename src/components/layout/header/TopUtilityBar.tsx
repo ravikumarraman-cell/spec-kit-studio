@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useCallback, memo } from 'react';
 import {
   FolderKanban,
   Search,
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../../types/speckit';
 import { useTheme, THEME_PRESETS, ThemeId } from '../../../context/ThemeContext';
+import { useClickOutside } from '../../../hooks/useClickOutside';
 
 interface TopUtilityBarProps {
   projects: SpecKitProject[];
@@ -51,6 +52,7 @@ interface TopUtilityBarProps {
 
 const TAB_TITLES: Record<ViewTab, string> = {
   overview: 'Workspace Hub',
+  workspace: 'Connected Workspace',
   spec: 'Feature Spec',
   plan: 'Architecture Plan',
   tasks: 'Task Breakdown',
@@ -90,24 +92,8 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        workspaceDropdownRef.current &&
-        !workspaceDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsWorkspaceDropdownOpen(false);
-      }
-      if (
-        moreMenuRef.current &&
-        !moreMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsMoreMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const closeMenus = useCallback(() => { setIsWorkspaceDropdownOpen(false); setIsMoreMenuOpen(false); }, []);
+  useClickOutside([workspaceDropdownRef, moreMenuRef], closeMenus);
 
   const filteredProjects = projects.filter((p) =>
     p.name.toLowerCase().includes(workspaceSearchQuery.toLowerCase())

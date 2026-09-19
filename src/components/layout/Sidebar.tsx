@@ -9,6 +9,7 @@ import {
   Activity,
   Terminal,
   FolderGit2,
+  HardDrive,
   Sparkles
 } from 'lucide-react';
 import { ViewTab } from '../../types/speckit';
@@ -42,6 +43,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <FolderGit2 className="w-4 h-4 text-sky-600 dark:text-cyan-400" />,
       badge: 'Import',
       badgeColor: 'text-sky-700 bg-sky-100 border-sky-300 dark:text-cyan-400 dark:bg-cyan-500/10 dark:border-cyan-500/20 font-bold',
+    },
+    {
+      id: 'workspace',
+      label: 'Connected Workspace',
+      icon: <HardDrive className="w-4 h-4 text-emerald-500" />,
+      badge: 'Local',
+      badgeColor: 'text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/30 font-bold',
     },
     {
       id: 'spec',

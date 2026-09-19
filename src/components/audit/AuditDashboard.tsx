@@ -11,6 +11,7 @@ import { EditorHeader } from '../common/EditorHeader';
 import { StatCard } from '../common/StatCard';
 import { AuditScoreOverview } from './AuditScoreOverview';
 import { AuditRecommendations } from './AuditRecommendations';
+import { generationApi } from '../../lib/api/generation';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
@@ -41,18 +42,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
   const handleRunAudit = async () => {
     setIsAuditing(true);
     try {
-      const res = await fetch('/api/audit/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          specContent: project.spec.markdown || JSON.stringify(project.spec),
-          planContent: project.plan.markdown || JSON.stringify(project.plan),
-          tasksContent: project.tasks.markdown || JSON.stringify(project.tasks),
-          constitutionContent: project.constitution.markdown || JSON.stringify(project.constitution),
-        }),
-      });
-
-      const data = await res.json();
+      const data = await generationApi.runAudit({ specContent: project.spec.markdown || JSON.stringify(project.spec), planContent: project.plan.markdown || JSON.stringify(project.plan), tasksContent: project.tasks.markdown || JSON.stringify(project.tasks), constitutionContent: project.constitution.markdown || JSON.stringify(project.constitution) });
       if (data.success && data.data) {
         const newAudit: SpecAuditResult = {
           lastAudited: new Date().toISOString(),

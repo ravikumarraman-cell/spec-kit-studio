@@ -1,6 +1,6 @@
 # 🚀 Spec-Kit Studio
-> **The Official Visual & Interactive Studio for GitHub `spec-kit` and Spec-Driven Development (SDD)**  
-> *Transform ambiguous product intent into deterministic software architecture. Seamlessly bridge high-level vision, technical plans, AI agent execution, and legacy codebases across any technology stack.*
+> **A visual, local-connector-enabled workspace for GitHub Spec-Kit and Spec-Driven Development (SDD).**
+> *Turn product intent into reviewable specifications, repository evidence, implementation contracts, and verification results.*
 
 ---
 
@@ -13,8 +13,8 @@
 
 ---
 
-> 🌟 **CORE HIGHLIGHT: Powered Natively by GitHub `spec-kit`**  
-> **Spec-Kit Studio** is natively powered by **`spec-kit`** — the official framework for Spec-Driven Development. Every specification, architecture plan, task board, and constitution rule managed in this studio conforms 100% to the official `.spec-kit` repository structure (`spec.md`, `plan.md`, `tasks.md`, `rules.md`, and `specify.sh`), providing complete interoperability with the `spec-kit` CLI, GitHub Actions, and AI coding assistants (Cursor, Claude Code, Windsurf, Copilot, Gemini).
+> 🌟 **CORE HIGHLIGHT: Evidence-first Spec-Driven Development**
+> **Spec-Kit Studio** provides a visual specification workspace plus an optional loopback-only local connector. The connector produces repository evidence, detects the official `specify` CLI, runs deterministic traceability checks, previews exports, and executes an allowlisted set of local verification commands. Studio stores its generated artifacts under `.specify/studio/` so it does not overwrite official Spec-Kit assets. See [Local Connector](docs/local-connector.md).
 
 ---
 

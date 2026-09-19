@@ -191,4 +191,4 @@ export interface SpecKitProject {
   version: string;
 }
 
-export type ViewTab = 'overview' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import';
+export type ViewTab = 'overview' | 'workspace' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import';

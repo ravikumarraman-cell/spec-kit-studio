@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, X, RefreshCw, CheckCircle2, Zap, Layers } from 'lucide-react';
 import { SpecKitProject, FeatureSpec } from '../../types/speckit';
+import { generationApi } from '../../lib/api/generation';
 
 interface AiSpecModalProps {
   isOpen: boolean;
@@ -43,46 +44,14 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
 
     try {
       // 1. Generate Spec
-      const specRes = await fetch('/api/spec/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          existingSpec: project.spec.markdown,
-          focusAreas,
-        }),
-      });
-
-      const specData = await specRes.json();
-      if (!specData.success || !specData.data) {
-        throw new Error(specData.error || 'Failed to generate specification.');
-      }
-
+      const specData = await generationApi.generateSpec({ topic, existingSpec: project.spec.markdown, focusAreas });
       const generatedSpecPayload = specData.data;
 
       // 2. Generate Plan
-      const planRes = await fetch('/api/plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          specTitle: generatedSpecPayload.title || topic,
-          specSummary: generatedSpecPayload.summary,
-          requirements: generatedSpecPayload.functionalRequirements,
-        }),
-      });
-      const planData = await planRes.json();
+      const planData = await generationApi.generatePlan({ specTitle: generatedSpecPayload.title || topic, specSummary: generatedSpecPayload.summary, requirements: generatedSpecPayload.functionalRequirements || [] });
 
       // 3. Generate Tasks
-      const tasksRes = await fetch('/api/tasks/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          specTitle: generatedSpecPayload.title || topic,
-          functionalRequirements: generatedSpecPayload.functionalRequirements,
-          techStack: planData.data?.techStack || [],
-        }),
-      });
-      const tasksData = await tasksRes.json();
+      const tasksData = await generationApi.generateTasks({ specTitle: generatedSpecPayload.title || topic, functionalRequirements: generatedSpecPayload.functionalRequirements || [], techStack: planData.data.techStack || [] });
 
       const newSpecObj: FeatureSpec = {
         id: project.spec.id,

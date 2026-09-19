@@ -1,0 +1,7 @@
+import { SpecKitProject, TaskItem } from '../types/speckit';
+
+export type AgentTarget = 'copilot' | 'codex' | 'claude' | 'gemini' | 'cursor';
+export function portableTaskPrompt(project: SpecKitProject, task: TaskItem, target: AgentTarget, evidence: string[] = []) {
+  const requirement = project.spec.functionalRequirements.find((item) => item.id === task.mappedRequirementId);
+  return `# ${target.toUpperCase()} implementation contract — ${task.id}\n\n## Objective\n${task.title}\n\n${task.description}\n\n## Requirement\n${requirement ? `${requirement.id}: ${requirement.title}\n${requirement.description}` : 'No mapped requirement; stop and request clarification.'}\n\n## Repository evidence\n${evidence.length ? evidence.map((item) => `- ${item}`).join('\n') : '- Inspect the relevant files before editing; do not assume framework conventions.'}\n\n## Constitution\n${project.constitution.rules.map((rule) => `- [${rule.strictness}] ${rule.ruleStatement}`).join('\n') || '- No rules defined; request them before work with security or data impact.'}\n\n## Definition of done\n- Implement only this task and its mapped requirement.\n- Update or add tests that prove the acceptance criteria.\n- Run the repository’s typecheck, test, and build commands when available.\n- Report changed files, commands run, results, and unresolved assumptions.\n- Do not invent APIs, dependencies, credentials, or schema behavior.\n`;
+}

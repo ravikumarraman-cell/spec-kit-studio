@@ -14,6 +14,8 @@ import {
 import { SpecKitProject } from '../../types/speckit';
 import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
+import { AgentTarget, portableTaskPrompt } from '../../lib/portablePrompts';
+import { generationApi } from '../../lib/api/generation';
 
 interface PromptStudioProps {
   project: SpecKitProject;
@@ -47,59 +49,21 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     return project.tasks.tasks.find((t) => t.id === selectedTaskId) || project.tasks.tasks[0];
   }, [project.tasks.tasks, selectedTaskId]);
 
-  // Generated Master Prompt String
+  const agentTarget: AgentTarget = selectedAgent.includes('Copilot') ? 'copilot' : selectedAgent.includes('Gemini') ? 'gemini' : selectedAgent.includes('Cursor') ? 'cursor' : selectedAgent.includes('Aider') ? 'codex' : 'claude';
+
+  // Generated Master Prompt String: a portable implementation contract, not a promise of infallibility.
   const masterPrompt = useMemo(() => {
-    return `You are a Senior Principal AI Software Engineer assigned to implement task ${selectedTask?.id || 'TASK'} for project "${project.name}".
-
-=== 1. GOVERNING CONSTITUTION & RULES ===
-${project.constitution.rules.map((r) => `- [${r.strictness}] ${r.title}: ${r.ruleStatement}`).join('\n')}
-
-=== 2. FEATURE SPECIFICATION CONTEXT ===
-Project Summary: ${project.spec.summary}
-Functional Requirements:
-${project.spec.functionalRequirements.map((f) => `- ${f.id} (${f.category}): ${f.title} - ${f.description}`).join('\n')}
-
-=== 3. ARCHITECTURE & TECH STACK ===
-${project.plan.techStack.map((t) => `- ${t.category}: ${t.technology} (${t.justification})`).join('\n')}
-
-=== 4. ACTIVE TARGET TASK TO IMPLEMENT ===
-Task ID: ${selectedTask?.id || 'TASK-101'}
-Task Title: ${selectedTask?.title || 'Implementation'}
-Phase: ${selectedTask?.phase || 'Phase 1'}
-Task Description: ${selectedTask?.description || 'Build task according to spec.'}
-Mapped Spec Requirement: ${selectedTask?.mappedRequirementId || 'FR-101'}
-${customNotes ? `\n=== ADDITIONAL INSTRUCTIONS ===\n${customNotes}\n` : ''}
-=== EXECUTION DIRECTIVES ===
-1. Write clean, modular, highly maintainable TypeScript code.
-2. Adhere strictly to the project constitution rules.
-3. Ensure zero hallucinated APIs and complete error handling.
-4. Verify task completion against acceptance criteria before ending your session.`;
-  }, [project, selectedTask, customNotes]);
+    const fallback = selectedTask || { id: 'TASK', title: 'Implementation', description: 'Build task according to specification.', phase: 'Phase 1: Setup', status: 'todo', estimatedHours: 0, dependencies: [] };
+    return `${portableTaskPrompt(project, fallback, agentTarget)}${customNotes ? `\n## Additional instructions\n${customNotes}\n` : ''}`;
+  }, [project, selectedTask, customNotes, agentTarget]);
 
   const handleRunAiSimulation = async () => {
     setIsGenerating(true);
     setAiSimulationOutput(null);
 
     try {
-      const res = await fetch('/api/prompt/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetAgent: selectedAgent,
-          taskId: selectedTask?.id,
-          taskTitle: selectedTask?.title,
-          specSummary: project.spec.summary,
-          constitution: project.constitution.rules.map((r) => r.ruleStatement).join('; '),
-          techStack: project.plan.techStack.map((t) => t.technology),
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setAiSimulationOutput(data.promptText || 'AI Agent prompt simulated successfully.');
-      } else {
-        setAiSimulationOutput('Error: ' + (data.error || 'Failed to simulate AI prompt.'));
-      }
+      const data = await generationApi.generatePrompt({ targetAgent: selectedAgent, taskId: selectedTask?.id, taskTitle: selectedTask?.title, specSummary: project.spec.summary, constitution: project.constitution.rules.map((r) => r.ruleStatement).join('; '), techStack: project.plan.techStack.map((t) => t.technology) });
+      setAiSimulationOutput(data.promptText || 'AI Agent prompt simulated successfully.');
     } catch (err: any) {
       setAiSimulationOutput('Failed to connect to AI server route: ' + err.message);
     } finally {

@@ -3,6 +3,7 @@ import { TruthReport } from '../lib/connector';
 import { storageService } from '../lib/storage';
 import {
   FeatureSpec,
+  FeatureJourney,
   FunctionalRequirement,
   ImplementationPlan,
   ProjectConstitution,
@@ -89,6 +90,7 @@ export function useProjectWorkspace() {
   const saveTasks = useCallback((tasks: TaskBreakdown) => updateActiveProject((project) => ({ ...project, tasks })), [updateActiveProject]);
   const saveConstitution = useCallback((constitution: ProjectConstitution) => updateActiveProject((project) => ({ ...project, constitution })), [updateActiveProject]);
   const saveAudit = useCallback((audit: SpecAuditResult) => updateActiveProject((project) => ({ ...project, audit })), [updateActiveProject]);
+  const saveJourney = useCallback((journey: FeatureJourney) => updateActiveProject((project) => ({ ...project, journey })), [updateActiveProject]);
 
   const applyAiSpecData = useCallback((spec: FeatureSpec, plan?: ImplementationPlan, tasks?: TaskBreakdown) => {
     updateActiveProject((project) => ({ ...project, spec, plan: plan || project.plan, tasks: tasks || project.tasks }));
@@ -143,7 +145,7 @@ export function useProjectWorkspace() {
 
   return {
     projects, activeProject, selectProject, createProject, resetProjects,
-    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit,
+    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
     applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, selectVersion,
   };
 }

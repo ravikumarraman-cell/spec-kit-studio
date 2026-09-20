@@ -23,7 +23,8 @@ import {
   Moon,
   Sun,
   Feather,
-  Laptop
+  Laptop,
+  Settings
 } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../../types/speckit';
 import { useTheme, THEME_PRESETS, ThemeId } from '../../../context/ThemeContext';
@@ -61,6 +62,7 @@ const TAB_TITLES: Record<ViewTab, string> = {
   audit: 'Spec Quality Audit',
   import: 'Repo Import Studio',
   export: 'CLI Exporter',
+  settings: 'Studio Settings',
 };
 
 export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
@@ -395,6 +397,15 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
                 <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                   Quick Tools
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => { onSelectTab('settings'); setIsMoreMenuOpen(false); }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <Settings className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                  <div><div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Studio Settings</div><div className="text-[10px] text-zinc-500">Engine, version, appearance, connector</div></div>
+                </button>
 
                 {/* GitHub & Jira Sync */}
                 {onOpenIntegrations && (

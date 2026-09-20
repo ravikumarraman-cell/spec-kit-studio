@@ -1,155 +1,58 @@
-import React from 'react';
-import {
-  LayoutDashboard,
-  FileText,
-  Workflow,
-  CheckSquare,
-  ShieldCheck,
-  Bot,
-  Activity,
-  Terminal,
-  FolderGit2,
-  HardDrive,
-  Sparkles
-} from 'lucide-react';
-import { ViewTab } from '../../types/speckit';
+import React, { useEffect, useState } from 'react';
+import { Activity, Bot, CheckCircle2, CheckSquare, ChevronRight, Circle, FileText, FolderGit2, HardDrive, Map, Play, Settings, Terminal, Workflow } from 'lucide-react';
+import { SpecKitProject, ViewTab } from '../../types/speckit';
+import { getStudioSettings } from '../../lib/studioSettings';
 
-interface SidebarProps {
-  activeTab: ViewTab;
-  onTabChange: (tab: ViewTab) => void;
-  auditScore?: number;
-  unmappedTaskCount?: number;
-  isCollapsed?: boolean;
-}
+interface SidebarProps { activeTab: ViewTab; onTabChange: (tab: ViewTab) => void; project: SpecKitProject; isCollapsed?: boolean; }
+type JourneyItem = { id: number; label: string; tab: ViewTab; icon: React.ReactNode };
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  onTabChange,
-  auditScore = 94,
-  unmappedTaskCount = 0,
-  isCollapsed = false,
-}) => {
+const journeyItems: JourneyItem[] = [
+  { id: 1, label: 'Connect safely', tab: 'workspace', icon: <HardDrive className="h-4 w-4" /> },
+  { id: 2, label: 'Describe feature', tab: 'spec', icon: <FileText className="h-4 w-4" /> },
+  { id: 3, label: 'Ground impact', tab: 'constitution', icon: <Map className="h-4 w-4" /> },
+  { id: 4, label: 'Design safely', tab: 'plan', icon: <Workflow className="h-4 w-4" /> },
+  { id: 5, label: 'Plan delivery', tab: 'tasks', icon: <CheckSquare className="h-4 w-4" /> },
+  { id: 6, label: 'Quality gate', tab: 'audit', icon: <Activity className="h-4 w-4" /> },
+  { id: 7, label: 'Implement', tab: 'prompt', icon: <Bot className="h-4 w-4" /> },
+  { id: 8, label: 'Verify & hand off', tab: 'export', icon: <Terminal className="h-4 w-4" /> },
+];
+
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, project, isCollapsed = false }) => {
+  const [showAdvancedTools, setShowAdvancedTools] = useState(() => getStudioSettings().showAdvancedTools);
+  useEffect(() => {
+    const refresh = () => setShowAdvancedTools(getStudioSettings().showAdvancedTools);
+    window.addEventListener('speckit-settings-change', refresh);
+    return () => window.removeEventListener('speckit-settings-change', refresh);
+  }, []);
   if (isCollapsed) return null;
+  const journey = project.journey || { activeStage: 1, completedStages: [] as number[] };
+  const current = journeyItems.find((item) => item.id === journey.activeStage) || journeyItems[0];
+  const completed = journey.completedStages.length;
+  const remaining = Math.max(0, journeyItems.length - completed);
 
-  const navItems: { id: ViewTab; label: string; icon: React.ReactNode; badge?: string; badgeColor?: string }[] = [
-    {
-      id: 'overview',
-      label: 'Workspace Hub',
-      icon: <LayoutDashboard className="w-4 h-4" />,
-    },
-    {
-      id: 'import',
-      label: 'Import Project / Repo',
-      icon: <FolderGit2 className="w-4 h-4 text-sky-600 dark:text-cyan-400" />,
-      badge: 'Import',
-      badgeColor: 'text-sky-700 bg-sky-100 border-sky-300 dark:text-cyan-400 dark:bg-cyan-500/10 dark:border-cyan-500/20 font-bold',
-    },
-    {
-      id: 'workspace',
-      label: 'Connected Workspace',
-      icon: <HardDrive className="w-4 h-4 text-emerald-500" />,
-      badge: 'Local',
-      badgeColor: 'text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/30 font-bold',
-    },
-    {
-      id: 'spec',
-      label: 'Feature Spec',
-      icon: <FileText className="w-4 h-4" />,
-      badge: 'spec.md',
-    },
-    {
-      id: 'plan',
-      label: 'Architecture Plan',
-      icon: <Workflow className="w-4 h-4" />,
-      badge: 'plan.md',
-    },
-    {
-      id: 'tasks',
-      label: 'Phased Task Board',
-      icon: <CheckSquare className="w-4 h-4" />,
-      badge: unmappedTaskCount > 0 ? `${unmappedTaskCount} unmapped` : 'tasks.md',
-      badgeColor: unmappedTaskCount > 0 ? 'text-amber-800 bg-amber-100 border-amber-300 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-500/30 font-semibold' : undefined,
-    },
-    {
-      id: 'constitution',
-      label: 'Constitution Rules',
-      icon: <ShieldCheck className="w-4 h-4" />,
-      badge: 'rules',
-    },
-    {
-      id: 'prompt',
-      label: 'AI Agent Prompts',
-      icon: <Bot className="w-4 h-4" />,
-      badge: 'AI',
-      badgeColor: 'text-purple-800 bg-purple-100 border-purple-300 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-500/30 font-semibold',
-    },
-    {
-      id: 'audit',
-      label: 'Spec Quality Audit',
-      icon: <Activity className="w-4 h-4" />,
-      badge: `${auditScore}%`,
-      badgeColor: auditScore >= 90 ? 'text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/30 font-semibold' : 'text-amber-800 bg-amber-100 border-amber-300 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-500/30 font-semibold',
-    },
-    {
-      id: 'export',
-      label: 'CLI & Repo Exporter',
-      icon: <Terminal className="w-4 h-4" />,
-      badge: 'specify.sh',
-    },
-  ];
+  return <aside className="hidden shrink-0 select-none overflow-y-auto border-r border-slate-200 bg-slate-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/70 md:flex md:w-72 md:flex-col">
+    <button type="button" onClick={() => onTabChange('overview')} className={`rounded-xl border p-3 text-left transition-colors ${activeTab === 'overview' ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-slate-200 bg-white hover:border-cyan-500/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-cyan-500/30'}`}>
+      <div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-cyan-300">Feature journey</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{completed}/8</span></div>
+      <div className="mt-2 flex items-end justify-between gap-3"><div><p className="text-xs font-bold text-slate-900 dark:text-zinc-100">{current.id}. {current.label}</p><p className="mt-0.5 text-[11px] text-slate-500 dark:text-zinc-400">{remaining} stage{remaining === 1 ? '' : 's'} remaining</p></div><ChevronRight className="h-4 w-4 text-cyan-500" /></div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400" style={{ width: `${Math.round((completed / 8) * 100)}%` }} /></div>
+    </button>
 
-  return (
-    <aside className="hidden md:flex md:w-64 border-r border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950/70 p-3 flex-col justify-between shrink-0 overflow-y-auto select-none">
-      <div className="flex flex-col gap-1 w-full">
-        <div className="px-3 py-2 text-[11px] font-black tracking-wider text-slate-500 dark:text-zinc-400 uppercase">
-          Spec Workflow Modules
-        </div>
+    <div className="mt-5 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Your journey</div>
+    <nav aria-label="Feature journey stages" className="mt-2 space-y-1">
+      {journeyItems.map((item) => {
+        const isComplete = journey.completedStages.includes(item.id); const isCurrent = current.id === item.id; const isWorkspaceOpen = activeTab === item.tab;
+        return <button key={item.id} type="button" onClick={() => onTabChange(item.tab)} aria-current={isCurrent ? 'step' : undefined} className={`group flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-xs transition-all ${isCurrent ? 'border-cyan-500/40 bg-cyan-500/10 text-slate-950 dark:text-cyan-100' : isWorkspaceOpen ? 'border-slate-300 bg-slate-200/70 text-slate-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100' : 'border-transparent text-slate-700 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'} ${!isComplete && !isCurrent ? 'opacity-70 hover:opacity-100' : ''}`}>
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${isComplete ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : isCurrent ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' : 'border-slate-300 text-slate-500 dark:border-zinc-700 dark:text-zinc-500'}`}>{isComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : item.id}</span>
+          <span className={isCurrent ? 'text-cyan-600 dark:text-cyan-300' : isComplete ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-zinc-500'}>{item.icon}</span><span className="min-w-0 flex-1 font-semibold">{item.label}</span>
+          {isCurrent && <span className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Now</span>}
+          {isComplete && !isCurrent && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-300">Edit</span>}
+          {!isComplete && !isCurrent && <Circle className="h-2.5 w-2.5 text-slate-400 dark:text-zinc-600" />}
+        </button>;
+      })}
+    </nav>
 
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all group ${
-                isActive
-                  ? 'bg-sky-100 text-sky-950 dark:bg-zinc-800/90 dark:text-cyan-300 border border-sky-300 dark:border-cyan-500/40 shadow-xs'
-                  : 'text-slate-800 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-zinc-900 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className={isActive ? 'text-sky-700 dark:text-cyan-400' : 'text-slate-600 dark:text-zinc-400 group-hover:text-slate-900 dark:group-hover:text-zinc-200'}>
-                  {item.icon}
-                </span>
-                <span>{item.label}</span>
-              </div>
+    <div className="mt-5 border-t border-slate-200 pt-4 dark:border-zinc-800"><div className="px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Studio</div><button type="button" onClick={() => onTabChange('settings')} className={`mt-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${activeTab === 'settings' ? 'bg-slate-200 text-slate-950 dark:bg-zinc-900 dark:text-zinc-100' : 'text-slate-600 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'}`}><Settings className="h-4 w-4" />Settings</button>{showAdvancedTools && <button type="button" onClick={() => onTabChange('import')} className={`mt-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${activeTab === 'import' ? 'bg-slate-200 text-slate-950 dark:bg-zinc-900 dark:text-zinc-100' : 'text-slate-600 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'}`}><FolderGit2 className="h-4 w-4" />Repository import <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-600">Advanced</span></button>}</div>
 
-              {item.badge && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
-                    item.badgeColor || 'text-slate-700 dark:text-zinc-300 bg-slate-200/80 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 font-semibold'
-                  }`}
-                >
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sidebar Footer Info */}
-      <div className="hidden md:block pt-4 border-t border-zinc-200 dark:border-zinc-900 mt-6 px-3">
-        <div className="rounded-xl bg-white dark:bg-gradient-to-b dark:from-zinc-900 dark:to-zinc-950 border border-zinc-200 dark:border-zinc-800/80 p-3 space-y-2 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-200">
-            <Sparkles className="w-3.5 h-3.5 text-sky-600 dark:text-cyan-400" />
-            <span>Spec-Driven AI</span>
-          </div>
-          <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Specify logic before generating code. Eliminate hallucination with structured specs.
-          </p>
-        </div>
-      </div>
-    </aside>
-  );
+    <div className="mt-auto border-t border-slate-200 px-2 pt-4 dark:border-zinc-800"><div className="rounded-xl border border-slate-200 bg-white p-3 text-[11px] dark:border-zinc-800 dark:bg-zinc-900/60"><div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-zinc-200"><HardDrive className="h-3.5 w-3.5 text-emerald-500" />{project.importedRepo?.repoName || 'No repository connected'}</div><p className="mt-1 text-slate-500 dark:text-zinc-400">{project.importedRepo ? `${project.importedRepo.primaryLanguage} · scan evidence attached` : 'Start Stage 1 to connect a repository.'}</p><button type="button" onClick={() => onTabChange(current.tab)} className="mt-2 inline-flex items-center gap-1 font-bold text-cyan-700 hover:text-cyan-600 dark:text-cyan-300">Resume Stage {current.id}<Play className="h-3 w-3" /></button></div></div>
+  </aside>;
 };

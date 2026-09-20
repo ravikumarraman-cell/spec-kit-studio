@@ -11,7 +11,6 @@ import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
-const OverviewDashboard = lazy(() => import('./components/dashboard/OverviewDashboard').then((module) => ({ default: module.OverviewDashboard })));
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
 const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
 const SpecEditor = lazy(() => import('./components/spec/SpecEditor').then((module) => ({ default: module.SpecEditor })));
@@ -21,12 +20,14 @@ const ConstitutionEditor = lazy(() => import('./components/constitution/Constitu
 const PromptStudio = lazy(() => import('./components/prompt/PromptStudio').then((module) => ({ default: module.PromptStudio })));
 const AuditDashboard = lazy(() => import('./components/audit/AuditDashboard').then((module) => ({ default: module.AuditDashboard })));
 const CliExporter = lazy(() => import('./components/exporter/CliExporter').then((module) => ({ default: module.CliExporter })));
+const FeatureJourney = lazy(() => import('./components/journey/FeatureJourney').then((module) => ({ default: module.FeatureJourney })));
+const StudioSettings = lazy(() => import('./components/settings/StudioSettings').then((module) => ({ default: module.StudioSettings })));
 
 function AppContent() {
   const { isDark } = useTheme();
   const {
     projects, activeProject, selectProject, createProject, resetProjects,
-    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit,
+    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
     applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, selectVersion,
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
@@ -70,9 +71,6 @@ function AppContent() {
   };
   const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => { mergeImportedFeature(stories, data); setActiveTab('spec'); };
 
-  // Count unmapped tasks
-  const unmappedTasks = activeProject.tasks.tasks.filter((t) => !t.mappedRequirementId).length;
-
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden theme-canvas font-sans antialiased flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Clean Single-Row Top Navigation Bar */}
@@ -102,8 +100,7 @@ function AppContent() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          auditScore={activeProject.audit?.overallScore || 94}
-          unmappedTaskCount={unmappedTasks}
+          project={activeProject}
           isCollapsed={!isSidebarOpen}
         />
 
@@ -117,15 +114,7 @@ function AppContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && (
-                <OverviewDashboard
-                  project={activeProject}
-                  onNavigateTab={setActiveTab}
-                  onTriggerAiSpecModal={() => setIsAiSpecModalOpen(true)}
-                  onSelectVersion={selectVersion}
-                  onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
-                />
-              )}
+              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} />}
 
               {activeTab === 'import' && (
                 <RepoImportStudio
@@ -137,6 +126,8 @@ function AppContent() {
               {activeTab === 'workspace' && (
                 <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} />
               )}
+
+              {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onOpenWorkspace={() => setActiveTab('workspace')} />}
 
               {activeTab === 'spec' && (
                 <SpecEditor
@@ -226,6 +217,7 @@ function AppContent() {
         }}
         activeProject={activeProject}
         onMergeIntoActiveProject={handleMergeIntoActiveProject}
+        onOpenWorkspace={() => { setIsFeatureImportModalOpen(false); setActiveTab('workspace'); }}
       />
 
       {/* GitHub & Jira Integration Sync Modal */}

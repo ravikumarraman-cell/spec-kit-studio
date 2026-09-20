@@ -176,6 +176,14 @@ export interface SpecAuditResult {
   recommendations: AuditRecommendation[];
 }
 
+/** Human approvals for the guided, feature-scoped Spec-Kit workflow. */
+export interface FeatureJourney {
+  activeStage: number;
+  completedStages: number[];
+  startedAt: string;
+  updatedAt: string;
+}
+
 export interface SpecKitProject {
   id: string;
   name: string;
@@ -188,7 +196,8 @@ export interface SpecKitProject {
   constitution: ProjectConstitution;
   audit?: SpecAuditResult;
   importedRepo?: ImportedRepository;
+  journey?: FeatureJourney;
   version: string;
 }
 
-export type ViewTab = 'overview' | 'workspace' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import';
+export type ViewTab = 'overview' | 'workspace' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import' | 'settings';

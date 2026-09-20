@@ -94,6 +94,24 @@ async function discoverBaselineCommands(root, files) {
   }
   return commands;
 }
+async function discoverLocalAgents(root) {
+  const candidates = [
+    { id: 'claude', label: 'Claude Code', commandName: 'claude', args: ['--version'] },
+    // `codex exec --help` verifies that the executable can launch without starting an agent session.
+    { id: 'codex', label: 'Codex', commandName: 'codex', args: ['exec', '--help'] },
+    { id: 'copilot', label: 'GitHub Copilot CLI', commandName: 'copilot', args: ['--version'] },
+  ];
+  return Promise.all(candidates.map(async (candidate) => {
+    const result = await command(candidate.commandName, candidate.args, root, 5_000);
+    return {
+      id: candidate.id,
+      label: candidate.label,
+      installed: result.ok,
+      // Version/help output is diagnostic only. Keep it short and never expose environment details.
+      version: result.ok ? result.output.split('\n').find(Boolean)?.trim().slice(0, 160) || undefined : undefined,
+    };
+  }));
+}
 function techEvidence(files, packageJson) {
   const deps = { ...(packageJson?.dependencies || {}), ...(packageJson?.devDependencies || {}) };
   const known = [
@@ -116,10 +134,11 @@ async function scan(root) {
   const branch = await command('git', ['branch', '--show-current'], root);
   const remotes = await command('git', ['remote', '-v'], root);
   const baselineCommands = await discoverBaselineCommands(root, files);
+  const agents = await discoverLocalAgents(root);
   return {
     repositoryPath: root, repositoryName: path.basename(root), scannedAt: new Date().toISOString(), files,
     filesTruncated: files.length >= 1200, manifests: files.filter((file) => /(^|\/)(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|pom\.xml|build\.gradle|Dockerfile|schema\.prisma)$/.test(file)),
-    technologies: techEvidence(files, packageJson), packageScripts: packageJson?.scripts || {}, baselineCommands,
+    technologies: techEvidence(files, packageJson), packageScripts: packageJson?.scripts || {}, baselineCommands, agents,
     git: { available: git.ok, branch: branch.output || null, status: git.output || '', remotes: remotes.output || '' },
     specKit: { detected: files.some((file) => file.startsWith('.specify/')), featureFile: files.includes('.specify/feature.json') },
   };
@@ -166,6 +185,17 @@ async function startWorkspaceDependencyInstall(root, workingDirectory) {
   const hasLockfile = await fs.stat(path.join(workspaceRoot, 'package-lock.json')).then(() => true).catch(() => false);
   const args = [hasLockfile ? 'ci' : 'install'];
   return startCommandJob({ label: workspace.workingDirectory || 'Repository root', commandName: 'npm', args, cwd: workspaceRoot, timeout: 300_000 });
+}
+function startSpecKitAgent(root, agent, prompt) {
+  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 50_000) throw new Error('A valid, reasonably sized Engine work packet is required.');
+  const commands = {
+    claude: { commandName: 'claude', args: ['-p', prompt], label: 'Claude Code · Spec-Kit planning' },
+    codex: { commandName: 'codex', args: ['exec', prompt], label: 'Codex · Spec-Kit planning' },
+    copilot: { commandName: 'copilot', args: ['-p', prompt], label: 'GitHub Copilot CLI · Spec-Kit planning' },
+  };
+  const selected = commands[agent];
+  if (!selected) throw new Error('Unsupported local coding agent.');
+  return startCommandJob({ ...selected, cwd: root, timeout: 600_000 });
 }
 function validate(project) {
   const errors = [], warnings = [];
@@ -240,6 +270,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/workspace/apply') { if (payload.confirmation !== 'APPLY') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, { applied: await apply(await safeRoot(payload.repositoryPath), payload.files) }); }
     if (req.method === 'POST' && req.url === '/v1/baseline/run') return send(req, res, 202, await startBaselineCommand(await safeRoot(payload.repositoryPath), payload.commandId));
     if (req.method === 'POST' && req.url === '/v1/dependencies/install') { if (payload.confirmation !== 'INSTALL_DEPENDENCIES') return send(req, res, 400, { error: 'Explicit dependency-install confirmation is required.' }); return send(req, res, 202, await startWorkspaceDependencyInstall(await safeRoot(payload.repositoryPath), payload.workingDirectory)); }
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); return send(req, res, 202, startSpecKitAgent(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt)); }
     if (req.method === 'POST' && req.url === '/v1/execute') { const root = await safeRoot(payload.repositoryPath); const entry = allowedExecutions.get(payload.action); if (!entry) return send(req, res, 400, { error: 'Action is not allowlisted.' }); const [bin, args] = entry; return send(req, res, 200, { action: payload.action, ...(await command(bin, args, root)) }); }
     return send(req, res, 404, { error: 'Not found.' });
   } catch (error) { return send(req, res, 400, { error: error.message || 'Connector request failed.' }); }

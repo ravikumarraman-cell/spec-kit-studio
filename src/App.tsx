@@ -191,7 +191,10 @@ function AppContent() {
                 <PromptStudio
                   project={activeProject}
                   initialTaskId={targetPromptTaskId}
-                  onRecordFeatureImplementation={saveLatestFeatureImplementation}
+                  onRecordFeatureImplementation={(receipt) => {
+                    saveLatestFeatureImplementation(receipt);
+                    setTargetPromptTaskId(undefined);
+                  }}
                 />
               )}
 

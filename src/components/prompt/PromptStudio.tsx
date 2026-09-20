@@ -24,7 +24,7 @@ import { AgentTarget, portableFeatureTaskPrompt, portableTaskPrompt } from '../.
 import { generationApi } from '../../lib/api/generation';
 import { actionableFeatureDeliveryTasks, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
-import { ConnectorJob, connectorClient } from '../../lib/connector';
+import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, connectorClient, repositoryEvidenceSnapshot } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
@@ -87,6 +87,48 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const [hasReviewedResult, setHasReviewedResult] = useState(false);
   const [receiptSaved, setReceiptSaved] = useState(false);
   const [verificationJob, setVerificationJob] = useState<ConnectorJob | null>(null);
+  const [recoveredEvidence, setRecoveredEvidence] = useState<ConnectorJobEvidence | null>(null);
+  const [isRecoveringEvidence, setIsRecoveringEvidence] = useState(false);
+
+  const restoreActiveConnectorJob = async () => {
+    const repositoryPath = project.importedRepo?.repoUrl;
+    if (!repositoryPath) return false;
+    const job = await activeConnectorJob(
+      window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318',
+      getConnectorSessionToken(),
+      repositoryPath,
+    );
+    if (!job) return false;
+    setCodexJob(job);
+    setIsRunningCodex(job.status === 'running');
+    return true;
+  };
+
+  useEffect(() => {
+    restoreActiveConnectorJob().catch(() => undefined);
+  // Reconnect when the connected repository changes. A repository has one active writer.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.importedRepo?.repoUrl]);
+
+  useEffect(() => {
+    if (!codexJob || codexJob.status !== 'running') return;
+    let cancelled = false;
+    const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', getConnectorSessionToken());
+    const refresh = async () => {
+      try {
+        const job = await client.getJob(codexJob.id);
+        if (!cancelled) {
+          setCodexJob(job);
+          setIsRunningCodex(job.status === 'running');
+        }
+      } catch {
+        if (!cancelled) setIsRunningCodex(false);
+      }
+    };
+    const timer = window.setInterval(refresh, 750);
+    void refresh();
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [codexJob?.id, codexJob?.status]);
 
   const reviewedFeatureTaskIds = useMemo(
     () => activeFeature?.implementationReceipts?.map((receipt) => receipt.taskId) || [],
@@ -97,10 +139,17 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     [featureTasks, reviewedFeatureTaskIds],
   );
   const taskOptions = useSharedTasks || featureTasks.length === 0 ? project.tasks.tasks : actionableFeatureTasks;
+
+  // A task-board click is a one-time navigation hint, not a permanent lock on
+  // the picker. Once a receipt is recorded, the regular next-actionable-task
+  // rule must take over.
+  useEffect(() => {
+    if (initialTaskId) setSelectedTaskId(initialTaskId);
+  }, [initialTaskId]);
+
   const selectedTask = useMemo(() => {
-    const requested = initialTaskId || selectedTaskId;
-    return taskOptions.find((task) => task.id === requested) || taskOptions[0];
-  }, [initialTaskId, selectedTaskId, taskOptions]);
+    return taskOptions.find((task) => task.id === selectedTaskId) || taskOptions[0];
+  }, [selectedTaskId, taskOptions]);
 
   useEffect(() => {
     if (taskOptions.length > 0 && !taskOptions.some((task) => task.id === selectedTaskId)) {
@@ -112,6 +161,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const selectedLocalAgent = AGENT_FRAMEWORKS.find((agent) => agent.name === selectedAgent)?.localAgent;
   const selectedAgentLabel = selectedLocalAgent ? localAgentLabels[selectedLocalAgent] : selectedAgent;
   const completedChangedFiles = codexJob ? evidenceChangedFiles(codexJob) : [];
+  const recoveredChangedFiles = recoveredEvidence?.changedFiles || [];
   const decisionGate = useMemo(
     () => !useSharedTasks && activeFeature && selectedTask ? featureTaskDecisionGate(selectedTask.id) : undefined,
     [useSharedTasks, activeFeature, selectedTask],
@@ -183,6 +233,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setIsRunningCodex(true);
     setRunError('');
     setCodexJob(null);
+    setRecoveredEvidence(null);
     setVerificationJob(null);
     setHasReviewedResult(false);
     setReceiptSaved(false);
@@ -197,7 +248,18 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       }
       if (!job.ok) setRunError(agentFailureGuidance(selectedLocalAgent, job.output));
     } catch (error) {
-      setRunError(agentFailureGuidance(selectedLocalAgent, error instanceof Error ? error.message : `Studio could not start ${selectedAgentLabel} locally.`));
+      const detail = error instanceof Error ? error.message : `Studio could not start ${selectedAgentLabel} locally.`;
+      if (/another studio job is already running/i.test(detail)) {
+        try {
+          if (await restoreActiveConnectorJob()) {
+            setRunError('Studio restored the active local job below. Review its live output or stop it safely before starting another task.');
+            return;
+          }
+        } catch {
+          // Preserve the original actionable connector diagnostic below.
+        }
+      }
+      setRunError(agentFailureGuidance(selectedLocalAgent, detail));
     } finally {
       setIsRunningCodex(false);
     }
@@ -232,15 +294,43 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     }
   };
 
+  const recoverTaskEvidence = async () => {
+    const repositoryPath = project.importedRepo?.repoUrl;
+    if (!repositoryPath || !selectedTask) return;
+    setIsRecoveringEvidence(true);
+    setRunError('');
+    setRecoveredEvidence(null);
+    setHasReviewedResult(false);
+    setReceiptSaved(false);
+    try {
+      const evidence = await repositoryEvidenceSnapshot(
+        window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318',
+        getConnectorSessionToken(),
+        repositoryPath,
+      );
+      setRecoveredEvidence(evidence);
+      if (evidence.changedFiles.length === 0) {
+        setRunError('Studio found no changed files in the current Git working tree. Do not record this task until you can verify its output.');
+      }
+    } catch (error) {
+      setRunError(agentFailureGuidance(selectedLocalAgent || 'codex', error instanceof Error ? error.message : 'Studio could not read current repository evidence.'));
+    } finally {
+      setIsRecoveringEvidence(false);
+    }
+  };
+
   const retainReceipt = () => {
-    if (!codexJob?.ok || !selectedTask || !hasReviewedResult) return;
+    const evidence = codexJob?.ok ? codexJob.evidence : recoveredEvidence;
+    if (!evidence || !selectedTask || !hasReviewedResult) return;
     onRecordFeatureImplementation({
       taskId: selectedTask.id,
-      jobId: codexJob.id,
+      jobId: codexJob?.ok ? codexJob.id : `recovered-${selectedTask.id}-${Date.now()}`,
       recordedAt: new Date().toISOString(),
-      changedFiles: evidenceChangedFiles(codexJob),
-      diffStat: codexJob.evidence?.diffStat || '',
-      verificationSummary: (verificationJob?.output || codexJob.output).slice(-8_000),
+      changedFiles: codexJob?.ok ? evidenceChangedFiles(codexJob) : evidence.changedFiles,
+      diffStat: evidence.diffStat || '',
+      verificationSummary: codexJob?.ok
+        ? (verificationJob?.output || codexJob.output).slice(-8_000)
+        : `Recovered from a read-only Git evidence snapshot. Reviewer confirmed the current working-tree changes belong to ${selectedTask.id}.\n${(verificationJob?.output || evidence.repositoryStatus).slice(-8_000)}`,
     });
     setReceiptSaved(true);
   };
@@ -414,7 +504,25 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
             {isRunningCodex && <button type="button" onClick={cancelCodexRun} className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2.5 text-xs font-bold text-rose-200 hover:bg-rose-500/20"><Square className="h-3.5 w-3.5 fill-current" />Stop safely</button>}
             <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />One task per handoff keeps scope and token use bounded.</span>
           </div>
+          {!codexJob && !isRunningCodex && selectedTask && project.importedRepo?.repoUrl && (
+            <details className="mx-5 mb-5 rounded-xl border border-zinc-800 bg-zinc-900/45 px-4 py-3 text-xs">
+              <summary className="cursor-pointer font-semibold text-zinc-300">Earlier agent run finished, but its result panel is missing?</summary>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-zinc-400">
+                <p className="max-w-2xl leading-relaxed">Read a fresh Git snapshot for this repository and recover a review receipt for the selected task. This does not run an agent, edit files, commit, or push. Because Git cannot prove task ownership, you will still confirm the evidence yourself.</p>
+                <button type="button" onClick={recoverTaskEvidence} disabled={isRecoveringEvidence} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRecoveringEvidence ? 'animate-spin' : ''}`} />{isRecoveringEvidence ? 'Reading evidence…' : 'Recover task evidence'}</button>
+              </div>
+            </details>
+          )}
           {runError && <div className="mx-5 mb-5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-100">{runError}</div>}
+          {recoveredEvidence && !codexJob && <section className="mx-5 mb-5 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">
+            <p className="font-bold text-amber-100">Recovered repository evidence — verify before recording</p>
+            <p className="mt-1 leading-relaxed text-zinc-400">This is a read-only snapshot of the current working tree, not a replay of the earlier agent. Review the files below and record it only if they belong to <span className="font-mono text-amber-100">{selectedTask?.id}</span>.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="rounded-lg bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Changed files ({recoveredChangedFiles.length})</p><p className="mt-1 max-h-24 overflow-auto font-mono text-[10px] text-zinc-400">{recoveredChangedFiles.join('\n') || 'No source or artifact file changes were detected.'}</p></div><div className="rounded-lg bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Diff summary</p><pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] text-zinc-400">{recoveredEvidence.diffStat || (recoveredChangedFiles.length ? 'New or untracked files are listed at left; Git does not produce a diff stat until they are added.' : 'No diff summary was available.')}</pre></div></div>
+            <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-bold text-cyan-100">Optional independent verification</p><p className="mt-1 text-[11px] text-zinc-400">Run the repository’s declared test command. It does not use agent tokens.</p></div><button type="button" onClick={runFeatureVerification} disabled={verificationJob?.status === 'running'} className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 hover:bg-cyan-400/20 disabled:opacity-50">{verificationJob?.status === 'running' ? 'Running verification…' : verificationJob?.ok ? 'Verification passed' : 'Run repository tests'}</button></div>{verificationJob && <AgentJobStatus job={verificationJob} preparingLabel="Running independent repository verification…" />}</div>
+            <label className="mt-4 flex cursor-pointer items-start gap-2 text-zinc-200"><input type="checkbox" checked={hasReviewedResult} onChange={(event) => setHasReviewedResult(event.target.checked)} className="mt-0.5 accent-amber-300" />I independently verified that these current working-tree changes belong to {selectedTask?.id}. I reviewed the files and any focused verification.</label>
+            <button type="button" onClick={retainReceipt} disabled={!hasReviewedResult || receiptSaved || recoveredChangedFiles.length === 0} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"><FileCheck2 className="h-3.5 w-3.5" />{receiptSaved ? 'Implementation receipt saved' : 'Record recovered implementation'}</button>
+            {receiptSaved && <p className="mt-2 text-[11px] text-emerald-200">The task is now recorded as reviewed and Studio will move to the next actionable task.</p>}
+          </section>}
           {codexJob && <div className="px-5 pb-5"><AgentJobStatus job={codexJob} preparingLabel={`${selectedAgentLabel} is implementing ${selectedTask?.id || 'the selected task'} locally…`} />
             {codexJob.ok && <section className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs">
               <p className="font-bold text-emerald-100">Codex finished. Review the evidence before recording this task.</p>

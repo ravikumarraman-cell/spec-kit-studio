@@ -237,7 +237,21 @@ function stopProcess(job, child, reason) {
   }, 10_000).unref();
 }
 function startCommandJob({ label, commandName, args, cwd, timeout, captureEvidence = false }) {
-  if (activeJobByRepository.has(cwd)) throw new Error('Another Studio job is already running for this repository. Review or cancel it before starting another.');
+  const activeId = activeJobByRepository.get(cwd);
+  if (activeId) {
+    const active = jobs.get(activeId);
+    const process = runningProcesses.get(activeId);
+    // A connector crash, an interrupted child, or an older connector release
+    // can leave an in-memory repository lock after the agent is gone. Never
+    // make the user restart blindly: recover a lock only when there is no
+    // live child process to protect.
+    if (!active || active.status !== 'running' || !process) {
+      activeJobByRepository.delete(cwd);
+      runningProcesses.delete(activeId);
+    } else {
+      throw new Error('Another Studio job is already running for this repository. Review or cancel it before starting another.');
+    }
+  }
   const id = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const agentCommands = new Set(['codex', 'claude', 'copilot']);
   const commandPreview = agentCommands.has(commandName) ? `${commandName} <agent arguments redacted>` : `${commandName} ${args.join(' ')}`;
@@ -338,6 +352,29 @@ function cancelJob(id) {
   stopProcess(job, child, 'Cancelled by the Studio user.');
   return job;
 }
+function activeJob(root) {
+  const id = activeJobByRepository.get(root);
+  return id ? jobs.get(id) || null : null;
+}
+// This deliberately uses only Git read commands. It is the recovery path for
+// a completed agent run whose browser job panel was lost (for example after a
+// refresh or connector restart). It never starts an agent and never edits a
+// repository; Studio still requires an explicit human review before recording
+// a receipt because a working tree can contain changes from more than one task.
+async function repositoryEvidence(root) {
+  const [status, changedFiles, stagedFiles, diffStat] = await Promise.all([
+    command('git', ['status', '--short', '--untracked-files=all'], root),
+    command('git', ['diff', '--name-only'], root),
+    command('git', ['diff', '--cached', '--name-only'], root),
+    command('git', ['diff', '--stat'], root),
+  ]);
+  const filesFromStatus = status.output.split('\n').map((line) => line.slice(3).trim()).filter(Boolean).map((file) => file.includes(' -> ') ? file.split(' -> ').at(-1) : file);
+  return {
+    repositoryStatus: status.output,
+    changedFiles: [...new Set([...changedFiles.output.split('\n'), ...stagedFiles.output.split('\n'), ...filesFromStatus].map((file) => file.trim()).filter(Boolean))].slice(0, 200),
+    diffStat: diffStat.output,
+  };
+}
 function validate(project) {
   const errors = [], warnings = [];
   const requirements = new Set((project.spec?.functionalRequirements || []).map((item) => item.id));
@@ -419,6 +456,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/codex/task/run') { if (payload.confirmation !== 'RUN_CODEX_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let Codex edit a local repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), 'codex', payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
+    if (req.method === 'POST' && req.url === '/v1/jobs/active') return send(req, res, 200, { job: activeJob(await safeRoot(payload.repositoryPath)) });
+    if (req.method === 'POST' && req.url === '/v1/repository/evidence') return send(req, res, 200, { evidence: await repositoryEvidence(await safeRoot(payload.repositoryPath)) });
     if (req.method === 'POST' && req.url === '/v1/jobs/cancel') return send(req, res, 200, cancelJob(String(payload.jobId || '')));
     if (req.method === 'POST' && req.url === '/v1/execute') { const root = await safeRoot(payload.repositoryPath); const entry = allowedExecutions.get(payload.action); if (!entry) return send(req, res, 400, { error: 'Action is not allowlisted.' }); const [bin, args] = entry; return send(req, res, 200, { action: payload.action, ...(await command(bin, args, root)) }); }
     return send(req, res, 404, { error: 'Not found.' });

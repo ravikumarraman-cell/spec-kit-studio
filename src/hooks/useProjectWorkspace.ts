@@ -15,6 +15,7 @@ import {
   TaskItem,
   UserStory,
   FeatureImportSource,
+  FeatureImplementationReceipt,
 } from '../types/speckit';
 
 type ImportedTask = Partial<TaskItem>;
@@ -110,7 +111,7 @@ export function useProjectWorkspace() {
         repoUrl: report.repositoryPath,
         repoName: report.repositoryName,
         description: `Local repository evidence scan completed ${new Date(report.scannedAt).toLocaleString()}.`,
-        primaryLanguage: report.technologies.find((item) => item.name === 'Python' || item.name === 'Go' || item.name === 'Rust')?.name || 'TypeScript/JavaScript',
+        primaryLanguage: report.technologies.find((item) => ['Python', 'Go', 'Rust', 'Java', '.NET', 'Ruby', 'PHP'].includes(item.name))?.name || report.technologies.find((item) => item.name === 'React' || item.name === 'Next.js') ? 'TypeScript/JavaScript' : 'Unknown / mixed stack',
         detectedTechStack: report.technologies.map((item, index) => ({
           id: `EVIDENCE-${index + 1}`,
           category: allowedCategories.has(item.category) ? item.category as NonNullable<SpecKitProject['importedRepo']>['detectedTechStack'][number]['category'] : 'Other',
@@ -162,11 +163,25 @@ export function useProjectWorkspace() {
     });
   }, [updateActiveProject]);
 
+  const saveLatestFeatureImplementation = useCallback((receipt: FeatureImplementationReceipt) => {
+    updateActiveProject((project) => {
+      const items = project.featureInbox || [];
+      if (!items.length) return project;
+      const index = items.length - 1;
+      return {
+        ...project,
+        featureInbox: items.map((item, itemIndex) => itemIndex === index
+          ? { ...item, implementationReceipts: [...(item.implementationReceipts || []).filter((existing) => existing.taskId !== receipt.taskId), receipt] }
+          : item),
+      };
+    });
+  }, [updateActiveProject]);
+
   const selectVersion = useCallback((version: string) => updateActiveProject((project) => ({ ...project, version })), [updateActiveProject]);
 
   return {
     projects, activeProject, selectProject, createProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, selectVersion,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, selectVersion,
   };
 }

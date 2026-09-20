@@ -12,15 +12,18 @@ import { StatCard } from '../common/StatCard';
 import { AuditScoreOverview } from './AuditScoreOverview';
 import { AuditRecommendations } from './AuditRecommendations';
 import { generationApi } from '../../lib/api/generation';
+import { auditBlockers, auditPassesQualityGate } from '../../lib/auditGate';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
   onUpdateAudit: (updatedAudit: SpecAuditResult) => void;
+  onOpenJourney: () => void;
 }
 
 export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
   project,
   onUpdateAudit,
+  onOpenJourney,
 }) => {
   const [isAuditing, setIsAuditing] = useState(false);
   const audit = project.audit || {
@@ -38,6 +41,8 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
       { category: 'Integration', suggestion: 'Provide custom shell script generator for Windows PowerShell (.ps1) alongside specify.sh.', impact: 'Medium' },
     ],
   };
+  const blockers = auditBlockers(audit);
+  const passesGate = auditPassesQualityGate(audit);
 
   const handleRunAudit = async () => {
     setIsAuditing(true);
@@ -112,6 +117,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
 
       {/* Gaps, Ambiguities, and Recommendations */}
       <AuditRecommendations audit={audit} />
+      <section className={`rounded-2xl border p-5 text-xs ${passesGate ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-amber-400/30 bg-amber-500/10'}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className={`font-bold ${passesGate ? 'text-emerald-200' : 'text-amber-100'}`}>{passesGate ? 'Quality gate ready to approve' : `${blockers.length} blocking finding${blockers.length === 1 ? '' : 's'} remain`}</p><p className="mt-1 text-zinc-300">{passesGate ? 'The remaining suggestions are advisory. They do not block this feature from moving forward.' : 'Resolve or explicitly document the blocking items before advancing.'}</p></div><button type="button" onClick={onOpenJourney} className={`rounded-lg px-3 py-2 font-bold ${passesGate ? 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300' : 'border border-amber-300/40 text-amber-100 hover:bg-amber-300/10'}`}>{passesGate ? 'Approve Stage 6 in Journey' : 'Return to Feature Journey'}</button></div></section>
     </div>
   );
 });

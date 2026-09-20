@@ -31,7 +31,19 @@ const managedToolsDir = path.join(process.cwd(), 'connector', '.tools');
 const managedUv = path.join(managedToolsDir, 'bin', 'uv');
 const managedPython = path.join(managedToolsDir, 'bin', 'python');
 const jobs = new Map();
+const runningProcesses = new Map();
+const activeJobByRepository = new Map();
 const MAX_JOB_OUTPUT = 1_000_000;
+const MAX_REQUEST_BYTES = 1_000_000;
+
+// Connector output is shown in the browser. Treat it as untrusted diagnostic
+// material: common credential shapes must never be echoed back to Studio.
+function redactSensitiveOutput(value) {
+  return String(value || '')
+    .replace(/\b(bearer)\s+[A-Za-z0-9._~+/-]+=*/gi, '$1 [REDACTED]')
+    .replace(/\b((?:api[_-]?key|token|secret|password|authorization)\s*(?:=|:|is)\s*)([^\s,;]+)/gi, '$1[REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]');
+}
 
 function send(req, res, status, body) {
   const origin = req.headers.origin;
@@ -41,10 +53,20 @@ function send(req, res, status, body) {
 }
 async function body(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  return JSON.parse(Buffer.concat(chunks).toString() || '{}');
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > MAX_REQUEST_BYTES) throw new Error('Request is too large. Reduce the pasted content and try again.');
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString() || '{}');
+  } catch {
+    throw new Error('Studio received malformed request data. Refresh the page and try again.');
+  }
 }
 async function safeRoot(candidate) {
+  if (typeof candidate !== 'string' || !candidate.trim()) throw new Error('Choose a repository folder before continuing.');
   const absolute = path.resolve(candidate);
   const real = await fs.realpath(absolute).catch(() => { throw new Error('Repository path does not exist.'); });
   if (!allowedRoots.some((root) => real === root || real.startsWith(`${root}${path.sep}`))) throw new Error('Repository path is outside STUDIO_ALLOWED_ROOTS.');
@@ -53,9 +75,9 @@ async function safeRoot(candidate) {
 async function command(command, args, cwd, timeout = 30_000) {
   try {
     const { stdout, stderr } = await execFileAsync(command, args, { cwd, timeout, maxBuffer: 1_000_000 });
-    return { ok: true, output: `${stdout}${stderr}`.trim() };
+    return { ok: true, output: redactSensitiveOutput(`${stdout}${stderr}`.trim()) };
   } catch (error) {
-    return { ok: false, output: `${error.stdout || ''}${error.stderr || error.message || ''}`.trim() };
+    return { ok: false, output: redactSensitiveOutput(`${error.stdout || ''}${error.stderr || error.message || ''}`.trim()) };
   }
 }
 async function uvCommand(args, cwd, timeout = 30_000) {
@@ -87,14 +109,43 @@ async function textIfPresent(root, file) {
 }
 async function discoverBaselineCommands(root, files) {
   const commands = [];
+  const add = (item) => {
+    if (!commands.some((command) => command.id === item.id)) commands.push(item);
+  };
   for (const manifest of files.filter((file) => file === 'package.json' || file.endsWith('/package.json'))) {
     try {
       const parsed = JSON.parse(await fs.readFile(path.join(root, manifest), 'utf8'));
       const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
       for (const script of ['lint', 'test', 'build']) {
-        if (parsed.scripts?.[script]) commands.push({ id: `npm:${workingDirectory || 'root'}:${script}`, label: `${workingDirectory || 'Repository root'} — ${script}`, runner: 'npm', script, workingDirectory });
+        if (parsed.scripts?.[script]) add({ id: `npm:${workingDirectory || 'root'}:${script}`, label: `${workingDirectory || 'Repository root'} — ${script}`, runner: 'npm', kind: script, commandName: 'npm', args: ['run', script], workingDirectory });
       }
     } catch { /* Invalid manifests are retained as scan evidence but never executable. */ }
+  }
+  for (const manifest of files.filter((file) => /(^|\/)(pyproject\.toml|pytest\.ini|tox\.ini|setup\.cfg)$/.test(file))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    add({ id: `python:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — pytest`, runner: 'python', kind: 'test', commandName: 'python3', args: ['-m', 'pytest'], workingDirectory });
+  }
+  for (const manifest of files.filter((file) => file === 'go.mod' || file.endsWith('/go.mod'))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    add({ id: `go:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — go test`, runner: 'go', kind: 'test', commandName: 'go', args: ['test', './...'], workingDirectory });
+  }
+  for (const manifest of files.filter((file) => file === 'Cargo.toml' || file.endsWith('/Cargo.toml'))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    add({ id: `cargo:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — cargo test`, runner: 'cargo', kind: 'test', commandName: 'cargo', args: ['test'], workingDirectory });
+  }
+  for (const manifest of files.filter((file) => file === 'pom.xml' || file.endsWith('/pom.xml'))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    add({ id: `maven:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — Maven test`, runner: 'maven', kind: 'test', commandName: 'mvn', args: ['test'], workingDirectory });
+  }
+  for (const manifest of files.filter((file) => file === 'build.gradle' || file === 'build.gradle.kts' || file.endsWith('/build.gradle') || file.endsWith('/build.gradle.kts'))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    const wrapper = path.join(root, workingDirectory, 'gradlew');
+    const hasWrapper = await fs.stat(wrapper).then(() => true).catch(() => false);
+    add({ id: `gradle:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — Gradle test`, runner: 'gradle', kind: 'test', commandName: hasWrapper ? wrapper : 'gradle', args: ['test'], workingDirectory });
+  }
+  for (const manifest of files.filter((file) => file.endsWith('.sln') || file.endsWith('.csproj'))) {
+    const workingDirectory = path.dirname(manifest) === '.' ? '' : path.dirname(manifest);
+    add({ id: `dotnet:${workingDirectory || 'root'}:test`, label: `${workingDirectory || 'Repository root'} — dotnet test`, runner: 'dotnet', kind: 'test', commandName: 'dotnet', args: ['test'], workingDirectory });
   }
   return commands;
 }
@@ -127,6 +178,10 @@ function techEvidence(files, packageJson) {
   if (files.includes('pyproject.toml') || files.includes('requirements.txt')) found.push({ category: 'Backend', name: 'Python', evidence: files.includes('pyproject.toml') ? 'pyproject.toml' : 'requirements.txt', confidence: 'high' });
   if (files.includes('go.mod')) found.push({ category: 'Backend', name: 'Go', evidence: 'go.mod', confidence: 'high' });
   if (files.includes('Cargo.toml')) found.push({ category: 'Backend', name: 'Rust', evidence: 'Cargo.toml', confidence: 'high' });
+  if (files.some((file) => /(^|\/)(pom\.xml|build\.gradle|build\.gradle\.kts)$/.test(file))) found.push({ category: 'Backend', name: 'Java', evidence: files.find((file) => /(^|\/)(pom\.xml|build\.gradle|build\.gradle\.kts)$/.test(file)), confidence: 'high' });
+  if (files.some((file) => file.endsWith('.sln') || file.endsWith('.csproj'))) found.push({ category: 'Backend', name: '.NET', evidence: files.find((file) => file.endsWith('.sln') || file.endsWith('.csproj')), confidence: 'high' });
+  if (files.some((file) => /(^|\/)(Gemfile|composer\.json)$/.test(file))) found.push({ category: 'Backend', name: files.some((file) => /(^|\/)Gemfile$/.test(file)) ? 'Ruby' : 'PHP', evidence: files.find((file) => /(^|\/)(Gemfile|composer\.json)$/.test(file)), confidence: 'high' });
+  if (files.some((file) => /(^|\/)(Dockerfile|docker-compose\.ya?ml)$/.test(file))) found.push({ category: 'Infra/DevOps', name: 'Docker', evidence: files.find((file) => /(^|\/)(Dockerfile|docker-compose\.ya?ml)$/.test(file)), confidence: 'high' });
   return found;
 }
 async function scan(root) {
@@ -165,29 +220,61 @@ async function runBaselineCommand(root, commandId) {
   const files = await walk(root);
   const selected = (await discoverBaselineCommands(root, files)).find((item) => item.id === commandId);
   if (!selected) throw new Error('Requested baseline command is no longer declared by this repository. Scan again and retry.');
-  return { label: selected.label, ...await command('npm', ['run', selected.script], path.join(root, selected.workingDirectory), 180_000) };
+  return { label: selected.label, ...await command(selected.commandName, selected.args, path.join(root, selected.workingDirectory), 180_000) };
 }
 function addJobOutput(job, chunk) {
-  job.output = `${job.output}${chunk}`.slice(-MAX_JOB_OUTPUT);
+  job.output = `${job.output}${redactSensitiveOutput(chunk)}`.slice(-MAX_JOB_OUTPUT);
 }
-function startCommandJob({ label, commandName, args, cwd, timeout }) {
+function stopProcess(job, child, reason) {
+  addJobOutput(job, `${reason}\n`);
+  child.kill('SIGTERM');
+  // A CLI that ignores SIGTERM must not leave the repository locked forever.
+  setTimeout(() => {
+    if (runningProcesses.get(job.id) === child) {
+      addJobOutput(job, 'The process did not stop promptly; forcing it to exit.\n');
+      child.kill('SIGKILL');
+    }
+  }, 10_000).unref();
+}
+function startCommandJob({ label, commandName, args, cwd, timeout, captureEvidence = false }) {
+  if (activeJobByRepository.has(cwd)) throw new Error('Another Studio job is already running for this repository. Review or cancel it before starting another.');
   const id = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const job = { id, label, command: `${commandName} ${args.join(' ')}`, status: 'running', output: '', startedAt: new Date().toISOString(), finishedAt: null, ok: null };
+  const agentCommands = new Set(['codex', 'claude', 'copilot']);
+  const commandPreview = agentCommands.has(commandName) ? `${commandName} <agent arguments redacted>` : `${commandName} ${args.join(' ')}`;
+  const job = { id, label, command: commandPreview, status: 'running', output: '', startedAt: new Date().toISOString(), finishedAt: null, ok: null };
   jobs.set(id, job);
   // Agent work packets are passed as command arguments. Explicitly close stdin so
   // non-interactive CLIs such as `codex exec` do not wait indefinitely for more input.
   const child = spawn(commandName, args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+  runningProcesses.set(id, child);
+  activeJobByRepository.set(cwd, id);
   const timeoutHandle = setTimeout(() => {
-    if (job.status === 'running') { addJobOutput(job, `Stopped after ${Math.round(timeout / 1000)} seconds without completing.\n`); child.kill('SIGTERM'); }
+    if (job.status === 'running') stopProcess(job, child, `Stopped after ${Math.round(timeout / 1000)} seconds without completing.`);
   }, timeout);
   child.stdout.on('data', (chunk) => addJobOutput(job, chunk.toString()));
   child.stderr.on('data', (chunk) => addJobOutput(job, chunk.toString()));
-  child.on('error', (error) => { clearTimeout(timeoutHandle); addJobOutput(job, `${error.message}\n`); job.status = 'failed'; job.ok = false; job.finishedAt = new Date().toISOString(); });
-  child.on('close', (code, signal) => {
+  child.on('error', (error) => { clearTimeout(timeoutHandle); addJobOutput(job, `${error.message}\n`); job.status = 'failed'; job.ok = false; job.finishedAt = new Date().toISOString(); runningProcesses.delete(id); activeJobByRepository.delete(cwd); });
+  child.on('close', async (code, signal) => {
     clearTimeout(timeoutHandle);
-    if (job.status !== 'failed') { job.ok = code === 0; job.status = code === 0 ? 'succeeded' : 'failed'; }
     if (signal) addJobOutput(job, `Process stopped by ${signal}.\n`);
+    if (captureEvidence) {
+      const [status, changedFiles, stagedFiles, diffStat] = await Promise.all([
+        command('git', ['status', '--short', '--untracked-files=all'], cwd),
+        command('git', ['diff', '--name-only'], cwd),
+        command('git', ['diff', '--cached', '--name-only'], cwd),
+        command('git', ['diff', '--stat'], cwd),
+      ]);
+      const filesFromStatus = status.output.split('\n').map((line) => line.slice(3).trim()).filter(Boolean).map((file) => file.includes(' -> ') ? file.split(' -> ').at(-1) : file);
+      job.evidence = {
+        repositoryStatus: status.output,
+        changedFiles: [...new Set([...changedFiles.output.split('\n'), ...stagedFiles.output.split('\n'), ...filesFromStatus].map((file) => file.trim()).filter(Boolean))].slice(0, 200),
+        diffStat: diffStat.output,
+      };
+    }
+    if (job.status !== 'failed' && job.status !== 'cancelled') { job.ok = code === 0; job.status = code === 0 ? 'succeeded' : 'failed'; }
     job.finishedAt = new Date().toISOString();
+    runningProcesses.delete(id);
+    activeJobByRepository.delete(cwd);
   });
   return job;
 }
@@ -195,16 +282,23 @@ async function startBaselineCommand(root, commandId) {
   const files = await walk(root);
   const selected = (await discoverBaselineCommands(root, files)).find((item) => item.id === commandId);
   if (!selected) throw new Error('Requested baseline command is no longer declared by this repository. Scan again and retry.');
-  return startCommandJob({ label: selected.label, commandName: 'npm', args: ['run', selected.script], cwd: path.join(root, selected.workingDirectory), timeout: 180_000 });
+  return startCommandJob({ label: selected.label, commandName: selected.commandName, args: selected.args, cwd: path.join(root, selected.workingDirectory), timeout: 180_000 });
 }
 async function startWorkspaceDependencyInstall(root, workingDirectory) {
   const files = await walk(root);
-  const workspace = (await discoverBaselineCommands(root, files)).find((item) => item.workingDirectory === workingDirectory);
-  if (!workspace) throw new Error('This workspace does not declare a supported baseline command. Scan again and retry.');
+  const workspace = (await discoverBaselineCommands(root, files)).find((item) => item.workingDirectory === workingDirectory && item.runner === 'npm');
+  if (!workspace) throw new Error('Studio can install dependencies automatically only for a declared npm workspace. Other project types remain importable and use their own package manager.');
   const workspaceRoot = path.join(root, workingDirectory);
   const hasLockfile = await fs.stat(path.join(workspaceRoot, 'package-lock.json')).then(() => true).catch(() => false);
   const args = [hasLockfile ? 'ci' : 'install'];
   return startCommandJob({ label: workspace.workingDirectory || 'Repository root', commandName: 'npm', args, cwd: workspaceRoot, timeout: 300_000 });
+}
+async function startFeatureVerification(root) {
+  const files = await walk(root);
+  const commands = await discoverBaselineCommands(root, files);
+  const selected = commands.find((item) => item.kind === 'test' && item.workingDirectory === '') || commands.find((item) => item.kind === 'test');
+  if (!selected) throw new Error('No declared automated test command was detected. Use the repository’s documented verification command, inspect the result, and record your review when ready.');
+  return startCommandJob({ label: 'Feature verification · ' + selected.label, commandName: selected.commandName, args: selected.args, cwd: path.join(root, selected.workingDirectory), timeout: 300_000, captureEvidence: true });
 }
 function startSpecKitAgent(root, agent, prompt) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 50_000) throw new Error('A valid, reasonably sized Engine work packet is required.');
@@ -216,6 +310,33 @@ function startSpecKitAgent(root, agent, prompt) {
   const selected = commands[agent];
   if (!selected) throw new Error('Unsupported local coding agent.');
   return startCommandJob({ ...selected, cwd: root, timeout: 600_000 });
+}
+function startLocalAgentImplementation(root, agent, prompt, taskId, featureTitle) {
+  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 80_000) throw new Error('A valid, reasonably sized feature task prompt is required.');
+  if (!/^(T\d+|TASK-\d+)$/.test(String(taskId || '').trim())) throw new Error('Choose one approved feature task before running the selected agent. Select a task with an official ID such as T001 or TASK-101.');
+  const guardrails = '\\n\\n## Studio execution boundary\\nYou are executing exactly ' + taskId + ' for feature "' + String(featureTitle || '').slice(0, 240) + '". Work only within this task’s approved scope. Do not commit, push, create branches, change unrelated tasks, or start a second agent. Before editing, inspect relevant files and state the file-level plan. Then implement, run focused verification, and finish with changed files, commands, results, and unresolved assumptions.';
+  const commands = {
+    codex: { commandName: 'codex', args: ['exec', '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, prompt + guardrails], label: 'Codex · ' + taskId + ' implementation' },
+    claude: { commandName: 'claude', args: ['-p', prompt + guardrails], label: 'Claude Code · ' + taskId + ' implementation' },
+    copilot: { commandName: 'copilot', args: ['-p', prompt + guardrails], label: 'GitHub Copilot CLI · ' + taskId + ' implementation' },
+  };
+  const selected = commands[agent];
+  if (!selected) throw new Error('That agent cannot be run by the local connector. Copy the portable handoff instead.');
+  return startCommandJob({
+    ...selected,
+    cwd: root,
+    timeout: 900_000,
+    captureEvidence: true,
+  });
+}
+function cancelJob(id) {
+  const job = jobs.get(id);
+  const child = runningProcesses.get(id);
+  if (!job || !child || job.status !== 'running') throw new Error('That local job is no longer running.');
+  job.status = 'cancelled';
+  job.ok = false;
+  stopProcess(job, child, 'Cancelled by the Studio user.');
+  return job;
 }
 function validate(project) {
   const errors = [], warnings = [];
@@ -268,6 +389,9 @@ async function installUv(root) {
 const allowedExecutions = new Map([['typecheck', ['npm', ['run', 'lint']]], ['test', ['npm', ['test']]], ['build', ['npm', ['run', 'build']]], ['git-status', ['git', ['status', '--short', '--branch']]], ['specify-version', ['specify', ['version']]], ['specify-check', ['specify', ['self', 'check']]]]);
 
 const server = http.createServer(async (req, res) => {
+  if (req.headers.origin && !allowedOrigins.includes(req.headers.origin)) {
+    return send(req, res, 403, { error: 'This Studio origin is not allowed by the local connector. Add it to STUDIO_ALLOWED_ORIGINS and restart the connector.' });
+  }
   if (req.method === 'OPTIONS') return send(req, res, 204, {});
   // Health is intentionally unauthenticated: it reveals only whether pairing is needed,
   // enabling a friendly client-side setup flow without exposing repository access.
@@ -292,8 +416,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/baseline/run') return send(req, res, 202, await startBaselineCommand(await safeRoot(payload.repositoryPath), payload.commandId));
     if (req.method === 'POST' && req.url === '/v1/dependencies/install') { if (payload.confirmation !== 'INSTALL_DEPENDENCIES') return send(req, res, 400, { error: 'Explicit dependency-install confirmation is required.' }); return send(req, res, 202, await startWorkspaceDependencyInstall(await safeRoot(payload.repositoryPath), payload.workingDirectory)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); return send(req, res, 202, startSpecKitAgent(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt)); }
+    if (req.method === 'POST' && req.url === '/v1/codex/task/run') { if (payload.confirmation !== 'RUN_CODEX_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let Codex edit a local repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), 'codex', payload.prompt, payload.taskId, payload.featureTitle)); }
+    if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
+    if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
+    if (req.method === 'POST' && req.url === '/v1/jobs/cancel') return send(req, res, 200, cancelJob(String(payload.jobId || '')));
     if (req.method === 'POST' && req.url === '/v1/execute') { const root = await safeRoot(payload.repositoryPath); const entry = allowedExecutions.get(payload.action); if (!entry) return send(req, res, 400, { error: 'Action is not allowlisted.' }); const [bin, args] = entry; return send(req, res, 200, { action: payload.action, ...(await command(bin, args, root)) }); }
     return send(req, res, 404, { error: 'Not found.' });
-  } catch (error) { return send(req, res, 400, { error: error.message || 'Connector request failed.' }); }
+  } catch (error) {
+    const message = redactSensitiveOutput(error instanceof Error ? error.message : 'Connector request failed.');
+    return send(req, res, 400, { error: message || 'Connector request failed.' });
+  }
 });
 server.listen(PORT, '127.0.0.1', () => console.log(`Spec-Kit Studio connector listening at http://127.0.0.1:${PORT}`));

@@ -20,9 +20,14 @@ function detectedAgent(): LocalAgentStatus | undefined {
 
 function selectedAgent(): LocalAgentStatus | undefined {
   const preference = getStudioSettings().preferredAgent;
-  // An explicit choice is an instruction, not a suggestion. Auto mode may fall back.
-  if (preference !== 'auto') return { id: preference, label: localAgentLabels[preference], installed: true };
-  return detectedAgent();
+  if (preference === 'auto') return detectedAgent();
+  // Settings is a real agent selection, never a cosmetic label. A fresh scan is
+  // required before Studio will start an explicitly selected local CLI.
+  try {
+    const value = JSON.parse(window.localStorage.getItem('speckit_local_agents') || '[]');
+    const agent = Array.isArray(value) ? value.find((item): item is LocalAgentStatus => item?.id === preference && item.installed === true) : undefined;
+    return agent || undefined;
+  } catch { return undefined; }
 }
 
 function officialArtifactFromAgentOutput(output: string) {

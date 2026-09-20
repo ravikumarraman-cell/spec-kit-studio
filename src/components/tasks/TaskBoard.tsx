@@ -123,7 +123,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
         {focusFeature.deliveryPlan?.acceptedAt && focusFeature.deliveryPlan.path && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature) ? <>
           <p className="mt-1 text-xs text-zinc-300">These are the accepted, feature-scoped delivery tasks. The project board below contains older shared work and is not evidence for this feature.</p>
-          <FeatureDeliveryBoard content={focusFeature.deliveryPlan.content} sourcePath={focusFeature.deliveryPlan.path} />
+          <FeatureDeliveryBoard content={focusFeature.deliveryPlan.content} sourcePath={focusFeature.deliveryPlan.path} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} />
         </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> The saved task artifact is shared workspace work, not evidence for this feature. Return to Plan delivery to find or generate feature-scoped <code>tasks.md</code>.</div>}
         <p className="mt-3 text-[11px] text-zinc-500">{focusFeature.userStoryIds.length} stories · {focusFeature.requirementIds.length} requirements · {focusFeature.taskIds.length} task cards linked into the shared board</p>
       </section>}

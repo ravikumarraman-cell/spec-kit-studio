@@ -202,6 +202,17 @@ export interface FeatureInboxItem {
   architecturePlan?: { path?: string; content: string; acceptedAt?: string };
   /** Stage 5 task breakdown retained with the feature it delivers. */
   deliveryPlan?: { path?: string; content: string; acceptedAt?: string };
+  /** Human-reviewed local implementation receipts. A receipt never commits or pushes code. */
+  implementationReceipts?: FeatureImplementationReceipt[];
+}
+
+export interface FeatureImplementationReceipt {
+  taskId: string;
+  recordedAt: string;
+  jobId: string;
+  changedFiles: string[];
+  diffStat: string;
+  verificationSummary: string;
 }
 
 export interface SpecKitProject {

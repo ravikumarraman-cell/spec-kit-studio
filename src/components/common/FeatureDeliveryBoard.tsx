@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CheckCircle2, CheckSquare, Clock3, Code, Columns3, Table2 } from 'lucide-react';
 
 interface DeliveryTask { id: string; requirement?: string; title: string; done: boolean; detail?: string; }
-interface Props { content: string; sourcePath?: string; }
+interface Props { content: string; sourcePath?: string; completedTaskIds?: string[]; }
 
 function parseTasks(content: string): DeliveryTask[] {
   return content.split('\n').flatMap((line) => {
@@ -16,9 +16,9 @@ function parseTasks(content: string): DeliveryTask[] {
 }
 
 /** Turns an official tasks.md into the same deliberate review surfaces as Studio's shared board. */
-export function FeatureDeliveryBoard({ content, sourcePath }: Props) {
+export function FeatureDeliveryBoard({ content, sourcePath, completedTaskIds = [] }: Props) {
   const [view, setView] = useState<'kanban' | 'matrix' | 'source'>('kanban');
-  const tasks = useMemo(() => parseTasks(content), [content]);
+  const tasks = useMemo(() => parseTasks(content).map((task) => ({ ...task, done: task.done || completedTaskIds.includes(task.id) })), [content, completedTaskIds]);
   const columns = [
     { label: 'To do', tasks: tasks.filter((task) => !task.done), tone: 'border-zinc-700', labelTone: 'text-zinc-300', icon: <span className="h-2 w-2 rounded-full bg-zinc-500" /> },
     { label: 'In progress', tasks: [] as DeliveryTask[], tone: 'border-amber-400/25', labelTone: 'text-amber-300', icon: <span className="h-2 w-2 rounded-full bg-amber-400" /> },

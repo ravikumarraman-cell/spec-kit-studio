@@ -30,7 +30,7 @@ function AppContent() {
   const {
     projects, activeProject, selectProject, createProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, selectVersion,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, selectVersion,
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
@@ -191,6 +191,7 @@ function AppContent() {
                 <PromptStudio
                   project={activeProject}
                   initialTaskId={targetPromptTaskId}
+                  onRecordFeatureImplementation={saveLatestFeatureImplementation}
                 />
               )}
 
@@ -198,6 +199,7 @@ function AppContent() {
                 <AuditDashboard
                   project={activeProject}
                   onUpdateAudit={saveAudit}
+                  onOpenJourney={() => setActiveTab('overview')}
                 />
               )}
 

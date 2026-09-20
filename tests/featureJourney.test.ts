@@ -38,3 +38,19 @@ test('engine instructions are only supplied for Engine-capable stages and stay t
   assert.match(engineInstructionForStage(7, project) || '', /TASK-001/);
   assert.match(engineInstructionForStage(8, project) || '', /Do not commit, push/);
 });
+
+test('a human-reviewed local implementation receipt unlocks Stage 7 without relying on shared workspace task state', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 7)!;
+  project.tasks.tasks[0].status = 'todo';
+  project.featureInbox = [{
+    id: 'feature-1', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'text',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: [], taskIds: ['T001'],
+    implementationReceipts: [{
+      taskId: 'T001', jobId: 'job-1', recordedAt: '2026-09-20',
+      changedFiles: ['src/funding.ts'], diffStat: '1 file changed', verificationSummary: 'tests passed',
+    }],
+  }];
+
+  assert.equal(stage.ready(project), true);
+});

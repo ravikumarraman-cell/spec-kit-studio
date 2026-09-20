@@ -6,13 +6,15 @@ import {
   Table as TableIcon,
   Code
 } from 'lucide-react';
-import { TaskBreakdown, TaskItem, TaskStatus, FeatureSpec } from '../../types/speckit';
+import { TaskBreakdown, TaskItem, TaskStatus, FeatureInboxItem, FeatureSpec } from '../../types/speckit';
 import { EditorHeader } from '../common/EditorHeader';
 import { ViewToggle, ViewOption } from '../common/ViewToggle';
 import { TaskCard } from './TaskCard';
 import { AddTaskForm } from './AddTaskForm';
 import { TasksTanStackMatrix } from './TasksTanStackMatrix';
 import { MarkdownSourceView } from '../common/MarkdownSourceView';
+import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
+import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
 
 interface TaskBoardProps {
   taskBreakdown: TaskBreakdown;
@@ -20,6 +22,7 @@ interface TaskBoardProps {
   onSaveTasks: (updatedBreakdown: TaskBreakdown) => void;
   onTriggerAiGenerate: () => void;
   onSelectTaskForPrompt: (taskId: string, taskTitle: string) => void;
+  focusFeature?: FeatureInboxItem;
 }
 
 const PHASES = [
@@ -43,6 +46,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onSaveTasks,
   onTriggerAiGenerate,
   onSelectTaskForPrompt,
+  focusFeature,
 }) => {
   const [activeView, setActiveView] = useState<TaskViewMode>('kanban');
   const [activePhaseFilter, setActivePhaseFilter] = useState<string>('all');
@@ -114,6 +118,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {focusFeature && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature delivery plan</p>
+        <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
+        {focusFeature.deliveryPlan?.acceptedAt && focusFeature.deliveryPlan.path && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature) ? <>
+          <p className="mt-1 text-xs text-zinc-300">These are the accepted, feature-scoped delivery tasks. The project board below contains older shared work and is not evidence for this feature.</p>
+          <FeatureDeliveryBoard content={focusFeature.deliveryPlan.content} sourcePath={focusFeature.deliveryPlan.path} />
+        </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> The saved task artifact is shared workspace work, not evidence for this feature. Return to Plan delivery to find or generate feature-scoped <code>tasks.md</code>.</div>}
+        <p className="mt-3 text-[11px] text-zinc-500">{focusFeature.userStoryIds.length} stories · {focusFeature.requirementIds.length} requirements · {focusFeature.taskIds.length} task cards linked into the shared board</p>
+      </section>}
       {/* Unified Editor Header */}
       <EditorHeader
         icon={CheckSquare}

@@ -21,6 +21,8 @@ npm run connector
 
 Enter the connector URL, repository path, and—when configured—the token in **Connected Workspace**.
 
+For ChatGPT-authenticated Codex, the connector uses `gpt-5.6-luna` for non-interactive work packets by default. Set `STUDIO_CODEX_MODEL` only when your account has a different supported Codex model.
+
 For your repository layout, set `STUDIO_ALLOWED_ROOTS` to `/Users/rraviku2/develop`. Then restart the connector; `/Users/rraviku2/develop/cloud-asset-inventory` will be within the permitted boundary.
 
 ## Safety model

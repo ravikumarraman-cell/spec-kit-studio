@@ -10,6 +10,8 @@ import { NewProjectModal } from './components/project/NewProjectModal';
 import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { JourneyHandoff } from './components/journey/JourneyHandoff';
+import { approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
 
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
 const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
@@ -28,7 +30,7 @@ function AppContent() {
   const {
     projects, activeProject, selectProject, createProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, selectVersion,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, selectVersion,
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
@@ -69,7 +71,24 @@ function AppContent() {
     replaceFromImport(newProject);
     setActiveTab('overview');
   };
-  const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => { mergeImportedFeature(stories, data); setActiveTab('spec'); };
+  const handleStartFeatureFromWorkspace = () => {
+    const journey = activeProject.journey || createFeatureJourney();
+    if (!journey.completedStages.includes(1)) {
+      saveJourney(approveJourneyStage(journey, 1));
+    }
+    setIsFeatureImportModalOpen(true);
+  };
+  const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => { mergeImportedFeature(stories, data); setActiveTab('overview'); };
+  const handleApproveJourneyStage = (stageId: number) => {
+    const journey = activeProject.journey || createFeatureJourney();
+    const stage = getJourneyStage(stageId);
+    if (journey.activeStage !== stageId || !stage.ready(activeProject)) {
+      setActiveTab('overview');
+      return;
+    }
+    saveJourney(approveJourneyStage(journey, stageId));
+    setActiveTab('overview');
+  };
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden theme-canvas font-sans antialiased flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -106,6 +125,7 @@ function AppContent() {
 
         {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
+          <JourneyHandoff project={activeProject} activeTab={activeTab} onOpenJourney={() => setActiveTab('overview')} onNavigate={setActiveTab} onApproveStage={handleApproveJourneyStage} />
           <Suspense fallback={<div className="py-16 text-center text-xs theme-text-muted">Loading workspace…</div>}><AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -114,7 +134,7 @@ function AppContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} />}
+              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} />}
 
               {activeTab === 'import' && (
                 <RepoImportStudio
@@ -124,7 +144,7 @@ function AppContent() {
               )}
 
               {activeTab === 'workspace' && (
-                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} />
+                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} onOpenJourney={() => setActiveTab('overview')} onOpenFeatureImport={handleStartFeatureFromWorkspace} />
               )}
 
               {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onOpenWorkspace={() => setActiveTab('workspace')} />}
@@ -135,12 +155,14 @@ function AppContent() {
                   onSaveSpec={saveSpec}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
+                  featureInbox={activeProject.featureInbox}
                 />
               )}
 
               {activeTab === 'plan' && (
                 <PlanEditor
                   plan={activeProject.plan}
+                  focusFeature={activeProject.featureInbox?.at(-1)}
                   onSavePlan={savePlan}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   isDarkMode={isDark}
@@ -151,6 +173,7 @@ function AppContent() {
                 <TaskBoard
                   taskBreakdown={activeProject.tasks}
                   spec={activeProject.spec}
+                  focusFeature={activeProject.featureInbox?.at(-1)}
                   onSaveTasks={saveTasks}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   onSelectTaskForPrompt={handleSelectTaskForPrompt}
@@ -213,7 +236,7 @@ function AppContent() {
         onClose={() => setIsFeatureImportModalOpen(false)}
         onImportComplete={(newProject) => {
           replaceFromImport(newProject);
-          setActiveTab('spec');
+          setActiveTab('overview');
         }}
         activeProject={activeProject}
         onMergeIntoActiveProject={handleMergeIntoActiveProject}

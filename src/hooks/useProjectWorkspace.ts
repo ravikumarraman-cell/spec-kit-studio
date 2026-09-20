@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TruthReport } from '../lib/connector';
+import { FeatureExtractionPackage } from '../lib/api/imports';
+import { createFeatureInboxItem } from '../lib/featureInbox';
 import { storageService } from '../lib/storage';
 import {
   FeatureSpec,
@@ -12,10 +14,14 @@ import {
   TaskBreakdown,
   TaskItem,
   UserStory,
+  FeatureImportSource,
 } from '../types/speckit';
 
 type ImportedTask = Partial<TaskItem>;
 export interface ImportedFeatureData {
+  title?: string;
+  summary?: string;
+  source?: FeatureImportSource;
   functionalRequirements?: FunctionalRequirement[];
   tasks?: ImportedTask[];
 }
@@ -125,20 +131,35 @@ export function useProjectWorkspace() {
   const replaceFromImport = useCallback((project: SpecKitProject) => updateActiveProject(() => project), [updateActiveProject]);
 
   const mergeImportedFeature = useCallback((stories: UserStory[], data: ImportedFeatureData) => {
-    updateActiveProject((project) => ({
-      ...project,
-      spec: {
-        ...project.spec,
-        userStories: [...project.spec.userStories, ...stories],
-        functionalRequirements: [...project.spec.functionalRequirements, ...(data.functionalRequirements || [])],
-        lastUpdated: new Date().toISOString(),
-      },
-      tasks: {
-        ...project.tasks,
-        tasks: [...project.tasks.tasks, ...(data.tasks || []).map(createImportedTask)],
-        lastUpdated: new Date().toISOString(),
-      },
-    }));
+    updateActiveProject((project) => {
+      const now = new Date().toISOString();
+      const extraction: FeatureExtractionPackage = { ...data, userStories: stories };
+      const featureInbox = [...(project.featureInbox || []), createFeatureInboxItem(extraction, data.source || 'unknown', project.featureInbox?.length || 0, now)];
+      return {
+        ...project,
+        featureInbox,
+        spec: {
+          ...project.spec,
+          userStories: [...project.spec.userStories, ...stories],
+          functionalRequirements: [...project.spec.functionalRequirements, ...(data.functionalRequirements || [])],
+          lastUpdated: now,
+        },
+        tasks: {
+          ...project.tasks,
+          tasks: [...project.tasks.tasks, ...(data.tasks || []).map(createImportedTask)],
+          lastUpdated: now,
+        },
+      };
+    });
+  }, [updateActiveProject]);
+
+  const saveLatestFeatureReview = useCallback((review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string } }) => {
+    updateActiveProject((project) => {
+      const items = project.featureInbox || [];
+      if (!items.length) return project;
+      const index = items.length - 1;
+      return { ...project, featureInbox: items.map((item, itemIndex) => itemIndex === index ? { ...item, ...review } : item) };
+    });
   }, [updateActiveProject]);
 
   const selectVersion = useCallback((version: string) => updateActiveProject((project) => ({ ...project, version })), [updateActiveProject]);
@@ -146,6 +167,6 @@ export function useProjectWorkspace() {
   return {
     projects, activeProject, selectProject, createProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, selectVersion,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, selectVersion,
   };
 }

@@ -184,6 +184,26 @@ export interface FeatureJourney {
   updatedAt: string;
 }
 
+/** A durable, feature-level receipt for work imported into a Studio workspace. */
+export type FeatureImportSource = 'text' | 'file' | 'github' | 'preset' | 'repository' | 'unknown';
+
+export interface FeatureInboxItem {
+  id: string;
+  title: string;
+  summary: string;
+  source: FeatureImportSource;
+  importedAt: string;
+  userStoryIds: string[];
+  requirementIds: string[];
+  taskIds: string[];
+  /** Read-only Stage 3 architecture evidence, explicitly accepted by a reviewer. */
+  impactMap?: { content: string; acceptedAt?: string };
+  /** Stage 4 Engine plan retained with the feature that it was created for. */
+  architecturePlan?: { path?: string; content: string; acceptedAt?: string };
+  /** Stage 5 task breakdown retained with the feature it delivers. */
+  deliveryPlan?: { path?: string; content: string; acceptedAt?: string };
+}
+
 export interface SpecKitProject {
   id: string;
   name: string;
@@ -196,6 +216,8 @@ export interface SpecKitProject {
   constitution: ProjectConstitution;
   audit?: SpecAuditResult;
   importedRepo?: ImportedRepository;
+  /** Feature-level import history. Optional to keep persisted legacy workspaces compatible. */
+  featureInbox?: FeatureInboxItem[];
   journey?: FeatureJourney;
   version: string;
 }

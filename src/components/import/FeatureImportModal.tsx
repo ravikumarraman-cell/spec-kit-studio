@@ -7,7 +7,6 @@ import {
   Github,
   Layers,
   Zap,
-  Check,
   RefreshCw,
   PlusCircle,
   FileCode,
@@ -27,6 +26,11 @@ import { featurePresets } from './featurePresets';
 import { LocalAgentId, LocalAgentStatus, localAgentLabels, localAgentOrder, recommendedLocalAgent } from '../../lib/agentAvailability';
 import { ConnectorJob, connectorClient } from '../../lib/connector';
 import { getStudioSettings } from '../../lib/studioSettings';
+import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
+import { agentFailureGuidance } from '../../lib/agentDiagnostics';
+import { AgentJobStatus } from '../common/AgentJobStatus';
+import { parseSpecKitArtifact } from '../../lib/specArtifactParser';
+import { UserStoryPreview } from './UserStoryPreview';
 
 interface FeatureImportModalProps {
   isOpen: boolean;
@@ -75,7 +79,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   const [generationPath, setGenerationPath] = useState<'engine' | 'gemini'>(() => recommendedLocalAgent(agentScan.agents, getStudioSettings().preferredAgent) ? 'engine' : 'gemini');
   const [engineAgent, setEngineAgent] = useState<'claude' | 'codex' | 'copilot'>('claude');
   const [enginePrompt, setEnginePrompt] = useState('');
-  const [connectorToken, setConnectorToken] = useState('');
+  const [connectorToken, setConnectorToken] = useState(() => getConnectorSessionToken());
   const [agentJob, setAgentJob] = useState<ConnectorJob | null>(null);
   const [isRunningAgent, setIsRunningAgent] = useState(false);
 
@@ -167,6 +171,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     setFileError(null); setIsRunningAgent(true);
     try {
       const baseUrl = window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318';
+      setConnectorSessionToken(connectorToken);
       const client = connectorClient(baseUrl, connectorToken);
       let job = await client.startSpecKitAgent(repositoryPath, engineAgent, enginePrompt);
       setAgentJob(job);
@@ -175,7 +180,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
         job = await client.getJob(job.id);
         setAgentJob(job);
       }
-      if (!job.ok) throw new Error(job.output || 'The coding agent did not complete the work packet.');
+      if (!job.ok) throw new Error(agentFailureGuidance(engineAgent, job.output));
     } catch (error) {
       setFileError(error instanceof Error ? `Studio could not run the local agent: ${error.message}` : 'Studio could not run the local agent.');
     } finally { setIsRunningAgent(false); }
@@ -189,8 +194,27 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
 
   const handleMergeToActive = () => {
     if (!extractedResult || !activeProject || !onMergeIntoActiveProject) return;
-    onMergeIntoActiveProject(extractedResult.userStories || [], extractedResult);
+    onMergeIntoActiveProject(extractedResult.userStories || [], { ...extractedResult, source: importTab });
     onClose();
+  };
+
+  const loadEngineStories = async () => {
+    const repositoryPath = activeProject?.importedRepo?.repoUrl;
+    if (!repositoryPath) { setFileError('Connect and scan the repository before loading its generated Spec-Kit file.'); return; }
+    try {
+      setFileError(null);
+      const baseUrl = window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318';
+      const { artifacts } = await connectorClient(baseUrl, connectorToken).readSpecKitArtifacts(repositoryPath);
+      if (!artifacts.length) throw new Error('No feature spec was found yet. Confirm the agent completed the “specify” step, then try again.');
+      const artifact = artifacts[0];
+      const parsed = parseSpecKitArtifact(artifact.content);
+      if (!parsed.userStories?.length) throw new Error(`Studio found ${artifact.path}, but could not identify user stories in it.`);
+      setFeatureTitle(parsed.title || featureTitle);
+      setExtractedResult(parsed);
+      setPreviewTab('stories');
+    } catch (error) {
+      setFileError(error instanceof Error ? `Couldn’t load the generated stories: ${error.message}` : 'Couldn’t load the generated stories.');
+    }
   };
 
   return (
@@ -235,7 +259,15 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
             <div className="grid sm:grid-cols-2 gap-2"><button type="button" onClick={() => setGenerationPath('engine')} disabled={!agentScan.scanned || !recommendedLocalAgent(agentScan.agents)} className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${generationPath === 'engine' ? 'border-cyan-400 bg-cyan-500/10 text-cyan-100' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}><strong className="block text-xs">Spec-Kit Engine{recommendedLocalAgent(agentScan.agents) ? ' · Recommended' : ''}</strong><span className="block mt-1 text-[11px]">{agentScan.scanned ? recommendedLocalAgent(agentScan.agents) ? 'Reviewable native workflow: constitution → specify → plan → tasks.' : 'No runnable local agent detected.' : 'Scan the connected workspace to enable.'}</span></button><button type="button" onClick={() => setGenerationPath('gemini')} className={`rounded-xl border p-3 text-left ${generationPath === 'gemini' ? 'border-purple-400 bg-purple-500/10 text-purple-100' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}><strong className="block text-xs">Gemini AI{agentScan.scanned && !recommendedLocalAgent(agentScan.agents) ? ' · Selected' : ' · Fallback'}</strong><span className="block mt-1 text-[11px]">Creates a Studio draft; review before exporting to the repository.</span></button></div>
             {generationPath === 'engine' && <div className="flex flex-wrap gap-2"><span className="w-full text-[11px] text-zinc-400">Choose a detected agent to receive the work packet:</span>{localAgentOrder.map((id) => { const agent = agentScan.agents.find((item) => item.id === id); const ready = Boolean(agent?.installed); return <button key={id} type="button" disabled={!ready} onClick={() => setEngineAgent(id as LocalAgentId)} className={`px-3 py-2 rounded-lg border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${engineAgent === id ? 'border-cyan-400 bg-cyan-500/10 text-cyan-100' : 'border-zinc-800 text-zinc-400'}`}>{localAgentLabels[id]} · {ready ? `ready${agent?.version ? ` (${agent.version})` : ''}` : agentScan.scanned ? 'not detected' : 'scan required'}</button>; })}</div>}
           </section>}
-          {enginePrompt && !extractedResult && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.16em] font-black text-emerald-300">Feature workflow · step 2 of 3</p><h3 className="mt-1 font-bold text-emerald-100">Run the work packet, then review it here</h3><p className="mt-1 text-xs text-emerald-200/80">Studio can run {localAgentLabels[engineAgent]} in the connected repository and show its live output. It will only receive instructions to create feature-scoped Spec-Kit artifacts—not application code.</p></div><button type="button" onClick={() => navigator.clipboard.writeText(enginePrompt)} className="shrink-0 px-3 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-bold">Copy packet</button></div><div className="grid gap-2 sm:grid-cols-[1fr_auto]"><label className="text-[11px] text-emerald-100/80">Pairing token <span className="text-emerald-200/50">(only if your connector requires one)</span><input value={connectorToken} onChange={(event) => setConnectorToken(event.target.value)} type="password" placeholder="Leave blank when no token is required" className="mt-1 w-full rounded-lg border border-emerald-500/25 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-100" /></label><button type="button" onClick={runEngineInStudio} disabled={isRunningAgent || !activeProject?.importedRepo?.repoUrl} className="self-end rounded-lg bg-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{isRunningAgent ? 'Running agent…' : `Run ${localAgentLabels[engineAgent]} in Studio`}</button></div>{!activeProject?.importedRepo?.repoUrl && <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-2 text-[11px] text-amber-100">Step 1 is incomplete: open Connected Workspace, scan the repository once, then return here. <button type="button" onClick={onOpenWorkspace} className="font-bold underline">Open Connected Workspace</button></div>}{agentJob && <div className={`rounded-xl border p-3 text-xs ${agentJob.status === 'failed' ? 'border-rose-500/30 bg-rose-500/10' : agentJob.status === 'succeeded' ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-cyan-400/30 bg-zinc-950/60'}`}><div className="font-bold text-zinc-100">{agentJob.status === 'running' ? 'Agent is preparing the Spec-Kit artifacts…' : agentJob.ok ? 'Step 2 complete · artifacts are ready to review' : 'The agent stopped before completing'}</div><pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950/80 p-2 text-[10px] text-zinc-300">{agentJob.output || 'Agent started; waiting for output…'}</pre>{agentJob.ok && <button type="button" onClick={onOpenWorkspace} className="mt-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-950">Step 3 · Open Workspace and scan to review changes</button>}</div>}<details className="text-xs text-emerald-100"><summary className="cursor-pointer font-semibold">Preview work packet</summary><pre className="mt-2 whitespace-pre-wrap rounded-lg bg-zinc-950/70 p-3 text-[11px] text-zinc-300 max-h-48 overflow-auto">{enginePrompt}</pre></details></section>}
+          {!extractedResult && activeProject?.importedRepo?.repoUrl && !enginePrompt && (
+            <section className="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-950/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-xs font-bold text-zinc-100">Already ran a local agent?</p><p className="mt-0.5 text-[11px] text-zinc-400">Load the newest official <code>specs/.../spec.md</code> into Studio for review. Nothing is written to your repository.</p></div>
+              <button type="button" onClick={loadEngineStories} className="shrink-0 rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/10">Load generated stories</button>
+            </section>
+          )}
+          {enginePrompt && !extractedResult && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.16em] font-black text-emerald-300">Feature workflow · step 2 of 3</p><h3 className="mt-1 font-bold text-emerald-100">Run the work packet, then review it here</h3><p className="mt-1 text-xs text-emerald-200/80">Studio can run {localAgentLabels[engineAgent]} in the connected repository and show its live output. It will only receive instructions to create feature-scoped Spec-Kit artifacts—not application code.</p></div><button type="button" onClick={() => navigator.clipboard.writeText(enginePrompt)} className="shrink-0 px-3 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-bold">Copy packet</button></div><div className="grid gap-2 sm:grid-cols-[1fr_auto]"><label className="text-[11px] text-emerald-100/80">Pairing token <span className="text-emerald-200/50">(only if your connector requires one)</span><input value={connectorToken} onChange={(event) => { setConnectorToken(event.target.value); setConnectorSessionToken(event.target.value); }} type="password" placeholder="Enter it once in Connected Workspace, or paste it here" className="mt-1 w-full rounded-lg border border-emerald-500/25 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-100" /></label><button type="button" onClick={runEngineInStudio} disabled={isRunningAgent || !activeProject?.importedRepo?.repoUrl} className="self-end rounded-lg bg-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{isRunningAgent ? 'Running agent…' : `Run ${localAgentLabels[engineAgent]} in Studio`}</button></div>{!activeProject?.importedRepo?.repoUrl && <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-2 text-[11px] text-amber-100">Step 1 is incomplete: open Connected Workspace, scan the repository once, then return here. <button type="button" onClick={onOpenWorkspace} className="font-bold underline">Open Connected Workspace</button></div>}{agentJob && <div className={`rounded-xl border p-3 text-xs ${agentJob.status === 'failed' ? 'border-rose-500/30 bg-rose-500/10' : agentJob.status === 'succeeded' ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-cyan-400/30 bg-zinc-950/60'}`}><div className="font-bold text-zinc-100">{agentJob.status === 'running' ? 'Agent is preparing the Spec-Kit artifacts…' : agentJob.ok ? 'Step 2 complete · stories are ready to review' : 'The agent stopped before completing'}</div><pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950/80 p-2 text-[10px] text-zinc-300">{agentJob.output || 'Agent started; waiting for output…'}</pre>{agentJob.ok && <button type="button" onClick={loadEngineStories} className="mt-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-950">Review generated user stories</button>}</div>}<details className="text-xs text-emerald-100"><summary className="cursor-pointer font-semibold">Preview work packet</summary><pre className="mt-2 whitespace-pre-wrap rounded-lg bg-zinc-950/70 p-3 text-[11px] text-zinc-300 max-h-48 overflow-auto">{enginePrompt}</pre></details></section>}
+          {agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabels[engineAgent]} for this feature…`} />}
+
           {/* Step 1: Input Source Selector Tabs */}
           {!extractedResult && (
             <div className="space-y-5">
@@ -549,52 +581,9 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
 
               {/* Preview Content: User Stories */}
               {previewTab === 'stories' && (
-                <div className="space-y-3 text-xs">
-                  {extractedResult.userStories?.map((story: any, idx: number) => (
-                    <div
-                      key={story.id || idx}
-                      className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2.5 hover:border-indigo-500/30 transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-indigo-400">{story.id}</span>
-                          <span className="font-bold text-zinc-100">{story.title}</span>
-                        </div>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                            story.priority === 'High'
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          }`}
-                        >
-                          {story.priority || 'High'}
-                        </span>
-                      </div>
-
-                      <p className="text-zinc-300 leading-relaxed bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/60">
-                        <span className="text-zinc-500">As a </span>
-                        <strong className="text-cyan-300">{story.asA}</strong>
-                        <span className="text-zinc-500">, I want to </span>
-                        <strong className="text-zinc-100">{story.iWantTo}</strong>
-                        <span className="text-zinc-500">, so that </span>
-                        <strong className="text-zinc-300">{story.soThat}</strong>.
-                      </p>
-
-                      {story.acceptanceCriteria && story.acceptanceCriteria.length > 0 && (
-                        <div className="space-y-1 pl-1">
-                          <div className="text-[11px] font-semibold text-zinc-400">Acceptance Criteria:</div>
-                          <ul className="space-y-1">
-                            {story.acceptanceCriteria.map((criterion: string, cIdx: number) => (
-                              <li key={cIdx} className="flex items-start gap-2 text-[11px] text-zinc-300">
-                                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                                <span>{criterion}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1 text-xs"><p className="font-medium text-zinc-400">Review each story’s audience, need, outcome, and testable behavior.</p><span className="rounded-full bg-indigo-500/10 px-2.5 py-1 font-bold text-indigo-200">{extractedResult.userStories?.length || 0} stories</span></div>
+                  {extractedResult.userStories?.map((story, idx) => <UserStoryPreview key={story.id || idx} story={story} index={idx} />)}
                 </div>
               )}
 

@@ -7,6 +7,7 @@ import {
   TaskItem,
 } from '../types/speckit';
 import { FeatureExtractionPackage } from './api/imports';
+import { createFeatureInboxItem } from './featureInbox';
 
 const defaultTaskPhase: TaskItem['phase'] = 'Phase 1: Setup';
 
@@ -87,5 +88,6 @@ export function createProjectFromFeatureExtraction(
   return {
     id: `PROJ-${timestamp}`, name: title, description: summary, createdAt: now, updatedAt: now,
     spec, plan, tasks, constitution, version: '1.0.7',
+    featureInbox: [createFeatureInboxItem({ ...extraction, title, summary }, 'unknown', 0, now)],
   };
 }

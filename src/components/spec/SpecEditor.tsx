@@ -7,7 +7,8 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { FeatureSpec, RequirementCategory, UserStory, FunctionalRequirement } from '../../types/speckit';
+import { FeatureInboxItem, FeatureSpec, RequirementCategory, UserStory, FunctionalRequirement } from '../../types/speckit';
+import { groupRequirementsByFeature, groupStoriesByFeature } from '../../lib/featureStoryGroups';
 import { EditorHeader } from '../common/EditorHeader';
 import { ViewToggle, ViewOption } from '../common/ViewToggle';
 import { MarkdownSourceView } from '../common/MarkdownSourceView';
@@ -24,6 +25,7 @@ interface SpecEditorProps {
   onSaveSpec: (updatedSpec: FeatureSpec) => void;
   onTriggerAiGenerate: () => void;
   onOpenFeatureImport?: () => void;
+  featureInbox?: FeatureInboxItem[];
 }
 
 type SpecViewMode = 'visual' | 'tanstack' | 'markdown';
@@ -41,6 +43,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   onSaveSpec,
   onTriggerAiGenerate,
   onOpenFeatureImport,
+  featureInbox,
 }) => {
   const [activeView, setActiveView] = useState<SpecViewMode>('visual');
   const [currentSpec, setCurrentSpec] = useState<FeatureSpec>(spec);
@@ -122,6 +125,8 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
       ? currentSpec.functionalRequirements
       : currentSpec.functionalRequirements.filter((f) => f.category === activeCategoryFilter);
   }, [currentSpec.functionalRequirements, activeCategoryFilter]);
+  const storyGroups = useMemo(() => groupStoriesByFeature(currentSpec.userStories, featureInbox), [currentSpec.userStories, featureInbox]);
+  const requirementGroups = useMemo(() => groupRequirementsByFeature(filteredFRs, featureInbox), [filteredFRs, featureInbox]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -178,13 +183,12 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
               </div>
             </div>
 
-            <div className="space-y-3">
-              {currentSpec.userStories.map((story) => (
-                <UserStoryCard
-                  key={story.id}
-                  story={story}
-                  onRemove={handleRemoveUserStory}
-                />
+            <div className="space-y-5">
+              {storyGroups.map((group) => (
+                <section key={group.id} className={`rounded-xl border p-3 ${group.imported ? 'border-violet-400/25 bg-violet-500/5' : 'border-zinc-800 bg-zinc-950/35'}`}>
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><h4 className="text-xs font-bold text-zinc-100">{group.label}</h4>{group.imported && <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-200">Imported feature</span>}</div><p className="mt-1 text-[11px] text-zinc-400">{group.description}</p></div><span className="shrink-0 rounded-full bg-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-300">{group.stories.length} {group.stories.length === 1 ? 'story' : 'stories'}</span></div>
+                  <div className="space-y-3">{group.stories.map((story) => <UserStoryCard key={story.id} story={story} onRemove={handleRemoveUserStory} />)}</div>
+                </section>
               ))}
             </div>
 
@@ -237,13 +241,12 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
-              {filteredFRs.map((req) => (
-                <RequirementCard
-                  key={req.id}
-                  req={req}
-                  onRemove={handleRemoveFR}
-                />
+            <div className="space-y-5">
+              {requirementGroups.map((group) => (
+                <section key={group.id} className={`rounded-xl border p-3 ${group.imported ? 'border-cyan-400/25 bg-cyan-500/5' : 'border-zinc-800 bg-zinc-950/35'}`}>
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><h4 className="text-xs font-bold text-zinc-100">{group.label}</h4>{group.imported && <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-200">Imported feature</span>}</div><p className="mt-1 text-[11px] text-zinc-400">{group.description}</p></div><span className="shrink-0 rounded-full bg-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-300">{group.requirements.length} requirements</span></div>
+                  <div className="space-y-2">{group.requirements.map((req) => <RequirementCard key={req.id} req={req} onRemove={handleRemoveFR} />)}</div>
+                </section>
               ))}
             </div>
 

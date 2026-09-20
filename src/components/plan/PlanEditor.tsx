@@ -6,7 +6,7 @@ import {
   Table as TableIcon,
   Code
 } from 'lucide-react';
-import { ImplementationPlan, TechStackItem, ApiContract, ADR } from '../../types/speckit';
+import { ImplementationPlan, TechStackItem, ApiContract, ADR, FeatureInboxItem } from '../../types/speckit';
 import { EditorHeader } from '../common/EditorHeader';
 import { ViewToggle, ViewOption } from '../common/ViewToggle';
 import { MarkdownSourceView } from '../common/MarkdownSourceView';
@@ -16,12 +16,15 @@ import { ApiContractsSection } from './ApiContractsSection';
 import { DataSchemasSection } from './DataSchemasSection';
 import { AdrSection } from './AdrSection';
 import { PlanTanStackMatrix } from './PlanTanStackMatrix';
+import { FeatureArtifactViewer } from '../common/FeatureArtifactViewer';
+import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 
 interface PlanEditorProps {
   plan: ImplementationPlan;
   onSavePlan: (updatedPlan: ImplementationPlan) => void;
   onTriggerAiGenerate: () => void;
   isDarkMode?: boolean;
+  focusFeature?: FeatureInboxItem;
 }
 
 type PlanViewMode = 'visual' | 'tanstack' | 'diagram' | 'markdown';
@@ -38,6 +41,7 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
   onSavePlan,
   onTriggerAiGenerate,
   isDarkMode = true,
+  focusFeature,
 }) => {
   const [activeView, setActiveView] = useState<PlanViewMode>('visual');
   const [currentPlan, setCurrentPlan] = useState<ImplementationPlan>(plan);
@@ -127,6 +131,21 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {focusFeature && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature architecture plan</p>
+        <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
+        {focusFeature.architecturePlan?.acceptedAt && focusFeature.architecturePlan.path && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature) ? <>
+          <p className="mt-1 text-xs text-zinc-300">This is the accepted, feature-scoped architecture plan. The shared architecture editor below is repository context, not this feature’s proposed design.</p>
+          <FeatureArtifactViewer content={focusFeature.architecturePlan.content} artifactLabel="plan.md" sourcePath={focusFeature.architecturePlan.path} acceptedAt={focusFeature.architecturePlan.acceptedAt} />
+        </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature architecture plan yet.</strong> The saved artifact does not demonstrate that it belongs to this feature, so Studio will not present it as evidence. Return to Design safely to find or generate a feature-scoped <code>plan.md</code>.</div>}
+        <p className="mt-3 text-[11px] text-zinc-500">{focusFeature.userStoryIds.length} stories · {focusFeature.requirementIds.length} requirements define the scope of this plan.</p>
+      </section>}
+      <details className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3" open={!focusFeature}>
+        <summary className="cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-zinc-200 hover:bg-zinc-800/60">
+          {focusFeature ? 'Open shared repository architecture' : 'Shared repository architecture'}
+          <span className="ml-2 text-xs font-normal text-zinc-500">{focusFeature ? 'Optional context and shared-editor controls' : 'Technology choices, APIs, schemas, and ADRs'}</span>
+        </summary>
+        <div className="mt-4 space-y-6">
       {/* Unified Editor Header */}
       <EditorHeader
         icon={Workflow}
@@ -205,6 +224,8 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
           subtitle="Architecture formatted for spec-kit CLI"
         />
       )}
+        </div>
+      </details>
     </div>
   );
 };

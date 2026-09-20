@@ -18,6 +18,10 @@ dotenv.config({ path: '.env.local' });
 const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.STUDIO_CONNECTOR_PORT || 4318);
 const TOKEN = process.env.STUDIO_CONNECTOR_TOKEN || '';
+// ChatGPT-authenticated Codex no longer supports the retired gpt-5.4-mini
+// default. Keep the connector self-contained while allowing a deliberate
+// per-machine override for accounts with different model availability.
+const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
 const allowedRoots = (process.env.STUDIO_ALLOWED_ROOTS || process.cwd())
   .split(',').map((root) => path.resolve(root.trim())).filter(Boolean);
 const allowedOrigins = (process.env.STUDIO_ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173')
@@ -143,6 +147,20 @@ async function scan(root) {
     specKit: { detected: files.some((file) => file.startsWith('.specify/')), featureFile: files.includes('.specify/feature.json') },
   };
 }
+async function readSpecKitArtifacts(root) {
+  const files = await walk(root, '', [], 5000);
+  const candidates = files
+    .filter((file) => /(^|\/)(spec|plan|tasks)\.md$/i.test(file) && (file.startsWith('specs/') || file.startsWith('.specify/')))
+    .map(async (file) => {
+      const target = path.join(root, file);
+      const [content, stat] = await Promise.all([fs.readFile(target, 'utf8'), fs.stat(target)]);
+      const name = path.basename(file).toLowerCase();
+      return { path: file, kind: name.replace('.md', ''), content: content.slice(0, 400_000), modifiedAt: stat.mtime.toISOString() };
+    });
+  const artifacts = await Promise.all(candidates);
+  artifacts.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  return { artifacts };
+}
 async function runBaselineCommand(root, commandId) {
   const files = await walk(root);
   const selected = (await discoverBaselineCommands(root, files)).find((item) => item.id === commandId);
@@ -156,7 +174,9 @@ function startCommandJob({ label, commandName, args, cwd, timeout }) {
   const id = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const job = { id, label, command: `${commandName} ${args.join(' ')}`, status: 'running', output: '', startedAt: new Date().toISOString(), finishedAt: null, ok: null };
   jobs.set(id, job);
-  const child = spawn(commandName, args, { cwd, shell: false });
+  // Agent work packets are passed as command arguments. Explicitly close stdin so
+  // non-interactive CLIs such as `codex exec` do not wait indefinitely for more input.
+  const child = spawn(commandName, args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
   const timeoutHandle = setTimeout(() => {
     if (job.status === 'running') { addJobOutput(job, `Stopped after ${Math.round(timeout / 1000)} seconds without completing.\n`); child.kill('SIGTERM'); }
   }, timeout);
@@ -190,7 +210,7 @@ function startSpecKitAgent(root, agent, prompt) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 50_000) throw new Error('A valid, reasonably sized Engine work packet is required.');
   const commands = {
     claude: { commandName: 'claude', args: ['-p', prompt], label: 'Claude Code · Spec-Kit planning' },
-    codex: { commandName: 'codex', args: ['exec', prompt], label: 'Codex · Spec-Kit planning' },
+    codex: { commandName: 'codex', args: ['exec', '--model', CODEX_MODEL, prompt], label: `Codex (${CODEX_MODEL}) · Spec-Kit planning` },
     copilot: { commandName: 'copilot', args: ['-p', prompt], label: 'GitHub Copilot CLI · Spec-Kit planning' },
   };
   const selected = commands[agent];
@@ -261,6 +281,7 @@ const server = http.createServer(async (req, res) => {
     }
     const payload = await body(req);
     if (req.method === 'POST' && req.url === '/v1/repository/scan') return send(req, res, 200, await scan(await safeRoot(payload.repositoryPath)));
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/artifacts/read') return send(req, res, 200, await readSpecKitArtifacts(await safeRoot(payload.repositoryPath)));
     if (req.method === 'POST' && req.url === '/v1/spec-kit/status') { const root = await safeRoot(payload.repositoryPath); const uv = await uvCommand(['--version'], root); const version = uv.ok ? await specifyCommand(['version'], root) : { ok: false, output: 'uv is not available.' }; const check = version.ok ? await specifyCommand(['self', 'check'], root) : null; return send(req, res, 200, { installed: version.ok, version, check, prerequisites: { uvAvailable: uv.ok, uvOutput: uv.output } }); }
     if (req.method === 'POST' && req.url === '/v1/prerequisites/install-uv') { if (payload.confirmation !== 'INSTALL_UV') return send(req, res, 400, { error: 'Explicit uv installation confirmation is required.' }); return send(req, res, 200, await installUv(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/install') { if (payload.confirmation !== 'INSTALL_SPEC_KIT') return send(req, res, 400, { error: 'Explicit installation confirmation is required.' }); return send(req, res, 200, await installSpecKit(await safeRoot(payload.repositoryPath))); }

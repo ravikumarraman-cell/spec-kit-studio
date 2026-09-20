@@ -9,6 +9,8 @@ test('feature extraction factory supplies a complete project when AI output is s
   assert.equal(project.spec.title, 'Billing portal');
   assert.equal(project.plan.techStack.length, 2);
   assert.equal(project.spec.userFlows.length, 3);
+  assert.equal(project.featureInbox?.length, 1);
+  assert.equal(project.featureInbox?.[0].title, 'Billing portal');
   assert.equal(project.createdAt, '2026-01-01T00:00:00.000Z');
 });
 

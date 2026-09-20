@@ -1,287 +1,230 @@
-# 🚀 Spec-Kit Studio
-> **A visual, local-connector-enabled workspace for GitHub Spec-Kit and Spec-Driven Development (SDD).**
-> *Turn product intent into reviewable specifications, repository evidence, implementation contracts, and verification results.*
+# Spec-Kit Studio
 
----
+**A visual, evidence-first control plane for adding a well-specified, reviewable feature to any existing repository.**
 
-[![GitHub Spec-Kit Version](https://img.shields.io/badge/spec--kit-v1.0.7-cyan?style=for-the-badge&logo=github)](https://github.com/github/spec-kit)
-[![React Version](https://img.shields.io/badge/React-19.0-blue?style=for-the-badge&logo=react)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org)
-[![TanStack](https://img.shields.io/badge/TanStack-Query_%26_Table-FF4154?style=for-the-badge&logo=reactquery)](https://tanstack.com)
-[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.0-06B6D4?style=for-the-badge&logo=tailwindcss)](https://tailwindcss.com)
-[![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
+Studio combines a web app with an optional loopback-only local connector. It guides a team from feature intent to feature-scoped Spec-Kit artifacts, an ordered delivery plan, a bounded local coding-agent task, and a human-reviewed verification record.
 
----
+Studio never silently edits a repository, creates a branch, commits, pushes, or marks agent work complete for you.
 
-> 🌟 **CORE HIGHLIGHT: Evidence-first Spec-Driven Development**
-> **Spec-Kit Studio** provides a visual specification workspace plus an optional loopback-only local connector. The connector produces repository evidence, detects the official `specify` CLI, runs deterministic traceability checks, previews exports, and executes an allowlisted set of local verification commands. Studio stores its generated artifacts under `.specify/studio/` so it does not overwrite official Spec-Kit assets. See [Local Connector](docs/local-connector.md).
+> **Start here:** [Quick start](#quick-start) → [Feature journey](#the-feature-journey) → [Run a local task](#run-a-task-locally) → [Review and hand off](#review-and-hand-off)
 
----
+## What Studio gives you
 
-> ⚡ **ENTERPRISE SCALE: Powered by TanStack & Deep GitHub/Jira Integrations**  
-> Spec-Kit Studio incorporates the **TanStack Stack** (`@tanstack/react-query` & `@tanstack/react-table`) for background state caching, optimistic UI updates, and high-density matrix views. It connects directly with **GitHub REST APIs** (PAT authentication, repository browsing, direct `.spec-kit` commits) and **Jira Cloud** (project search, ticket creation, user story synchronization).
+| Need | Studio provides |
+| --- | --- |
+| Understand an unfamiliar repository | A read-only truth layer: Git state, manifests, technologies, available baseline checks, Spec-Kit status, and local-agent readiness. |
+| Add a feature without losing context | A feature inbox plus feature-scoped spec, impact evidence, architecture plan, and delivery tasks. |
+| Use Spec-Kit deliberately | An Engine-first eight-stage journey with a clear next action and review point at every consequential boundary. |
+| Run a local coding agent safely | A scoped Codex, Claude Code, or Copilot CLI handoff—one task per run, workspace writes only, no automatic commit or push. |
+| Retain trustworthy evidence | Live agent status, redacted output, changed files, verification output, and human-reviewed implementation receipts. |
+| Work across technologies | Repository grounding and baseline detection for JavaScript/TypeScript, Python, Go, Rust, Java, .NET, Ruby, PHP, Docker, and more. |
 
----
+## The mental model
 
-## 📖 Table of Contents
-1. [The Executive Summary: Why Spec-Driven Development (SDD)?](#-the-executive-summary-why-spec-driven-development-sdd)
-2. [Core Architecture: The 4 Pillars of SDD](#-core-architecture-the-4-pillars-of-sdd)
-3. [End-to-End Operational Lifecycle](#-end-to-end-operational-lifecycle)
-4. [Enterprise Capabilities & Highlights](#-enterprise-capabilities--highlights)
-   - [Native Spec-Kit v1.0.7 Core Engine](#1-native-spec-kit-v107-core-engine)
-   - [TanStack Powered High-Density Matrix](#2-tanstack-powered-high-density-matrix)
-   - [Direct GitHub Repository Synchronization](#3-direct-github-repository-synchronization)
-   - [Jira Cloud Project & Ticket Sync](#4-jira-cloud-project--ticket-sync)
-   - [Legacy Codebase Introspection & Import](#5-legacy-codebase-introspection--import)
-   - [Zero-Disruption Feature Merging](#6-zero-disruption-feature-merging)
-   - [AI Coding Agent Prompt Studio](#7-ai-coding-agent-prompt-studio)
-   - [Spec Quality Audit & Governance Matrix](#8-spec-quality-audit--governance-matrix)
-5. [Tech Stack Independence & Capability Matrix](#-tech-stack-independence--capability-matrix)
-6. [Local Environment & Configuration](#-local-environment--configuration)
-7. [Deploy on Vercel](#-deploy-on-vercel)
-8. [Quick Start Guide](#-quick-start-guide)
-9. [License & Ecosystem](#-license--ecosystem)
+Studio is the control plane; your repository remains the source of code; Spec-Kit artifacts remain the source of planned work; and the local agent performs the bounded task.
 
----
-
-## 🧠 The Executive Summary: Why Spec-Driven Development (SDD)?
-
-In the era of modern AI coding assistants (Cursor, Claude Code, Windsurf, Copilot Workspace, Gemini Studio), software development bottleneck has fundamentally shifted from **syntax authoring** to **architectural context precision**.
-
-When AI agents are given unstructured prompts or loose Jira tickets, software projects inevitably suffer from:
-* **Context Drift & Hallucinations**: AI agents invent unrequested packages, break API contracts, or write code that violates existing architecture.
-* **Refactoring Nightmares**: New features inadvertently break non-functional requirements, security policies, or database schemas.
-* **Fragmented Traceability**: Product specifications live in Google Docs, tasks live in Jira, code lives in GitHub, and zero connection ties them together.
-
-### The Spec-Kit Studio Solution
-**Spec-Kit Studio** introduces a human-in-the-loop, **Spec-Driven Development (SDD)** control plane. By establishing a single source of truth across four synchronized files (`spec.md`, `plan.md`, `tasks.md`, `rules.md`), Spec-Kit Studio enforces deterministic alignment between product vision, technical architecture, and AI agent execution.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                               SPEC-KIT STUDIO                                    │
-├──────────────────────────────────────────────────────────────────────────────────┤
-│  ┌────────────────┐    ┌────────────────┐    ┌────────────────┐    ┌───────────┐ │
-│  │  Constitution  │ ── │  Feature Spec  │ ── │ Architecture   │ ── │  Phased   │ │
-│  │   (rules.md)   │    │   (spec.md)    │    │ Plan (plan.md) │    │  Tasks    │ │
-│  └────────────────┘    └────────────────┘    └────────────────┘    └───────────┘ │
-└────────────────────────────────────────┬─────────────────────────────────────────┘
-                                         │
-                                         ▼
-         ┌────────────────────────────────────────────────────────────────┐
-         │             DETERMINISTIC CONTEXT PROMPT GENERATOR             │
-         │     Optimized for Cursor, Claude Code, Windsurf, Copilot, etc. │
-         └───────────────────────────────┬────────────────────────────────┘
-                                         │
-                                         ▼
-         ┌────────────────────────────────────────────────────────────────┐
-         │                  DIRECT GITHUB & JIRA SYNC                     │
-         │    Commits .spec-kit files & creates Jira Stories automatically│
-         └───────────────────────────────┬────────────────────────────────┘
-                                         │
-                                         ▼
-         ┌────────────────────────────────────────────────────────────────┐
-         │                 MULTI-STACK CODEBASE EXECUTION                 │
-         │     TypeScript / Python / Go / Rust / Java / C# / Flutter      │
-         └────────────────────────────────────────────────────────────────┘
+```text
+Feature request
+  → Repository evidence
+  → Feature spec and impact map
+  → Feature architecture plan
+  → Feature delivery tasks
+  → One local agent task
+  → Human review + repository verification
+  → Handoff
 ```
 
----
+Studio keeps **current feature evidence** separate from older shared workspace artifacts. A previous plan or task board cannot be presented as proof for a new feature.
 
-## 🏛 Core Architecture: The 4 Pillars of SDD
+## Quick start
 
-Spec-Kit Studio models every software workspace using four synchronized specification artifacts conforming 100% to GitHub `spec-kit`:
+### 1. Prerequisites
 
-| Pillar | Artifact File | Primary Responsibility | Key Elements |
-| :--- | :--- | :--- | :--- |
-| **1. Constitution** | `rules.md` | Non-negotiable engineering invariants & governance | Tech constraints, security policies, coding standards, performance SLAs |
-| **2. Feature Spec** | `spec.md` | Product requirements & user stories | `As a... I want to... So that...`, Acceptance Criteria (Given/When/Then) |
-| **3. Architecture Plan** | `plan.md` | System design & technical contracts | Tech stack, DB schemas, REST/gRPC API contracts, component boundaries |
-| **4. Phased Tasks** | `tasks.md` | Actionable, step-by-step implementation tasks | Phased breakdown, dependencies, requirement mapping (`US-101` $\rightarrow$ `TASK-201`) |
+- **Node.js 22.12 or later** (the supported range is Node 22).
+- npm.
+- Git, for the most useful repository evidence.
+- Optional: `codex`, `claude`, or `copilot` CLI if Studio should run a local coding agent. Studio detects what is actually available after a repository scan.
 
-### Standardized Directory Structure
-When exported or committed to GitHub, Spec-Kit Studio generates the official `.spec-kit` repository bundle:
-```
-my-project/
-├── .spec-kit/
-│   ├── spec.md          # Product Requirements & User Stories
-│   ├── plan.md          # Architecture Plan & Technical Contracts
-│   ├── tasks.md         # Actionable Phased Implementation Tasks
-│   ├── rules.md         # Constitution & Engineering Governance
-│   └── specify.sh       # Executable local CLI helper script
-├── src/                 # Application Source Code
-└── package.json         # Project Dependencies
-```
+### 2. Install and start Studio
 
----
-
-## 🔄 End-to-End Operational Lifecycle
-
-Spec-Kit Studio guides software development through a deterministic 5-stage lifecycle:
-
-```
-  ┌───────────────────┐
-  │ 1. INTROSPECT     │  Import existing repo zips, manifests, or raw PRD features
-  └─────────┬─────────┘
-            │
-  ┌─────────┴─────────┐
-  │ 2. SPECIFY        │  Synthesize structured User Stories, FRs, and Acceptance Criteria
-  └─────────┬─────────┘
-            │
-  ┌─────────┴─────────┐
-  │ 3. ARCHITECT      │  Define data schemas, API contracts, and technology stack boundaries
-  └─────────┬─────────┘
-            │
-  ┌─────────┴─────────┐
-  │ 4. DECOMPOSE      │  Generate dependency-mapped tasks grouped by implementation phases
-  └─────────┬─────────┘
-            │
-  ┌─────────┴─────────┐
-  │ 5. ORCHESTRATE    │  Sync with GitHub, push Jira tickets, and generate AI agent prompts
-  └───────────────────┘
-```
-
----
-
-## ⚡ Enterprise Capabilities & Highlights
-
-### 1. Native Spec-Kit v1.0.7 Core Engine
-Spec-Kit Studio embeds the native GitHub `spec-kit` v1.0.7 engine under `vendor/spec-kit/`. It provides instant access to official preset catalogs, community extensions, and standardized markdown templates for `spec.md`, `plan.md`, `tasks.md`, and `rules.md`.
-
-### 2. TanStack Powered High-Density Matrix
-* **`@tanstack/react-query`**: Manages background asynchronous requests, query caching, stale-time policies, and optimistic UI states.
-* **`@tanstack/react-table`**: Powers the **TanStack Matrix** view mode in the Spec Editor and Task Board, providing multi-column sorting, global search filtering, pagination, and dense tabular displays for hundreds of requirements.
-
-### 3. Direct GitHub Repository Synchronization
-Connect your GitHub Personal Access Token (PAT) to:
-* Browse user repositories directly inside the studio.
-* Select target branches (`main`, `develop`, feature branches).
-* Commit generated `.spec-kit/` files (`spec.md`, `plan.md`, `tasks.md`, `rules.md`) directly to your remote repository with zero command-line friction.
-
-### 4. Jira Cloud Project & Ticket Sync
-Integrate Atlassian Jira Cloud (`company.atlassian.net`) to:
-* Query Jira projects and boards automatically.
-* Export Spec-Kit User Stories and Tasks directly into Jira as real Stories or Epics.
-* Maintain bi-directional alignment between Jira ticket keys and Spec-Kit requirement IDs (`US-101` $\leftrightarrow$ `PROJ-142`).
-
-### 5. Legacy Codebase Introspection & Import
-Reverse-engineer existing repositories across any technology stack:
-* **Manifest Parser**: Upload dependency manifests (`package.json`, `Cargo.toml`, `go.mod`, `requirements.txt`, `pom.xml`, `Gemfile`, `Dockerfile`).
-* **Framework Introspection**: Automatically detects ORMs, database drivers, API frameworks, and styling engines.
-* **Auto-Spec Generation**: Converts detected architecture into structured `spec.md` user stories and `plan.md` architectural components.
-
-### 6. Zero-Disruption Feature Merging
-When adding a new capability (e.g. OAuth 2.0, Stripe Payments, Vector Search) to an active project:
-* **ID Preservation**: Existing requirement IDs (`FR-101` through `FR-108`) remain untouched. New requirements receive incremental IDs (`FR-109`).
-* **Contract Expansion**: Automatically updates `plan.md` database models and API routes without overwriting existing contracts.
-* **Phased Injection**: Inserts new implementation tasks into designated feature phases.
-
-### 7. AI Coding Agent Prompt Studio
-Converts specification items into copy-pasteable, context-rich prompt snippets tailored for specific AI coding assistants:
-* **Cursor**: Formatted with `@files` directives and precise file boundaries.
-* **Claude Code**: Optimized for terminal agent execution with bash verification checks.
-* **Windsurf**: Structured for Cascade multi-file generation flows.
-* **GitHub Copilot Workspace**: Tailored for issue-driven task plans.
-* **Gemini Studio**: Optimized for high-context architectural reasoning.
-
-### 8. Spec Quality Audit & Governance Matrix
-Includes an automated spec health auditor that scores specifications across 5 criteria:
-* **Completeness Score (0-100%)**: Detects unmapped requirements or orphaned tasks.
-* **Given/When/Then Validation**: Verifies formal acceptance criteria formatting.
-* **Traceability Index**: Guarantees 100% mapping between tasks and user stories.
-* **Architecture Drift Protection**: Identifies conflicts between chosen packages and architecture plans.
-* **Governance Checklist**: Ensures non-negotiable security invariants in `rules.md` are enforced.
-
-### 9. Modular Plug-and-Play Component Architecture
-The frontend is architected as an ultra-modular, decoupled component library engineered for high-performance enterprise applications:
-* **Reusable Primitives (`src/components/common/`)**: Shared, zero-dependency components including `EditorHeader`, `ViewToggle`, `TanStackTable`, `Badge`, `StatCard`, `EmptyState`, and `MarkdownSourceView`.
-* **Decoupled Domain Orchestrators**: Every major editor (`SpecEditor`, `PlanEditor`, `TaskBoard`, `ConstitutionEditor`, `OverviewDashboard`) is composed of lightweight, single-responsibility sub-components (e.g., `TaskCard`, `UserStoryCard`, `RequirementCard`, `TechStackSection`, `ApiContractsSection`, `TraceabilityMatrix`, `RuleCard`).
-* **Performance Tuning & Render Budget**:
-  - Extensive memoization via `React.memo` across all leaf items and cards.
-  - Stable callback references via `useCallback` to prevent cascading render trees.
-  - Computed matrix filters and grouping memoized with `useMemo`.
-  - Custom composable hooks (`useClipboard`, `useKeyboardShortcut`) for frictionless plug-and-play reuse.
-
----
-
-## ⚡ Tech Stack Independence & Capability Matrix
-
-Spec-Kit Studio operates at the specification layer, making it 100% stack-agnostic:
-
-| Technology Stack | Manifest Detected | Spec & Plan Output |
-| :--- | :--- | :--- |
-| **Node.js / TypeScript** | `package.json`, `tsconfig.json` | Express/Fastify routes, Prisma/Drizzle schemas, React/Vue components |
-| **Python** | `requirements.txt`, `pyproject.toml` | FastAPI/Django endpoints, Pydantic models, SQLAlchemy schemas |
-| **Go** | `go.mod` | Gin/Fiber handlers, GORM models, Go struct interfaces |
-| **Rust** | `Cargo.toml` | Axum/Actix endpoints, Diesel/SQLx models, Serde structs |
-| **Java / Kotlin** | `pom.xml`, `build.gradle` | Spring Boot controllers, JPA entities, DTO mapping |
-| **Ruby** | `Gemfile` | Rails active-record models, controller actions, RSpec tests |
-| **Flutter / Dart** | `pubspec.yaml` | Bloc/Riverpod states, Flutter widgets, REST clients |
-
----
-
-## 🛠 Local Environment & Configuration
-
-Environment variables are managed via `.env` (see `.env.example`):
-
-```env
-# GEMINI_API_KEY: Required for Gemini AI specification generation
-GEMINI_API_KEY="your-gemini-api-key"
-
-# GITHUB_TOKEN: Optional GitHub PAT with repo scope for direct commits
-GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# JIRA CONFIGURATION: Optional Jira Cloud credentials
-JIRA_DOMAIN="company.atlassian.net"
-JIRA_EMAIL="developer@company.com"
-JIRA_API_TOKEN="ATATT3xFfGF0..."
-```
-
----
-
-## ▲ Deploy on Vercel
-
-The repository is configured for Vite static output plus the Express API exported from `api/index.ts`. Import the Git repository into Vercel and deploy with the repository defaults—`vercel.json` sets the build command, `dist` output directory, API rewrite, and SPA fallback.
-
-Set these Vercel environment variables before deploying:
-
-| Variable | Required | Purpose |
-| :--- | :--- | :--- |
-| `GEMINI_API_KEY` | Only for Gemini generation | Kept server-side by the API. Do not create a `VITE_GEMINI_API_KEY`. |
-| `GITHUB_TOKEN` | Optional | Enables server-side GitHub integration actions. Prefer a scoped, short-lived token. |
-| `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Optional | Enables Jira integration actions. |
-| `APP_URL` | Optional | Public Studio URL for integration callbacks. |
-
-Vercel runs Node 22, as declared in `package.json`. The Connected Workspace feature intentionally does **not** run in Vercel: each user runs the local connector on their own machine and allows the deployed Studio origin in `STUDIO_ALLOWED_ORIGINS`. This preserves local repository access rather than sending filesystem permissions to the hosted app.
-
----
-
-## ⚡ Quick Start Guide
-
-### 1. Launch Spec-Kit Studio
-Start the development server:
 ```bash
+git clone <your-clone-url>
+cd spec-kit-studio
+npm install
 npm run dev
 ```
-Navigate to `http://localhost:3000` in your browser.
 
-### 2. Choose Your Workflow
-* **Option A (New Project)**: Click **"AI Spec Generator"**, describe your idea in natural language, and let Gemini generate the 4-pillar specification package.
-* **Option B (Existing Codebase)**: Click **"Import Project / Repo"**, paste a GitHub URL or upload your project manifest, and generate an architectural specification layer.
-* **Option C (Add Feature)**: Click **"Import Feature / User Stories"**, paste a PRD or ticket description, and click **"Merge into Active Workspace"**.
+Open the local URL printed by the dev server (normally `http://localhost:3000`). Before deployment, run:
 
-### 3. Review & Refine
-Use the **Feature Spec**, **Architecture Plan**, **Task Board**, and **Constitution Rules** tabs to inspect, edit, or view the **TanStack Matrix**.
+```bash
+npm run verify
+```
 
-### 4. Sync & Execute
-* Click **"GitHub & Jira Sync"** in the top navigation bar to commit `.spec-kit/` files directly to GitHub or push stories to Jira.
-* Copy targeted prompt snippets from **AI Agent Prompts** into Cursor, Claude Code, or Windsurf to write code with 100% precision!
+This runs TypeScript checks, automated tests, and a production build.
 
----
+### 3. Start the local connector
 
-## 📜 License & Ecosystem
+The browser cannot safely read or edit arbitrary local folders. The connector is the intentionally small, local bridge for repository evidence and local agents.
 
-Licensed under the **MIT License**.  
-Powered natively by **[GitHub `spec-kit`](https://github.com/github/spec-kit)**.
+Copy `.env.example` to `.env.local`, then set a parent directory containing only repositories you intend Studio to access:
 
-*Built for software engineers, product architects, and AI-first engineering teams.*  
-**Spec-Kit Studio — Turning Ambiguity into Deterministic Software.**
+```env
+STUDIO_ALLOWED_ROOTS="/absolute/path/to/your/repos"
+STUDIO_CONNECTOR_TOKEN="use-a-long-random-value"
+STUDIO_ALLOWED_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+```
+
+In a second terminal, from the Studio repository:
+
+```bash
+npm run connector
+```
+
+In Studio, open **Connected Workspace**, enter the repository’s absolute path and—when configured—the pairing token, then select **Scan repository**. Scanning is read-only.
+
+> The repository path must be inside `STUDIO_ALLOWED_ROOTS`. For `/Users/me/develop/my-service`, set `/Users/me/develop` as the allowed root—not your whole home directory.
+
+For a hosted Studio URL, add that URL to `STUDIO_ALLOWED_ORIGINS` and keep the connector on the user’s own machine. See [Local Connector](docs/local-connector.md) for full setup and safety details.
+
+## The feature journey
+
+The left navigation is a journey map: it shows the current stage, what is complete, and one primary next action. Completed stages can always be reopened and edited; meaningful changes should be reviewed again.
+
+| Stage | Goal | What you do | Evidence Studio retains |
+| --- | --- | --- | --- |
+| 1. Connect safely | Establish a known baseline. | Scan the repository and review Git state, available checks, and tooling. | Repository evidence and baseline results. |
+| 2. Describe feature | Agree on outcome and boundaries. | Import a PRD, issue, URL, or pasted requirements; review stories and requirements. | Feature inbox item and feature spec. |
+| 3. Ground impact | Understand what could be affected. | Review owning paths, neighbors, tests, contracts, and applicable rules. | Feature-scoped impact evidence. |
+| 4. Design safely | Agree on a compatible design. | Review the feature’s `plan.md`; run the selected Engine/agent if needed. | Feature-scoped architecture plan. |
+| 5. Plan delivery | Make implementation executable. | Review dependency-ordered `tasks.md` and requirement mappings. | Feature-scoped delivery plan. |
+| 6. Quality gate | Catch cross-artifact gaps before code changes. | Run the audit and resolve blockers at their owning stage. | Audit result and decisions. |
+| 7. Implement | Complete one bounded task safely. | Submit the next task to a local agent, then review evidence. | Agent output, changed files, verification result, and a reviewed receipt. |
+| 8. Verify & hand off | Make the change durable and reviewable. | Review remaining work, Git evidence, checks, and exports. | Handoff-ready artifacts and verification evidence. |
+
+### Add a feature to an existing repository
+
+1. In **Connected Workspace**, scan a clean clone of the target repository.
+2. Choose **Import feature** from the Feature Inbox or journey.
+3. Paste requirements, upload a document, or provide a supported issue/URL.
+4. Choose **Prepare Spec-Kit Engine Work Packet** for the Engine-first path.
+5. Review stories and requirements, then merge into the connected workspace.
+6. Follow the highlighted next stage. Studio retains current-feature scope so the new plan and tasks cannot be confused with existing workspace work.
+
+Read the deeper guide: [Feature Journey: Engine-First Workflow](docs/feature-journey-engine-first.md).
+
+## Run a task locally
+
+Stage 7 is deliberately simple:
+
+1. Open **AI Agent Prompts** from the journey.
+2. Studio automatically selects the next unfinished, unreviewed feature task. Completed or recorded tasks are not the default run target.
+3. Select an available local agent: **Codex CLI**, **Claude Code**, or **GitHub Copilot CLI**.
+4. Select **Run with _agent_ locally**, then approve the browser confirmation.
+5. Watch live status and elapsed time. You can stop a running task safely.
+6. Review changed files and output, run independent repository checks when appropriate, then check the review box and select **Record reviewed implementation**.
+
+Studio writes only inside the connected repository. It does not commit, push, switch branches, or mark a task complete merely because an agent says it finished.
+
+### Minimal-intervention defaults
+
+Some planning tasks contain operational policy choices. Studio applies conservative, visible defaults so the normal path remains **select task → run task**. If your organization uses a different policy, open **Review or change operational defaults**; the selected policy is saved per feature/task and included in the handoff.
+
+### See completed work without rerunning it
+
+In **AI Agent Prompts**, open **Completed & reviewed work**. It stays collapsed to keep the next task in focus. For each recorded task it shows:
+
+- task ID, title, and review timestamp;
+- produced or changed files, including newly created files;
+- retained agent and verification output; and
+- the Git diff summary, when Git can provide one.
+
+The files remain at the shown paths in the connected repository. The receipt is an audit record, not a second copy of the code.
+
+## Local agents and Spec-Kit Engine
+
+Studio is Engine-first, but it never pretends a CLI is installed or authenticated. A repository scan detects usable local agents; Settings lets the user choose a preferred available agent.
+
+| Agent | Studio action |
+| --- | --- |
+| Codex CLI | Runs a scoped local task through the connector. The default non-interactive model is `gpt-5.6-luna`; override `STUDIO_CODEX_MODEL` only when your account supports another model. |
+| Claude Code | Runs a scoped local task when installed and authenticated. |
+| GitHub Copilot CLI | Runs a scoped local task when installed and authenticated. |
+| Gemini, Cursor, Windsurf/Aider | Produces a portable, feature-scoped handoff to copy into that tool. |
+
+Connected Workspace can check official Spec-Kit availability and guide explicit setup. It never silently initializes a repository or overwrites official Spec-Kit content.
+
+## Safety and privacy
+
+The local connector is designed for private repositories and follows these constraints:
+
+- Binds only to `127.0.0.1`.
+- Accepts browser requests only from configured Studio origins.
+- Resolves paths and rejects those outside `STUDIO_ALLOWED_ROOTS`.
+- Requires a pairing token when one is configured.
+- Redacts common credential patterns from returned command output.
+- Uses discovered or allowlisted baseline commands instead of arbitrary browser-issued shell commands.
+- Requires explicit confirmation for repository writes, installs, and local agent runs.
+- Captures evidence but never commits, pushes, or creates branches.
+
+Do not put API keys in `VITE_*` variables. Gemini, GitHub, and Jira credentials are server-side configuration only. See the annotated [.env.example](.env.example).
+
+## Repository support and baseline checks
+
+Studio does not require an npm project. A scan discovers suitable baseline checks from repository conventions, including npm scripts, Python pytest, Go test, Cargo test, Maven/Gradle test, and .NET test commands.
+
+If it cannot find a supported check, Studio says so and lets you record a manual baseline. It does not invent an npm command for a non-npm project. Pre-existing failures remain visible and are not attributed to the feature.
+
+## Deploy on Vercel
+
+Studio can deploy as a Vercel web app. Import the repository into Vercel; [`vercel.json`](vercel.json) supplies build and routing configuration.
+
+Set only the server-side integrations you use:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Only for Gemini generation | Keeps Gemini access server-side. |
+| `GITHUB_TOKEN` | Optional | Enables configured GitHub integration actions; use a scoped, short-lived token. |
+| `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Optional | Enables configured Jira actions. |
+| `APP_URL` | Optional | Public URL for integrations that need it. |
+
+Vercel cannot access a user’s filesystem. Connected Workspace remains local: every user runs their own connector and allows the hosted origin with `STUDIO_ALLOWED_ORIGINS`.
+
+## Troubleshooting
+
+| Message or symptom | What to do |
+| --- | --- |
+| `Repository path is outside STUDIO_ALLOWED_ROOTS` | Add the repository’s intended parent folder to `STUDIO_ALLOWED_ROOTS`, restart the connector, then scan again. |
+| `Connector token is required` | Enter the same value used for `STUDIO_CONNECTOR_TOKEN` in Connected Workspace. Never paste it into an agent prompt. |
+| `spawn uv ENOENT` | Use Connected Workspace’s guided uv setup or your organization’s approved installer. |
+| A local agent is “not logged in” | Authenticate that CLI in a terminal, then rescan so Studio refreshes readiness. |
+| No files shown after an agent run | Open live agent output. New/untracked files are captured for new runs; older receipts may require inspecting artifact paths in the repository. |
+| No supported baseline checks | Informational only: record a manual baseline or add a project-native check. |
+
+## Project layout
+
+```text
+src/                 React application and reusable domain components
+src/components/      Journey, workspace, artifact, audit, prompt, and export surfaces
+src/lib/             Shared workflow, connector, prompt, and evidence logic
+connector/server.mjs Loopback-only local repository connector
+api/                 Hosted API entry point
+docs/                Workflow and operational guides
+tests/               Node test suite
+```
+
+## Documentation
+
+- [Feature journey, ownership, and review loops](docs/feature-journey-engine-first.md)
+- [Local connector setup and safety model](docs/local-connector.md)
+- [Efficient Codex CLI feature execution](docs/codex-cli-feature-execution-plan.md)
+- [Adding features to an existing repository](docs/adding_features_to_existing.md)
+
+## Contributing
+
+Before submitting a change:
+
+```bash
+npm run verify
+```
+
+Keep feature evidence scoped, avoid silently changing user repositories, and add regression tests whenever workflow behavior changes.

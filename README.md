@@ -38,8 +38,9 @@
    - [Spec Quality Audit & Governance Matrix](#8-spec-quality-audit--governance-matrix)
 5. [Tech Stack Independence & Capability Matrix](#-tech-stack-independence--capability-matrix)
 6. [Local Environment & Configuration](#-local-environment--configuration)
-7. [Quick Start Guide](#-quick-start-guide)
-8. [License & Ecosystem](#-license--ecosystem)
+7. [Deploy on Vercel](#-deploy-on-vercel)
+8. [Quick Start Guide](#-quick-start-guide)
+9. [License & Ecosystem](#-license--ecosystem)
 
 ---
 
@@ -234,6 +235,23 @@ JIRA_DOMAIN="company.atlassian.net"
 JIRA_EMAIL="developer@company.com"
 JIRA_API_TOKEN="ATATT3xFfGF0..."
 ```
+
+---
+
+## ▲ Deploy on Vercel
+
+The repository is configured for Vite static output plus the Express API exported from `api/index.ts`. Import the Git repository into Vercel and deploy with the repository defaults—`vercel.json` sets the build command, `dist` output directory, API rewrite, and SPA fallback.
+
+Set these Vercel environment variables before deploying:
+
+| Variable | Required | Purpose |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | Only for Gemini generation | Kept server-side by the API. Do not create a `VITE_GEMINI_API_KEY`. |
+| `GITHUB_TOKEN` | Optional | Enables server-side GitHub integration actions. Prefer a scoped, short-lived token. |
+| `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Optional | Enables Jira integration actions. |
+| `APP_URL` | Optional | Public Studio URL for integration callbacks. |
+
+Vercel runs Node 22, as declared in `package.json`. The Connected Workspace feature intentionally does **not** run in Vercel: each user runs the local connector on their own machine and allows the deployed Studio origin in `STUDIO_ALLOWED_ORIGINS`. This preserves local repository access rather than sending filesystem permissions to the hosted app.
 
 ---
 

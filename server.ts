@@ -24,7 +24,6 @@ app.use(createAuditRouter());
 app.use(createRepositoryRouter());
 
 app.use(createGenerationRouter());
-app.use(createRepositoryRouter());
 
 if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
   serveApplication(app, PORT);

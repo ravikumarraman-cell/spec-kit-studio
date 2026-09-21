@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Workflow,
   Eye,
@@ -20,6 +20,7 @@ import { FeatureArtifactViewer } from '../common/FeatureArtifactViewer';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 
 interface PlanEditorProps {
+  projectId: string;
   plan: ImplementationPlan;
   onSavePlan: (updatedPlan: ImplementationPlan) => void;
   onTriggerAiGenerate: () => void;
@@ -37,6 +38,7 @@ const VIEW_OPTIONS: ViewOption<PlanViewMode>[] = [
 ];
 
 export const PlanEditor: React.FC<PlanEditorProps> = ({
+  projectId,
   plan,
   onSavePlan,
   onTriggerAiGenerate,
@@ -46,6 +48,12 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
   const [activeView, setActiveView] = useState<PlanViewMode>('visual');
   const [currentPlan, setCurrentPlan] = useState<ImplementationPlan>(plan);
   const [hasUnsaved, setHasUnsaved] = useState(false);
+
+  useEffect(() => {
+    setCurrentPlan(plan);
+    setHasUnsaved(false);
+    setActiveView('visual');
+  }, [projectId, plan]);
 
   const handleUpdateField = useCallback((field: keyof ImplementationPlan, value: any) => {
     setCurrentPlan((prev) => ({

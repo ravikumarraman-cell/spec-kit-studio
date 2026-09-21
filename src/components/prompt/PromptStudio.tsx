@@ -412,14 +412,13 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       )}
 
       {activeFeature && !useSharedTasks && (
-        <FeatureImplementationHistory
-          receipts={activeFeature.implementationReceipts || []}
-          tasks={featureTasks}
-        />
-      )}
-
-      {activeFeature && !useSharedTasks && (
-        <FeatureCodeChanges repositoryPath={project.importedRepo?.repoUrl} receipts={activeFeature.implementationReceipts || []} />
+        <details className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+          <summary className="cursor-pointer px-5 py-4 text-xs font-bold text-zinc-300 hover:text-zinc-100">Previous implementation evidence <span className="ml-1 font-normal text-zinc-500">Optional context · {activeFeature.implementationReceipts?.length || 0} reviewed task{activeFeature.implementationReceipts?.length === 1 ? '' : 's'}</span></summary>
+          <div className="space-y-5 border-t border-zinc-800 p-5">
+            <FeatureImplementationHistory receipts={activeFeature.implementationReceipts || []} tasks={featureTasks} />
+            <FeatureCodeChanges repositoryPath={project.importedRepo?.repoUrl} receipts={activeFeature.implementationReceipts || []} />
+          </div>
+        </details>
       )}
 
       {/* Target Task and Agent Configuration Grid */}

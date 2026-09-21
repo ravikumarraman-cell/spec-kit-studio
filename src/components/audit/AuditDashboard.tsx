@@ -13,6 +13,8 @@ import { AuditScoreOverview } from './AuditScoreOverview';
 import { AuditRecommendations } from './AuditRecommendations';
 import { generationApi } from '../../lib/api/generation';
 import { auditBlockers, auditPassesQualityGate } from '../../lib/auditGate';
+import { ActionErrorNotice } from '../common/ActionErrorNotice';
+import { userFacingActionError } from '../../lib/workflowUx';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
@@ -26,6 +28,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
   onOpenJourney,
 }) => {
   const [isAuditing, setIsAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const audit = project.audit || {
     lastAudited: new Date().toISOString(),
     overallScore: 94,
@@ -46,6 +49,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
 
   const handleRunAudit = async () => {
     setIsAuditing(true);
+    setAuditError(null);
     try {
       const data = await generationApi.runAudit({ specContent: project.spec.markdown || JSON.stringify(project.spec), planContent: project.plan.markdown || JSON.stringify(project.plan), tasksContent: project.tasks.markdown || JSON.stringify(project.tasks), constitutionContent: project.constitution.markdown || JSON.stringify(project.constitution) });
       if (data.success && data.data) {
@@ -65,6 +69,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
       }
     } catch (err) {
       console.error('Failed to run audit:', err);
+      setAuditError(userFacingActionError('run the quality audit', err, 'Couldn’t run the quality audit. Check the Studio connection and try again.'));
     } finally {
       setIsAuditing(false);
     }
@@ -92,6 +97,8 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
           </button>
         }
       />
+
+      <ActionErrorNotice message={auditError} onRetry={handleRunAudit} retryLabel="Run audit again" />
 
       {/* Overall Score Banner */}
       <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col md:flex-row md:items-center justify-between gap-6">

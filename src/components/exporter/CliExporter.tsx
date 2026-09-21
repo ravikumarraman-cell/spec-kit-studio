@@ -15,6 +15,8 @@ import { SpecKitProject } from '../../types/speckit';
 import { generateSpecKitZip, downloadBlob } from '../../lib/export';
 import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
+import { ActionErrorNotice } from '../common/ActionErrorNotice';
+import { userFacingActionError } from '../../lib/workflowUx';
 
 interface CliExporterProps {
   project: SpecKitProject;
@@ -22,6 +24,7 @@ interface CliExporterProps {
 
 export const CliExporter: React.FC<CliExporterProps> = memo(({ project }) => {
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const { copied: isCopiedCommand, copy: copyCommand } = useClipboard();
 
   const sanitizeName = project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -29,10 +32,12 @@ export const CliExporter: React.FC<CliExporterProps> = memo(({ project }) => {
   const handleDownloadZip = async () => {
     try {
       setIsExporting(true);
+      setExportError(null);
       const blob = await generateSpecKitZip(project);
       downloadBlob(blob, `${sanitizeName}-spec-kit.zip`);
     } catch (err) {
       console.error('Failed to export zip:', err);
+      setExportError(userFacingActionError('package this workspace', err, 'Couldn’t package this workspace. Try again after reviewing the project artifacts.'));
     } finally {
       setIsExporting(false);
     }
@@ -65,6 +70,8 @@ chmod +x specify.sh
           </button>
         }
       />
+
+      <ActionErrorNotice message={exportError} onRetry={handleDownloadZip} retryLabel="Package again" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (1/3): Directory Hierarchy Tree */}

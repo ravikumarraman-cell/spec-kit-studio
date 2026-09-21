@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   FileText,
   Eye,
@@ -21,6 +21,7 @@ import { SpecEdgeCases } from './SpecEdgeCases';
 import { SpecTanStackMatrix } from './SpecTanStackMatrix';
 
 interface SpecEditorProps {
+  projectId: string;
   spec: FeatureSpec;
   onSaveSpec: (updatedSpec: FeatureSpec) => void;
   onTriggerAiGenerate: () => void;
@@ -39,6 +40,7 @@ const VIEW_OPTIONS: ViewOption<SpecViewMode>[] = [
 const CATEGORIES: RequirementCategory[] = ['Core', 'UI/UX', 'API', 'Database', 'Security', 'Performance', 'Integration'];
 
 export const SpecEditor: React.FC<SpecEditorProps> = ({
+  projectId,
   spec,
   onSaveSpec,
   onTriggerAiGenerate,
@@ -49,6 +51,14 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   const [currentSpec, setCurrentSpec] = useState<FeatureSpec>(spec);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
+
+  // The shell keeps an editor mounted while a user switches workspaces. Never
+  // carry a previous project's draft into the newly selected project.
+  useEffect(() => {
+    setCurrentSpec(spec);
+    setHasUnsaved(false);
+    setActiveCategoryFilter('all');
+  }, [projectId, spec]);
 
   const handleUpdateField = useCallback((field: keyof FeatureSpec, value: any) => {
     setCurrentSpec((prev) => ({

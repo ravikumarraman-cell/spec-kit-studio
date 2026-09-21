@@ -102,7 +102,9 @@ function AppContent() {
         onSelectTab={setActiveTab}
         onSelectProject={selectProject}
         onCreateProject={() => setIsNewProjectModalOpen(true)}
-        onOpenImportStudio={() => setActiveTab('import')}
+        // Repository setup has one guided path. The dedicated import studio is
+        // retained as an explicitly enabled advanced migration tool.
+        onOpenImportStudio={() => setActiveTab('workspace')}
         onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
         onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
         onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
@@ -153,6 +155,7 @@ function AppContent() {
 
               {activeTab === 'spec' && (
                 <SpecEditor
+                  projectId={activeProject.id}
                   spec={activeProject.spec}
                   onSaveSpec={saveSpec}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
@@ -163,6 +166,7 @@ function AppContent() {
 
               {activeTab === 'plan' && (
                 <PlanEditor
+                  projectId={activeProject.id}
                   plan={activeProject.plan}
                   focusFeature={activeProject.featureInbox?.at(-1)}
                   onSavePlan={savePlan}
@@ -173,6 +177,7 @@ function AppContent() {
 
               {activeTab === 'tasks' && (
                 <TaskBoard
+                  projectId={activeProject.id}
                   taskBreakdown={activeProject.tasks}
                   spec={activeProject.spec}
                   focusFeature={activeProject.featureInbox?.at(-1)}
@@ -184,6 +189,7 @@ function AppContent() {
 
               {activeTab === 'constitution' && (
                 <ConstitutionEditor
+                  projectId={activeProject.id}
                   constitution={activeProject.constitution}
                   onSaveConstitution={saveConstitution}
                 />

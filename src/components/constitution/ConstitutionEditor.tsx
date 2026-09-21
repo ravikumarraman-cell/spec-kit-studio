@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ShieldCheck,
   Eye,
@@ -15,6 +15,7 @@ import { ConstitutionPresets } from './ConstitutionPresets';
 import { ConstitutionTanStackMatrix } from './ConstitutionTanStackMatrix';
 
 interface ConstitutionEditorProps {
+  projectId: string;
   constitution: ProjectConstitution;
   onSaveConstitution: (updatedConstitution: ProjectConstitution) => void;
 }
@@ -28,12 +29,19 @@ const VIEW_OPTIONS: ViewOption<ConstitutionViewMode>[] = [
 ];
 
 export const ConstitutionEditor: React.FC<ConstitutionEditorProps> = ({
+  projectId,
   constitution,
   onSaveConstitution,
 }) => {
   const [activeView, setActiveView] = useState<ConstitutionViewMode>('visual');
   const [currentConst, setCurrentConst] = useState<ProjectConstitution>(constitution);
   const [hasUnsaved, setHasUnsaved] = useState(false);
+
+  useEffect(() => {
+    setCurrentConst(constitution);
+    setHasUnsaved(false);
+    setActiveView('visual');
+  }, [projectId, constitution]);
 
   const handleSave = useCallback(() => {
     onSaveConstitution(currentConst);

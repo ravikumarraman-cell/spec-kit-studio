@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   CheckSquare,
   CheckCircle2,
@@ -17,6 +17,7 @@ import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
 
 interface TaskBoardProps {
+  projectId: string;
   taskBreakdown: TaskBreakdown;
   spec: FeatureSpec;
   onSaveTasks: (updatedBreakdown: TaskBreakdown) => void;
@@ -41,6 +42,7 @@ const VIEW_OPTIONS: ViewOption<TaskViewMode>[] = [
 ];
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({
+  projectId,
   taskBreakdown,
   spec,
   onSaveTasks,
@@ -51,6 +53,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [activeView, setActiveView] = useState<TaskViewMode>('kanban');
   const [activePhaseFilter, setActivePhaseFilter] = useState<string>('all');
   const [currentTasks, setCurrentTasks] = useState<TaskItem[]>(taskBreakdown.tasks);
+
+  useEffect(() => {
+    setCurrentTasks(taskBreakdown.tasks);
+    setActivePhaseFilter('all');
+    setActiveView('kanban');
+  }, [projectId, taskBreakdown]);
 
   const handleUpdateStatus = useCallback(
     (taskId: string, newStatus: TaskStatus) => {

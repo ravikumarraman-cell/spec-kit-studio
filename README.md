@@ -1,51 +1,148 @@
 # Spec-Kit Studio
 
-**A visual, evidence-first control plane for adding a well-specified, reviewable feature to any existing repository.**
+## Turn AI code generation into accountable software delivery
 
-Studio combines a web app with an optional loopback-only local connector. It guides a team from feature intent to feature-scoped Spec-Kit artifacts, an ordered delivery plan, a bounded local coding-agent task, and a human-reviewed verification record.
+**Spec-Kit Studio is the evidence-first control plane for teams that want AI to accelerate software delivery without surrendering engineering judgment.**
 
-Studio never silently edits a repository, creates a branch, commits, pushes, or marks agent work complete for you.
+AI coding agents can write remarkably capable code. The hard problem is not generating a diff—it is generating the *right* diff, in the right repository, for the right requirement, with the right constraints, and with enough evidence that a human can trust the result.
 
-> **Start here:** [Quick start](#quick-start) → [Feature journey](#the-feature-journey) → [Run a local task](#run-a-task-locally) → [Review and hand off](#review-and-hand-off)
+Spec-Kit Studio makes that discipline practical. It guides a feature from intent to verified handoff through an eight-stage, AI-assisted workflow. At every consequential point, it captures the context an agent needs, keeps the work scoped to the active feature, and leaves approval with the people accountable for the product.
 
-## What Studio gives you
-
-| Need | Studio provides |
-| --- | --- |
-| Understand an unfamiliar repository | A read-only truth layer: Git state, manifests, technologies, available baseline checks, Spec-Kit status, and local-agent readiness. |
-| Add a feature without losing context | A feature inbox plus feature-scoped spec, impact evidence, architecture plan, and delivery tasks. |
-| Use Spec-Kit deliberately | An Engine-first eight-stage journey with a clear next action and review point at every consequential boundary. |
-| Run a local coding agent safely | A scoped Codex, Claude Code, or Copilot CLI handoff—one task per run, workspace writes only, no automatic commit or push. |
-| Retain trustworthy evidence | Live agent status, redacted output, changed files, verification output, and human-reviewed implementation receipts. |
-| Work across technologies | Repository grounding and baseline detection for JavaScript/TypeScript, Python, Go, Rust, Java, .NET, Ruby, PHP, Docker, and more. |
-
-## The mental model
-
-Studio is the control plane; your repository remains the source of code; Spec-Kit artifacts remain the source of planned work; and the local agent performs the bounded task.
+> **The promise:** less time rediscovering context, fewer expensive rework loops, faster reviews, and AI-generated code that arrives with a reason to believe it is correct.
 
 ```text
-Feature request
-  → Repository evidence
-  → Feature spec and impact map
-  → Feature architecture plan
-  → Feature delivery tasks
-  → One local agent task
-  → Human review + repository verification
-  → Handoff
+Feature intent → repository truth → specification → impact map → safe design
+      → delivery plan → bounded AI task → evidence-based verification → handoff
 ```
 
-Studio keeps **current feature evidence** separate from older shared workspace artifacts. A previous plan or task board cannot be presented as proof for a new feature.
+## Why this matters
+
+The cost of modern software delivery is rarely the keystrokes required to write code. It is the coordination tax around those keystrokes:
+
+- Reconstructing how an unfamiliar repository works.
+- Translating a request into requirements an engineer and an agent interpret the same way.
+- Discovering architectural constraints after implementation has already begun.
+- Reviewing broad, ambiguous AI-generated changes without a reliable link to a plan.
+- Repeating the same context gathering for every task, reviewer, and handoff.
+
+Spec-Kit Studio attacks that tax directly. It turns implicit knowledge into durable, feature-scoped evidence before implementation; gives an AI agent a single bounded task instead of an open-ended instruction; and records what changed and how it was checked afterward.
+
+| Without a control plane | With Spec-Kit Studio |
+| --- | --- |
+| “Build this feature” is an ambiguous prompt. | A feature has reviewed stories, requirements, constraints, design, and dependency-ordered tasks. |
+| The agent infers repository conventions ad hoc. | Studio first captures repository truth, baseline checks, available tools, and applicable guardrails. |
+| Reviews begin with “what was this supposed to do?” | Reviewers receive the task, changed files, verification evidence, and retained decision record. |
+| Old plans are easily mistaken for the new feature’s plan. | Current-feature evidence is explicitly separated from shared workspace history. |
+| Agent completion is treated as success. | A human records completion only after reviewing evidence. |
+
+This is not a process layer added for its own sake. It is a way to make the development lifecycle shorter by moving uncertainty—and the conversations needed to resolve it—*upstream*, when correction is cheap.
+
+## The development-life-cycle advantage
+
+Studio compresses the delivery cycle by making each transition explicit and reusable.
+
+```text
+        Clarify once                 Ground once                Review once
+Request ─────────────→ Spec ─────────────────→ Plan ─────────────────→ Code
+                         │                       │                      │
+                         └──── reusable evidence ┴──── bounded prompt ─┘
+                                                                         │
+                                              Verification + handoff ◀──┘
+```
+
+| Lifecycle friction | Studio mechanism | Practical outcome |
+| --- | --- | --- |
+| Repository onboarding | Read-only scan of Git state, technology evidence, checks, Spec-Kit status, and runnable agents. | Engineers and agents start from facts instead of archaeology. |
+| Requirement drift | Imported feature briefs become structured stories, requirements, boundaries, and success measures. | Less “that is not what I meant” rework. |
+| Design churn | A feature-scoped impact map and `plan.md` are reviewed before implementation. | Constraints are discovered before a broad diff exists. |
+| Task ambiguity | `tasks.md` maps delivery work to requirements and dependencies. | AI agents receive a small, executable contract rather than a vague project goal. |
+| Review overload | Changed files, command results, verification output, and receipts stay attached to the task. | Review starts with evidence, not reconstruction. |
+| Handoff loss | The final package preserves the specification, plan, tasks, governance, and verification trail. | The next engineer inherits context, not just code. |
+
+## The feature journey: from first scan to durable handoff
+
+The Studio interface is intentionally organized around **one clear next step**. The full route is always available, but the active stage is the focus. AI may prepare work at any stage; it never advances the journey by itself.
+
+| Stage | The question it answers | What Studio helps you do | Evidence retained |
+| --- | --- | --- | --- |
+| **1. Connect safely** | What is true about this repository right now? | Scan the repository, Git state, toolchain, tests, and baseline health. | Repository truth and baseline record. |
+| **2. Describe the feature** | What outcome are we trying to create without breaking? | Import a PRD, ticket, URL, document, or notes; review stories and requirements. | Feature inbox receipt and feature specification. |
+| **3. Ground the impact map** | Where does this feature belong and what can it affect? | Identify owning paths, neighboring code, tests, contracts, schemas, and rules. | Feature-scoped impact evidence. |
+| **4. Design safely** | What is the smallest compatible technical design? | Review or prepare a feature-scoped `plan.md` with APIs, components, risks, tests, and rollback considerations. | Accepted feature architecture plan. |
+| **5. Make delivery actionable** | What must happen, in what order, and how is it traced? | Review dependency-ordered `tasks.md` with requirement mappings and verification work. | Accepted feature delivery plan. |
+| **6. Pass the quality gate** | Are the artifacts internally consistent enough to begin code? | Run a cross-artifact audit and resolve or explicitly own blocking gaps. | Audit findings and decisions. |
+| **7. Implement deliberately** | Can an agent safely execute one approved piece of work? | Send one selected task to Codex, Claude Code, or Copilot; inspect output and evidence. | Changed files, agent output, checks, and a human-reviewed implementation receipt. |
+| **8. Verify & hand off** | Can someone else understand, validate, and safely continue this change? | Compare the result with the approved work, review final evidence, and export the package. | Handoff-ready artifacts and verification trail. |
+
+### The critical design principle: AI is powerful, but bounded
+
+At Stage 7, Studio does not ask an agent to “finish the feature.” It supplies a reviewed, task-scoped contract informed by the feature, constitution, architecture, delivery plan, and repository context. The agent can work quickly; the scope remains legible.
+
+```text
+Approved feature plan
+  + accepted task
+  + repository guardrails
+  + operational defaults
+  + focused verification request
+  = a bounded AI implementation handoff
+```
+
+That distinction is how teams move faster *and* retain control.
+
+## What Studio does for every role
+
+| Role | What becomes easier |
+| --- | --- |
+| Product and delivery leaders | A request becomes a reviewable path from desired outcome to verified implementation, not a black-box agent run. |
+| Staff engineers and architects | Design, compatibility, risk, contracts, and rollback concerns are made visible before implementation. |
+| Feature developers | Less context switching: Studio presents the next meaningful action and retains prior evidence. |
+| AI-assisted developers | Codex, Claude Code, and Copilot get focused prompts with enough context to be useful without unconstrained repository-wide authority. |
+| Reviewers | The “why,” expected scope, changed files, and verification record arrive together. |
+| New maintainers | The handoff preserves decisions and traceability instead of requiring repository archaeology. |
+
+## Core capabilities
+
+### Repository truth before generation
+
+Connected Workspace is a read-only grounding layer. It discovers repository structure, Git status, technology evidence, likely baseline checks, official Spec-Kit status, and locally available coding agents. It supports JavaScript/TypeScript, Python, Go, Rust, Java, .NET, Ruby, PHP, Docker, and more.
+
+No guessed test command. No invented architecture. No blind AI run.
+
+### Feature intake that turns intent into engineering artifacts
+
+Import feature context from text, PRDs, documents, issue URLs, or reusable presets. Studio helps shape it into user stories, functional requirements, acceptance criteria, edge cases, and success measures before design and implementation begin.
+
+### Feature-scoped plans, not generic documentation
+
+Studio keeps active feature evidence distinct from older, shared workspace artifacts. A plan or task board from a previous feature is never silently treated as proof for the current one. This prevents one of the most subtle sources of AI-assisted delivery mistakes: applying correct context to the wrong change.
+
+### Controlled local AI execution
+
+Studio supports local **Codex CLI**, **Claude Code**, and **GitHub Copilot CLI** execution when those tools are installed and authenticated. It also creates portable handoffs for Gemini, Cursor, Windsurf, and Aider.
+
+- One task per local run.
+- Writes are confined to the connected repository.
+- Every write, install, or agent run requires explicit confirmation.
+- Studio never commits, pushes, creates branches, or self-certifies completion.
+- Human review is required before a receipt is recorded.
+
+### Evidence that makes review faster
+
+For a completed task, Studio can retain agent output, changed files—including newly created files—Git diff summaries, verification output, operational decisions, and the reviewer’s implementation receipt. This converts “the agent said it is done” into a concrete review packet.
+
+### Quality gates and exportable handoff
+
+Before implementation, Studio audits consistency across the spec, plan, tasks, and constitution. At the end, it packages the feature’s Spec-Kit artifacts for durable handoff and repeatable collaboration.
 
 ## Quick start
 
-### 1. Prerequisites
+### Prerequisites
 
-- **Node.js 22.12 or later** (the supported range is Node 22).
-- npm.
-- Git, for the most useful repository evidence.
-- Optional: `codex`, `claude`, or `copilot` CLI if Studio should run a local coding agent. Studio detects what is actually available after a repository scan.
+- **Node.js 22.12 or later** (supported range: Node 22).
+- npm and Git.
+- Optional: `codex`, `claude`, or `copilot` CLI for local agent execution.
 
-### 2. Install and start Studio
+### Start Studio
 
 ```bash
 git clone <your-clone-url>
@@ -54,19 +151,19 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by the dev server (normally `http://localhost:3000`). Before deployment, run:
+Open the local URL printed by the dev server. Before shipping changes, run:
 
 ```bash
 npm run verify
 ```
 
-This runs TypeScript checks, automated tests, and a production build.
+This runs TypeScript checks, the Node test suite, and a production build.
 
-### 3. Start the local connector
+### Connect the local repository bridge
 
-The browser cannot safely read or edit arbitrary local folders. The connector is the intentionally small, local bridge for repository evidence and local agents.
+Browsers should not have arbitrary filesystem access. The optional local connector is a deliberately small, loopback-only bridge for repository evidence and local agents.
 
-Copy `.env.example` to `.env.local`, then set a parent directory containing only repositories you intend Studio to access:
+Copy `.env.example` to `.env.local`, then allow only the parent directories that contain repositories you intend Studio to access:
 
 ```env
 STUDIO_ALLOWED_ROOTS="/absolute/path/to/your/repos"
@@ -74,147 +171,83 @@ STUDIO_CONNECTOR_TOKEN="use-a-long-random-value"
 STUDIO_ALLOWED_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 ```
 
-In a second terminal, from the Studio repository:
+Run it in another terminal:
 
 ```bash
 npm run connector
 ```
 
-In Studio, open **Connected Workspace**, enter the repository’s absolute path and—when configured—the pairing token, then select **Scan repository**. Scanning is read-only.
+Then open **Connected Workspace** in Studio, enter the repository path and pairing token when configured, and select **Scan repository**. Scanning is read-only.
 
-> The repository path must be inside `STUDIO_ALLOWED_ROOTS`. For `/Users/me/develop/my-service`, set `/Users/me/develop` as the allowed root—not your whole home directory.
+> For `/Users/me/develop/my-service`, set `/Users/me/develop` as the allowed root—not your entire home directory.
 
-For a hosted Studio URL, add that URL to `STUDIO_ALLOWED_ORIGINS` and keep the connector on the user’s own machine. See [Local Connector](docs/local-connector.md) for full setup and safety details.
+## A practical first feature
 
-## The feature journey
+1. **Scan a clean clone** in Connected Workspace and record the baseline.
+2. **Describe the feature** by importing the request, PRD, ticket, or requirements.
+3. **Review the generated stories and requirements** before they enter the project.
+4. **Ground the impact map** to identify the code, tests, contracts, and guardrails that matter.
+5. **Review the feature plan and delivery tasks**, then resolve audit blockers.
+6. **Open AI Agent Prompts**. Studio selects the next unfinished, unreviewed feature task by default.
+7. **Run one local task** with an available agent, review its evidence, run focused checks, and record the reviewed receipt.
+8. **Verify and hand off** the resulting artifacts and repository evidence.
 
-The left navigation is a journey map: it shows the current stage, what is complete, and one primary next action. Completed stages can always be reopened and edited; meaningful changes should be reviewed again.
+The important result is not merely that code was generated. It is that the generated code is traceable to a requirement, a reviewed plan, a bounded task, and a verification record.
 
-| Stage | Goal | What you do | Evidence Studio retains |
-| --- | --- | --- | --- |
-| 1. Connect safely | Establish a known baseline. | Scan the repository and review Git state, available checks, and tooling. | Repository evidence and baseline results. |
-| 2. Describe feature | Agree on outcome and boundaries. | Import a PRD, issue, URL, or pasted requirements; review stories and requirements. | Feature inbox item and feature spec. |
-| 3. Ground impact | Understand what could be affected. | Review owning paths, neighbors, tests, contracts, and applicable rules. | Feature-scoped impact evidence. |
-| 4. Design safely | Agree on a compatible design. | Review the feature’s `plan.md`; run the selected Engine/agent if needed. | Feature-scoped architecture plan. |
-| 5. Plan delivery | Make implementation executable. | Review dependency-ordered `tasks.md` and requirement mappings. | Feature-scoped delivery plan. |
-| 6. Quality gate | Catch cross-artifact gaps before code changes. | Run the audit and resolve blockers at their owning stage. | Audit result and decisions. |
-| 7. Implement | Complete one bounded task safely. | Submit the next task to a local agent, then review evidence. | Agent output, changed files, verification result, and a reviewed receipt. |
-| 8. Verify & hand off | Make the change durable and reviewable. | Review remaining work, Git evidence, checks, and exports. | Handoff-ready artifacts and verification evidence. |
+## Safety and privacy are product features
 
-### Add a feature to an existing repository
-
-1. In **Connected Workspace**, scan a clean clone of the target repository.
-2. Choose **Import feature** from the Feature Inbox or journey.
-3. Paste requirements, upload a document, or provide a supported issue/URL.
-4. Choose **Prepare Spec-Kit Engine Work Packet** for the Engine-first path.
-5. Review stories and requirements, then merge into the connected workspace.
-6. Follow the highlighted next stage. Studio retains current-feature scope so the new plan and tasks cannot be confused with existing workspace work.
-
-Read the deeper guide: [Feature Journey: Engine-First Workflow](docs/feature-journey-engine-first.md).
-
-## Run a task locally
-
-Stage 7 is deliberately simple:
-
-1. Open **AI Agent Prompts** from the journey.
-2. Studio automatically selects the next unfinished, unreviewed feature task. Completed or recorded tasks are not the default run target.
-3. Select an available local agent: **Codex CLI**, **Claude Code**, or **GitHub Copilot CLI**.
-4. Select **Run with _agent_ locally**, then approve the browser confirmation.
-5. Watch live status and elapsed time. You can stop a running task safely.
-6. Review changed files and output, run independent repository checks when appropriate, then check the review box and select **Record reviewed implementation**.
-
-Studio writes only inside the connected repository. It does not commit, push, switch branches, or mark a task complete merely because an agent says it finished.
-
-### Minimal-intervention defaults
-
-Some planning tasks contain operational policy choices. Studio applies conservative, visible defaults so the normal path remains **select task → run task**. If your organization uses a different policy, open **Review or change operational defaults**; the selected policy is saved per feature/task and included in the handoff.
-
-### See completed work without rerunning it
-
-In **AI Agent Prompts**, open **Completed & reviewed work**. It stays collapsed to keep the next task in focus. For each recorded task it shows:
-
-- task ID, title, and review timestamp;
-- produced or changed files, including newly created files;
-- retained agent and verification output; and
-- the Git diff summary, when Git can provide one.
-
-The files remain at the shown paths in the connected repository. The receipt is an audit record, not a second copy of the code.
-
-## Local agents and Spec-Kit Engine
-
-Studio is Engine-first, but it never pretends a CLI is installed or authenticated. A repository scan detects usable local agents; Settings lets the user choose a preferred available agent.
-
-| Agent | Studio action |
-| --- | --- |
-| Codex CLI | Runs a scoped local task through the connector. The default non-interactive model is `gpt-5.6-luna`; override `STUDIO_CODEX_MODEL` only when your account supports another model. |
-| Claude Code | Runs a scoped local task when installed and authenticated. |
-| GitHub Copilot CLI | Runs a scoped local task when installed and authenticated. |
-| Gemini, Cursor, Windsurf/Aider | Produces a portable, feature-scoped handoff to copy into that tool. |
-
-Connected Workspace can check official Spec-Kit availability and guide explicit setup. It never silently initializes a repository or overwrites official Spec-Kit content.
-
-## Safety and privacy
-
-The local connector is designed for private repositories and follows these constraints:
+The local connector is designed for private repositories and intentionally limits authority:
 
 - Binds only to `127.0.0.1`.
-- Accepts browser requests only from configured Studio origins.
-- Resolves paths and rejects those outside `STUDIO_ALLOWED_ROOTS`.
-- Requires a pairing token when one is configured.
-- Redacts common credential patterns from returned command output.
+- Restricts browser access to configured origins.
+- Rejects paths outside `STUDIO_ALLOWED_ROOTS`.
+- Supports a pairing token without persisting it in Studio settings.
+- Redacts common credential patterns from returned output.
 - Uses discovered or allowlisted baseline commands instead of arbitrary browser-issued shell commands.
-- Requires explicit confirmation for repository writes, installs, and local agent runs.
-- Captures evidence but never commits, pushes, or creates branches.
+- Requires explicit confirmation for writes, installations, and agent execution.
+- Never stages, commits, pushes, or creates branches.
 
-Do not put API keys in `VITE_*` variables. Gemini, GitHub, and Jira credentials are server-side configuration only. See the annotated [.env.example](.env.example).
+Do not place secrets in `VITE_*` variables. Gemini, GitHub, and Jira credentials are server-side configuration only. See [.env.example](.env.example) and [Local Connector](docs/local-connector.md).
 
-## Repository support and baseline checks
+## Architecture: built for trust and evolution
 
-Studio does not require an npm project. A scan discovers suitable baseline checks from repository conventions, including npm scripts, Python pytest, Go test, Cargo test, Maven/Gradle test, and .NET test commands.
+```text
+React screens → workflow hooks → pure domain libraries → browser storage
+                                      ↓
+                            typed local connector client
+                                      ↓
+                         loopback-only repository boundary
+```
 
-If it cannot find a supported check, Studio says so and lets you record a manual baseline. It does not invent an npm command for a non-npm project. Pre-existing failures remain visible and are not attributed to the feature.
+The application is deliberately modular:
 
-## Deploy on Vercel
+- `components/journey` owns stages, approvals, and handoffs.
+- `components/workspace` owns connection, setup, and repository baseline.
+- `components/import` owns feature intake and artifact parsing.
+- `components/prompt` owns task selection, agent execution UI, and review receipts.
+- `lib/` owns pure workflow rules, transformations, connector contracts, and policy decisions.
+- `connector/server.mjs` owns allowlists, path confinement, redaction, and local process boundaries.
 
-Studio can deploy as a Vercel web app. Import the repository into Vercel; [`vercel.json`](vercel.json) supplies build and routing configuration.
+See [Architecture](docs/architecture.md) and [Modular architecture](docs/modular-architecture.md).
+
+## Deploying the web application
+
+The Studio web app can be deployed to Vercel using [`vercel.json`](vercel.json). The connector remains on each user’s own machine; a hosted web app never gains direct access to a user’s filesystem.
 
 Set only the server-side integrations you use:
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | Only for Gemini generation | Keeps Gemini access server-side. |
-| `GITHUB_TOKEN` | Optional | Enables configured GitHub integration actions; use a scoped, short-lived token. |
-| `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Optional | Enables configured Jira actions. |
-| `APP_URL` | Optional | Public URL for integrations that need it. |
-
-Vercel cannot access a user’s filesystem. Connected Workspace remains local: every user runs their own connector and allows the hosted origin with `STUDIO_ALLOWED_ORIGINS`.
-
-## Troubleshooting
-
-| Message or symptom | What to do |
+| Variable | Purpose |
 | --- | --- |
-| `Repository path is outside STUDIO_ALLOWED_ROOTS` | Add the repository’s intended parent folder to `STUDIO_ALLOWED_ROOTS`, restart the connector, then scan again. |
-| `Connector token is required` | Enter the same value used for `STUDIO_CONNECTOR_TOKEN` in Connected Workspace. Never paste it into an agent prompt. |
-| `spawn uv ENOENT` | Use Connected Workspace’s guided uv setup or your organization’s approved installer. |
-| A local agent is “not logged in” | Authenticate that CLI in a terminal, then rescan so Studio refreshes readiness. |
-| No files shown after an agent run | Open live agent output. New/untracked files are captured for new runs; older receipts may require inspecting artifact paths in the repository. |
-| No supported baseline checks | Informational only: record a manual baseline or add a project-native check. |
+| `GEMINI_API_KEY` | Gemini-backed generation. |
+| `GITHUB_TOKEN` | Optional configured GitHub integration. Use a scoped, short-lived token. |
+| `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Optional Jira Cloud integration. |
+| `APP_URL` | Public URL for integrations that require it. |
 
-## Project layout
-
-```text
-src/                 React application and reusable domain components
-src/components/      Journey, workspace, artifact, audit, prompt, and export surfaces
-src/lib/             Shared workflow, connector, prompt, and evidence logic
-connector/server.mjs Loopback-only local repository connector
-api/                 Hosted API entry point
-docs/                Workflow and operational guides
-tests/               Node test suite
-```
+For hosted Studio, add the site URL to `STUDIO_ALLOWED_ORIGINS` on the user’s local connector.
 
 ## Documentation
 
-- [Feature journey, ownership, and review loops](docs/feature-journey-engine-first.md)
+- [Feature journey and Engine-first workflow](docs/feature-journey-engine-first.md)
 - [Local connector setup and safety model](docs/local-connector.md)
 - [Efficient Codex CLI feature execution](docs/codex-cli-feature-execution-plan.md)
 - [Adding features to an existing repository](docs/adding_features_to_existing.md)
@@ -227,4 +260,8 @@ Before submitting a change:
 npm run verify
 ```
 
-Keep feature evidence scoped, avoid silently changing user repositories, and add regression tests whenever workflow behavior changes.
+Preserve the central contract: keep feature evidence scoped, require explicit approval for consequential actions, never silently modify a user repository, and add regression tests whenever workflow behavior changes.
+
+---
+
+**Spec-Kit Studio does not replace engineering judgment. It gives engineering judgment the leverage to direct AI at the speed of modern software delivery.**

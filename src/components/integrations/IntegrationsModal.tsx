@@ -23,6 +23,7 @@ import {
   JiraConfig,
 } from "../../lib/integrationsStore";
 import { integrationsApi } from "../../lib/api/integrations";
+import { Modal } from "../common/Modal";
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -167,10 +168,8 @@ export function IntegrationsModal({
     },
   });
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Integrations and direct sync" className="items-center justify-center bg-slate-950/80 p-4 animate-fade-in">
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/50">
@@ -496,6 +495,6 @@ export function IntegrationsModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

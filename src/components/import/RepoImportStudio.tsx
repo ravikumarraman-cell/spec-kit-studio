@@ -11,10 +11,8 @@ import {
   Plus,
   Trash2,
   Code2,
-  Zap,
   CheckCircle2,
   RefreshCw,
-  FolderGit2,
   Globe,
   Database,
   Shield,
@@ -29,6 +27,8 @@ import { ImportNotice } from './ImportNotice';
 import { importApi } from '../../lib/api/imports';
 import { createImportedRepository } from '../../lib/repositoryImportFactory';
 import { repositoryPresets } from './repositoryPresets';
+import { RepositoryImportHeader } from './RepositoryImportHeader';
+import { RepositoryImportMode, RepositoryImportModeSelector } from './RepositoryImportModeSelector';
 
 interface RepoImportStudioProps {
   onImportComplete: (project: SpecKitProject) => void;
@@ -39,7 +39,7 @@ export const RepoImportStudio: React.FC<RepoImportStudioProps> = ({
   onImportComplete,
   isDarkMode = true,
 }) => {
-  const [importMode, setImportMode] = useState<'preset' | 'url' | 'paste' | 'zip'>('preset');
+  const [importMode, setImportMode] = useState<RepositoryImportMode>('preset');
   const [githubUrl, setGithubUrl] = useState('');
   const [pastedManifest, setPastedManifest] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -251,68 +251,12 @@ export const RepoImportStudio: React.FC<RepoImportStudioProps> = ({
 
   return (
     <div className="space-y-6 pb-12 max-w-6xl mx-auto">
-      {/* Header Bar */}
-      <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-zinc-950 border border-sky-200 dark:border-zinc-800 text-sky-600 dark:text-cyan-400 shrink-0">
-              <FolderGit2 className="w-5 h-5" />
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Import Existing Project / GitHub Repository
-            </h2>
-            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-sky-100 dark:bg-cyan-500/10 text-sky-800 dark:text-cyan-400 border border-sky-300 dark:border-cyan-500/30">
-              Universal Tech Stack AI Parser
-            </span>
-          </div>
-          <p className="text-xs text-slate-600 dark:text-zinc-300 mt-2 max-w-2xl leading-relaxed">
-            Import any existing repository (Node.js, Python, Rust, Go, Java, Docker, etc.). Spec-Kit Studio automatically extracts all technologies used, lets you pick technology choices, and generates feature specifications and plans matched to the codebase!
-          </p>
-        </div>
-      </div>
+      <RepositoryImportHeader />
 
       {/* Step 1: Repository Input Options */}
       {!analyzedRepo ? (
         <div className="space-y-6">
-          {/* Input Mode Selector */}
-          <div className="p-1 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-wrap items-center text-xs">
-            <button
-              onClick={() => setImportMode('preset')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'preset' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>Preset Repos</span>
-            </button>
-            <button
-              onClick={() => setImportMode('url')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'url' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Github className="w-3.5 h-3.5" />
-              <span>GitHub URL</span>
-            </button>
-            <button
-              onClick={() => setImportMode('paste')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'paste' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Paste Code</span>
-            </button>
-            <button
-              onClick={() => setImportMode('zip')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'zip' ? 'bg-zinc-800 text-purple-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <FileArchive className="w-3.5 h-3.5 text-purple-400" />
-              <span>Spec-Kit Package (.zip/.json)</span>
-            </button>
-          </div>
+          <RepositoryImportModeSelector value={importMode} onChange={setImportMode} />
 
           {/* Mode 1: Preset Real-World Repos */}
           {importMode === 'preset' && (

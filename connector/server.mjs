@@ -375,6 +375,43 @@ async function repositoryEvidence(root) {
     diffStat: diffStat.output,
   };
 }
+
+const codePreviewExtensions = new Set(['.py', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.go', '.java', '.cs', '.rb', '.php', '.rs', '.kt', '.kts', '.scala', '.sh', '.sql', '.html', '.css', '.scss', '.vue', '.svelte', '.tf', '.bicep']);
+const previewArtifactPath = (file) => /(^|\/)(\.specify|specs?|docs?)(\/|$)|\.(md|mdx|ya?ml|json)$/i.test(file);
+const previewCodePath = (file) => codePreviewExtensions.has(path.extname(file).toLowerCase()) && !previewArtifactPath(file);
+
+function safeRelativePath(candidate) {
+  if (typeof candidate !== 'string' || !candidate.trim()) return null;
+  const normalized = candidate.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (path.isAbsolute(normalized) || normalized.split('/').some((part) => part === '..' || !part)) return null;
+  return normalized;
+}
+
+async function readFeatureCodeChanges(root, requestedPaths) {
+  if (!Array.isArray(requestedPaths) || requestedPaths.length > 200) throw new Error('Choose up to 200 recorded files to preview.');
+  const evidence = await repositoryEvidence(root);
+  const changed = new Set(evidence.changedFiles.map((file) => file.replace(/\\/g, '/')));
+  const selected = [...new Set(requestedPaths.map(safeRelativePath).filter((file) => file && changed.has(file) && previewCodePath(file)))].slice(0, 80);
+  const files = await Promise.all(selected.map(async (file) => {
+    const absolute = path.resolve(root, file);
+    if (!absolute.startsWith(`${root}${path.sep}`)) return null;
+    const stat = await fs.stat(absolute).catch(() => null);
+    if (!stat?.isFile()) return { path: file, status: 'deleted', content: '', patch: '', truncated: false };
+    const sizeLimit = 160_000;
+    const raw = await fs.readFile(absolute).catch(() => null);
+    if (!raw || raw.includes(0)) return { path: file, status: 'binary', content: '', patch: '', truncated: false };
+    const truncated = raw.length > sizeLimit;
+    const content = redactSensitiveOutput(raw.subarray(0, sizeLimit).toString('utf8'));
+    const [workingPatch, stagedPatch] = await Promise.all([
+      command('git', ['diff', '--no-ext-diff', '--unified=3', '--', file], root),
+      command('git', ['diff', '--cached', '--no-ext-diff', '--unified=3', '--', file], root),
+    ]);
+    const patch = [workingPatch.output, stagedPatch.output].filter(Boolean).join('\n').slice(0, sizeLimit);
+    const statusLine = evidence.repositoryStatus.split('\n').find((line) => line.slice(3).trim().replace(/\\/g, '/') === file) || '';
+    return { path: file, status: statusLine.slice(0, 2).trim() || 'modified', content, patch, truncated };
+  }));
+  return { files: files.filter(Boolean), omitted: requestedPaths.length - selected.length };
+}
 function validate(project) {
   const errors = [], warnings = [];
   const requirements = new Set((project.spec?.functionalRequirements || []).map((item) => item.id));
@@ -458,6 +495,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/jobs/active') return send(req, res, 200, { job: activeJob(await safeRoot(payload.repositoryPath)) });
     if (req.method === 'POST' && req.url === '/v1/repository/evidence') return send(req, res, 200, { evidence: await repositoryEvidence(await safeRoot(payload.repositoryPath)) });
+    if (req.method === 'POST' && req.url === '/v1/repository/feature-code') return send(req, res, 200, await readFeatureCodeChanges(await safeRoot(payload.repositoryPath), payload.paths));
     if (req.method === 'POST' && req.url === '/v1/jobs/cancel') return send(req, res, 200, cancelJob(String(payload.jobId || '')));
     if (req.method === 'POST' && req.url === '/v1/execute') { const root = await safeRoot(payload.repositoryPath); const entry = allowedExecutions.get(payload.action); if (!entry) return send(req, res, 400, { error: 'Action is not allowlisted.' }); const [bin, args] = entry; return send(req, res, 200, { action: payload.action, ...(await command(bin, args, root)) }); }
     return send(req, res, 404, { error: 'Not found.' });

@@ -2,11 +2,6 @@ import React, { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { FeatureImportModal } from './components/import/FeatureImportModal';
-import { IntegrationsModal } from './components/integrations/IntegrationsModal';
-import { QuickSearchModal } from './components/common/QuickSearchModal';
-import { AiSpecModal } from './components/common/AiSpecModal';
-import { NewProjectModal } from './components/project/NewProjectModal';
 import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -24,6 +19,13 @@ const AuditDashboard = lazy(() => import('./components/audit/AuditDashboard').th
 const CliExporter = lazy(() => import('./components/exporter/CliExporter').then((module) => ({ default: module.CliExporter })));
 const FeatureJourney = lazy(() => import('./components/journey/FeatureJourney').then((module) => ({ default: module.FeatureJourney })));
 const StudioSettings = lazy(() => import('./components/settings/StudioSettings').then((module) => ({ default: module.StudioSettings })));
+// Global dialogs are reached only through explicit user intent. Keeping them
+// out of the app shell avoids paying their code cost during initial navigation.
+const QuickSearchModal = lazy(() => import('./components/common/QuickSearchModal').then((module) => ({ default: module.QuickSearchModal })));
+const AiSpecModal = lazy(() => import('./components/common/AiSpecModal').then((module) => ({ default: module.AiSpecModal })));
+const FeatureImportModal = lazy(() => import('./components/import/FeatureImportModal').then((module) => ({ default: module.FeatureImportModal })));
+const IntegrationsModal = lazy(() => import('./components/integrations/IntegrationsModal').then((module) => ({ default: module.IntegrationsModal })));
+const NewProjectModal = lazy(() => import('./components/project/NewProjectModal').then((module) => ({ default: module.NewProjectModal })));
 
 function AppContent() {
   const { isDark } = useTheme();
@@ -217,7 +219,7 @@ function AppContent() {
       </div>
 
       {/* Global Quick Search Modal */}
-      <QuickSearchModal
+      {isQuickSearchOpen && <Suspense fallback={null}><QuickSearchModal
         isOpen={isQuickSearchOpen}
         onClose={() => setIsQuickSearchOpen(false)}
         project={activeProject}
@@ -225,18 +227,18 @@ function AppContent() {
           setActiveTab(tab);
           setIsQuickSearchOpen(false);
         }}
-      />
+      /></Suspense>}
 
       {/* AI Spec Generation Modal */}
-      <AiSpecModal
+      {isAiSpecModalOpen && <Suspense fallback={null}><AiSpecModal
         isOpen={isAiSpecModalOpen}
         onClose={() => setIsAiSpecModalOpen(false)}
         project={activeProject}
         onApplySpecData={handleApplyAiSpecData}
-      />
+      /></Suspense>}
 
       {/* Feature Import & User Stories Generator Modal */}
-      <FeatureImportModal
+      {isFeatureImportModalOpen && <Suspense fallback={null}><FeatureImportModal
         isOpen={isFeatureImportModalOpen}
         onClose={() => setIsFeatureImportModalOpen(false)}
         onImportComplete={(newProject) => {
@@ -246,19 +248,19 @@ function AppContent() {
         activeProject={activeProject}
         onMergeIntoActiveProject={handleMergeIntoActiveProject}
         onOpenWorkspace={() => { setIsFeatureImportModalOpen(false); setActiveTab('workspace'); }}
-      />
+      /></Suspense>}
 
       {/* GitHub & Jira Integration Sync Modal */}
-      <IntegrationsModal
+      {isIntegrationsModalOpen && <Suspense fallback={null}><IntegrationsModal
         isOpen={isIntegrationsModalOpen}
         onClose={() => setIsIntegrationsModalOpen(false)}
         specData={activeProject.spec}
         planData={activeProject.plan}
         tasksData={activeProject.tasks}
         rulesData={activeProject.constitution}
-      />
+      /></Suspense>}
 
-      <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} onCreate={handleCreateNewProject} />
+      {isNewProjectModalOpen && <Suspense fallback={null}><NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} onCreate={handleCreateNewProject} /></Suspense>}
     </div>
   );
 }

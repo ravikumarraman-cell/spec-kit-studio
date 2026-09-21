@@ -63,6 +63,11 @@ export function getJourneyStage(id: number): FeatureJourneyStage {
   return featureJourneyStages.find((stage) => stage.id === id) || featureJourneyStages[0];
 }
 
+/** Returns a real successor only; the final stage intentionally has none. */
+export function nextFeatureJourneyStage(id: number): FeatureJourneyStage | undefined {
+  return featureJourneyStages.find((stage) => stage.id === id + 1);
+}
+
 export function getJourneyStageForTab(tab: ViewTab): FeatureJourneyStage | undefined {
   return featureJourneyStages.find((stage) => stage.destination === tab);
 }

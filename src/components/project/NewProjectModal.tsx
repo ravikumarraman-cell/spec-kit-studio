@@ -1,5 +1,6 @@
 import React, { FormEvent, useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { Modal } from '../common/Modal';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -11,8 +12,6 @@ interface NewProjectModalProps {
 export function NewProjectModal({ isOpen, onClose, onCreate }: NewProjectModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  if (!isOpen) return null;
-
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return;
@@ -21,8 +20,8 @@ export function NewProjectModal({ isOpen, onClose, onCreate }: NewProjectModalPr
     setDescription('');
   };
 
-  return <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="new-workspace-title">
+  return <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="new-workspace-title" className="items-center justify-center p-4">
+    <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 text-xs shadow-2xl">
       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
         <h3 id="new-workspace-title" className="text-sm font-bold text-zinc-100">Create New Spec Workspace</h3>
         <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-zinc-500 hover:text-zinc-200"><X className="w-4 h-4" /></button>
@@ -40,5 +39,5 @@ export function NewProjectModal({ isOpen, onClose, onCreate }: NewProjectModalPr
         </div>
       </form>
     </div>
-  </div>;
+  </Modal>;
 }

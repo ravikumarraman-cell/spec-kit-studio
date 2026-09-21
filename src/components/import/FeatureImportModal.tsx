@@ -1,36 +1,21 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  Sparkles,
-  X,
-  FileText,
-  Upload,
-  Github,
-  Layers,
-  Zap,
-  RefreshCw,
-  PlusCircle,
-  FileCode,
-  ShieldCheck,
-  Cpu,
-  ArrowRight,
-  CheckCircle2,
-  ListTodo,
-  Workflow,
-  Plus
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Sparkles, X } from 'lucide-react';
 import { SpecKitProject, UserStory } from '../../types/speckit';
 import { ImportNotice } from './ImportNotice';
 import { FeatureExtractionPackage, importApi } from '../../lib/api/imports';
 import { createProjectFromFeatureExtraction } from '../../lib/importProjectFactory';
-import { featurePresets } from './featurePresets';
-import { LocalAgentId, LocalAgentStatus, localAgentLabels, localAgentOrder, recommendedLocalAgent } from '../../lib/agentAvailability';
-import { ConnectorJob, connectorClient } from '../../lib/connector';
+import { LocalAgentId, LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
+import { configuredConnectorClient, ConnectorJob } from '../../lib/connector';
 import { getStudioSettings } from '../../lib/studioSettings';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
 import { parseSpecKitArtifact } from '../../lib/specArtifactParser';
-import { UserStoryPreview } from './UserStoryPreview';
+import { FeatureImportSource, FeatureSourceInput } from './FeatureSourceInput';
+import { GenerationPathSelector } from './GenerationPathSelector';
+import { EngineWorkPacketPanel } from './EngineWorkPacketPanel';
+import { FeatureExtractionPreview, FeaturePreviewTab } from './FeatureExtractionPreview';
+import { Modal } from '../common/Modal';
 
 interface FeatureImportModalProps {
   isOpen: boolean;
@@ -67,13 +52,13 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   onMergeIntoActiveProject,
   onOpenWorkspace,
 }) => {
-  const [importTab, setImportTab] = useState<'text' | 'file' | 'github' | 'preset'>('text');
+  const [importTab, setImportTab] = useState<FeatureImportSource>('text');
   const [featureTitle, setFeatureTitle] = useState('');
   const [featureContent, setFeatureContent] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedResult, setExtractedResult] = useState<FeatureExtractionPackage | null>(null);
-  const [previewTab, setPreviewTab] = useState<'stories' | 'requirements' | 'plan' | 'tasks' | 'constitution'>('stories');
+  const [previewTab, setPreviewTab] = useState<FeaturePreviewTab>('stories');
   const [fileError, setFileError] = useState<string | null>(null);
   const [agentScan, setAgentScan] = useState(() => readLocalAgentStatus());
   const [generationPath, setGenerationPath] = useState<'engine' | 'gemini'>(() => recommendedLocalAgent(agentScan.agents, getStudioSettings().preferredAgent) ? 'engine' : 'gemini');
@@ -82,8 +67,6 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   const [connectorToken, setConnectorToken] = useState(() => getConnectorSessionToken());
   const [agentJob, setAgentJob] = useState<ConnectorJob | null>(null);
   const [isRunningAgent, setIsRunningAgent] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -95,8 +78,6 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     if (recommended) setEngineAgent(recommended.id);
   }, [isOpen]);
 
-
-  if (!isOpen) return null;
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,9 +151,8 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     if (!window.confirm(`Run ${localAgentLabels[engineAgent]} in ${repositoryPath}? It may create or update only feature-scoped Spec-Kit artifacts. Studio will show its output here.`)) return;
     setFileError(null); setIsRunningAgent(true);
     try {
-      const baseUrl = window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318';
       setConnectorSessionToken(connectorToken);
-      const client = connectorClient(baseUrl, connectorToken);
+      const client = configuredConnectorClient(connectorToken);
       let job = await client.startSpecKitAgent(repositoryPath, engineAgent, enginePrompt);
       setAgentJob(job);
       while (job.status === 'running') {
@@ -203,8 +183,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     if (!repositoryPath) { setFileError('Connect and scan the repository before loading its generated Spec-Kit file.'); return; }
     try {
       setFileError(null);
-      const baseUrl = window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318';
-      const { artifacts } = await connectorClient(baseUrl, connectorToken).readSpecKitArtifacts(repositoryPath);
+      const { artifacts } = await configuredConnectorClient(connectorToken).readSpecKitArtifacts(repositoryPath);
       if (!artifacts.length) throw new Error('No feature spec was found yet. Confirm the agent completed the “specify” step, then try again.');
       const artifact = artifacts[0];
       const parsed = parseSpecKitArtifact(artifact.content);
@@ -218,8 +197,8 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-zinc-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="w-full max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Import feature and generate Spec-Kit" className="items-center justify-center overflow-y-auto p-3 sm:p-4 md:p-6">
+      <div className="my-auto flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
         {/* Modal Header */}
         <div className="p-5 border-b border-zinc-800 flex items-center justify-between gap-4 bg-zinc-950/60">
           <div className="flex items-center gap-3">
@@ -254,420 +233,81 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
         {/* Main Content Area */}
         <div className="p-5 md:p-6 overflow-y-auto space-y-6 flex-1">
           <ImportNotice message={fileError} />
-          {!extractedResult && <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
-            <div><p className="text-[10px] uppercase tracking-[0.16em] font-black text-cyan-300">Generation path</p><h3 className="mt-1 font-bold text-zinc-100">{!agentScan.scanned || !recommendedLocalAgent(agentScan.agents) ? 'Gemini is ready to continue' : 'Spec-Kit Engine first'}</h3><p className="mt-1 text-xs text-zinc-400">{agentScan.scanned ? recommendedLocalAgent(agentScan.agents) ? 'Studio found a local coding agent the connector can run. Gemini remains available for a Studio-only draft.' : 'No local coding agent is ready for this connector, so Gemini is selected automatically.' : 'No workspace scan is needed to draft with Gemini. Scan later if you want Studio to detect a local coding agent.'}</p></div>
-            <div className="grid sm:grid-cols-2 gap-2"><button type="button" onClick={() => setGenerationPath('engine')} disabled={!agentScan.scanned || !recommendedLocalAgent(agentScan.agents)} className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${generationPath === 'engine' ? 'border-cyan-400 bg-cyan-500/10 text-cyan-100' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}><strong className="block text-xs">Spec-Kit Engine{recommendedLocalAgent(agentScan.agents) ? ' · Recommended' : ''}</strong><span className="block mt-1 text-[11px]">{agentScan.scanned ? recommendedLocalAgent(agentScan.agents) ? 'Reviewable native workflow: constitution → specify → plan → tasks.' : 'No runnable local agent detected.' : 'Scan the connected workspace to enable.'}</span></button><button type="button" onClick={() => setGenerationPath('gemini')} className={`rounded-xl border p-3 text-left ${generationPath === 'gemini' ? 'border-purple-400 bg-purple-500/10 text-purple-100' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}><strong className="block text-xs">Gemini AI{agentScan.scanned && !recommendedLocalAgent(agentScan.agents) ? ' · Selected' : ' · Fallback'}</strong><span className="block mt-1 text-[11px]">Creates a Studio draft; review before exporting to the repository.</span></button></div>
-            {generationPath === 'engine' && <div className="flex flex-wrap gap-2"><span className="w-full text-[11px] text-zinc-400">Choose a detected agent to receive the work packet:</span>{localAgentOrder.map((id) => { const agent = agentScan.agents.find((item) => item.id === id); const ready = Boolean(agent?.installed); return <button key={id} type="button" disabled={!ready} onClick={() => setEngineAgent(id as LocalAgentId)} className={`px-3 py-2 rounded-lg border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${engineAgent === id ? 'border-cyan-400 bg-cyan-500/10 text-cyan-100' : 'border-zinc-800 text-zinc-400'}`}>{localAgentLabels[id]} · {ready ? `ready${agent?.version ? ` (${agent.version})` : ''}` : agentScan.scanned ? 'not detected' : 'scan required'}</button>; })}</div>}
-          </section>}
+          {!extractedResult && (
+            <GenerationPathSelector
+              scan={agentScan}
+              path={generationPath}
+              selectedAgent={engineAgent}
+              onPathChange={setGenerationPath}
+              onAgentChange={setEngineAgent}
+            />
+          )}
           {!extractedResult && activeProject?.importedRepo?.repoUrl && !enginePrompt && (
             <section className="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-950/50 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-xs font-bold text-zinc-100">Already ran a local agent?</p><p className="mt-0.5 text-[11px] text-zinc-400">Load the newest official <code>specs/.../spec.md</code> into Studio for review. Nothing is written to your repository.</p></div>
               <button type="button" onClick={loadEngineStories} className="shrink-0 rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/10">Load generated stories</button>
             </section>
           )}
-          {enginePrompt && !extractedResult && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.16em] font-black text-emerald-300">Feature workflow · step 2 of 3</p><h3 className="mt-1 font-bold text-emerald-100">Run the work packet, then review it here</h3><p className="mt-1 text-xs text-emerald-200/80">Studio can run {localAgentLabels[engineAgent]} in the connected repository and show its live output. It will only receive instructions to create feature-scoped Spec-Kit artifacts—not application code.</p></div><button type="button" onClick={() => navigator.clipboard.writeText(enginePrompt)} className="shrink-0 px-3 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-bold">Copy packet</button></div><div className="grid gap-2 sm:grid-cols-[1fr_auto]"><label className="text-[11px] text-emerald-100/80">Pairing token <span className="text-emerald-200/50">(only if your connector requires one)</span><input value={connectorToken} onChange={(event) => { setConnectorToken(event.target.value); setConnectorSessionToken(event.target.value); }} type="password" placeholder="Enter it once in Connected Workspace, or paste it here" className="mt-1 w-full rounded-lg border border-emerald-500/25 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-100" /></label><button type="button" onClick={runEngineInStudio} disabled={isRunningAgent || !activeProject?.importedRepo?.repoUrl} className="self-end rounded-lg bg-emerald-400 px-4 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{isRunningAgent ? 'Running agent…' : `Run ${localAgentLabels[engineAgent]} in Studio`}</button></div>{!activeProject?.importedRepo?.repoUrl && <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-2 text-[11px] text-amber-100">Step 1 is incomplete: open Connected Workspace, scan the repository once, then return here. <button type="button" onClick={onOpenWorkspace} className="font-bold underline">Open Connected Workspace</button></div>}{agentJob && <div className={`rounded-xl border p-3 text-xs ${agentJob.status === 'failed' ? 'border-rose-500/30 bg-rose-500/10' : agentJob.status === 'succeeded' ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-cyan-400/30 bg-zinc-950/60'}`}><div className="font-bold text-zinc-100">{agentJob.status === 'running' ? 'Agent is preparing the Spec-Kit artifacts…' : agentJob.ok ? 'Step 2 complete · stories are ready to review' : 'The agent stopped before completing'}</div><pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950/80 p-2 text-[10px] text-zinc-300">{agentJob.output || 'Agent started; waiting for output…'}</pre>{agentJob.ok && <button type="button" onClick={loadEngineStories} className="mt-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-950">Review generated user stories</button>}</div>}<details className="text-xs text-emerald-100"><summary className="cursor-pointer font-semibold">Preview work packet</summary><pre className="mt-2 whitespace-pre-wrap rounded-lg bg-zinc-950/70 p-3 text-[11px] text-zinc-300 max-h-48 overflow-auto">{enginePrompt}</pre></details></section>}
+          {enginePrompt && !extractedResult && (
+            <EngineWorkPacketPanel
+              prompt={enginePrompt}
+              agentLabel={localAgentLabels[engineAgent]}
+              connectorToken={connectorToken}
+              repositoryConnected={Boolean(activeProject?.importedRepo?.repoUrl)}
+              isRunning={isRunningAgent}
+              job={agentJob}
+              onCopy={() => navigator.clipboard.writeText(enginePrompt)}
+              onTokenChange={(token) => { setConnectorToken(token); setConnectorSessionToken(token); }}
+              onRun={runEngineInStudio}
+              onOpenWorkspace={onOpenWorkspace}
+              onReviewStories={loadEngineStories}
+            />
+          )}
           {agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabels[engineAgent]} for this feature…`} />}
 
-          {/* Step 1: Input Source Selector Tabs */}
+          {/* Step 1: Input source. Business logic stays in this modal; this component is view-only. */}
           {!extractedResult && (
-            <div className="space-y-5">
-              <div className="p-1 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-wrap items-center text-xs">
-                <button
-                  onClick={() => setImportTab('text')}
-                  className={`flex-1 py-2.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    importTab === 'text'
-                      ? 'bg-zinc-800 text-cyan-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <FileText className="w-4 h-4 text-cyan-400" />
-                  <span>Paste Text / PRD</span>
-                </button>
-                <button
-                  onClick={() => setImportTab('file')}
-                  className={`flex-1 py-2.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    importTab === 'file'
-                      ? 'bg-zinc-800 text-cyan-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Upload className="w-4 h-4 text-purple-400" />
-                  <span>Upload Document</span>
-                </button>
-                <button
-                  onClick={() => setImportTab('github')}
-                  className={`flex-1 py-2.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    importTab === 'github'
-                      ? 'bg-zinc-800 text-cyan-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Github className="w-4 h-4" />
-                  <span>GitHub Issue / URL</span>
-                </button>
-                <button
-                  onClick={() => setImportTab('preset')}
-                  className={`flex-1 py-2.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    importTab === 'preset'
-                      ? 'bg-zinc-800 text-amber-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Zap className="w-4 h-4 text-amber-400" />
-                  <span>Feature Presets</span>
-                </button>
-              </div>
-
-              {/* Tab 1: Text / PRD */}
-              {importTab === 'text' && (
-                <div className="space-y-4 text-xs">
-                  <div className="space-y-1">
-                    <label className="block font-bold text-zinc-200">Feature Title (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Multi-Factor Authentication (MFA) & Passkeys"
-                      value={featureTitle}
-                      onChange={(e) => setFeatureTitle(e.target.value)}
-                      className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-cyan-500/50"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block font-bold text-zinc-200">Feature Description, PRD Text, or Requirements</label>
-                    <textarea
-                      rows={8}
-                      placeholder="Paste your PRD text, Jira issue details, feature specifications, or user feedback here..."
-                      value={featureContent}
-                      onChange={(e) => setFeatureContent(e.target.value)}
-                      className="w-full p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500/50 leading-relaxed"
-                    />
-                  </div>
-
-                  {/* Extract Button */}
-                  <button
-                    onClick={handlePrimaryAction}
-                    disabled={isExtracting || !featureContent.trim()}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/20 transition-all disabled:opacity-50"
-                  >
-                    {isExtracting ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-cyan-300" />
-                        <span>AI Extracting User Stories & Spec-Kit...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>{generationPath === 'engine' ? 'Prepare Spec-Kit Engine Work Packet' : 'Extract User Stories & Generate Spec-Kit'}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {/* Tab 2: File Upload */}
-              {importTab === 'file' && (
-                <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800 text-xs text-center flex flex-col items-center justify-center space-y-4">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-                    <Upload className="w-6 h-6" />
-                  </div>
-
-                  <div className="space-y-1 max-w-md">
-                    <h3 className="text-sm font-bold text-zinc-100">Upload Feature Document (.md, .txt, .json)</h3>
-                    <p className="text-zinc-400">
-                      Upload your feature spec, PRD document, or requirements file. Spec-Kit Studio will parse it and generate full user stories!
-                    </p>
-                  </div>
-
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept=".md,.txt,.json,.doc,.docx"
-                    className="hidden"
-                  />
-
-                  {featureContent ? (
-                    <div className="w-full p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-left space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>File Loaded: {featureTitle}</span>
-                        </span>
-                        <button onClick={() => setFeatureContent('')} className="text-zinc-500 hover:text-zinc-300">
-                          Clear
-                        </button>
-                      </div>
-                      <p className="text-zinc-400 font-mono text-[11px] line-clamp-3">{featureContent}</p>
-                      <button
-                        onClick={handlePrimaryAction}
-                        disabled={isExtracting}
-                        className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2"
-                      >
-                        {isExtracting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                        <span>Extract Stories & Spec-Kit from File</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold flex items-center gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span>Select Feature Document</span>
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 3: GitHub Issue URL */}
-              {importTab === 'github' && (
-                <div className="p-6 rounded-2xl bg-zinc-950/60 border border-zinc-800 space-y-4 text-xs">
-                  <div className="space-y-1">
-                    <label className="block font-bold text-zinc-100">GitHub Issue URL or Raw Issue Description</label>
-                    <p className="text-zinc-400">
-                      Import feature user stories directly from a GitHub issue or PR description.
-                    </p>
-                  </div>
-
-                  <input
-                    type="text"
-                    placeholder="https://github.com/owner/repo/issues/42"
-                    value={githubUrl}
-                    onChange={(e) => {
-                      setGithubUrl(e.target.value);
-                      setFeatureContent(`Feature from GitHub Issue: ${e.target.value}`);
-                    }}
-                    className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none"
-                  />
-
-                  <div className="space-y-1">
-                    <label className="block font-bold text-zinc-200">GitHub Issue Body / Acceptance Criteria</label>
-                    <textarea
-                      rows={5}
-                      placeholder="Paste issue body text or user stories from GitHub..."
-                      value={featureContent}
-                      onChange={(e) => setFeatureContent(e.target.value)}
-                      className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handlePrimaryAction}
-                    disabled={isExtracting || !featureContent.trim()}
-                    className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2"
-                  >
-                    {isExtracting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    <span>Extract User Stories from GitHub Issue</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Tab 4: Feature Presets */}
-              {importTab === 'preset' && (
-                <div className="space-y-3 text-xs">
-                  <div className="font-semibold text-zinc-400 uppercase tracking-wider">
-                    Select a Production Feature Blueprint
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {featurePresets.map((preset) => (
-                      <div
-                        key={preset.title}
-                        className="p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800 hover:border-cyan-500/40 transition-all space-y-3 flex flex-col justify-between group"
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-sm text-zinc-100 group-hover:text-cyan-300 transition-colors">
-                              {preset.title}
-                            </span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                              {preset.category}
-                            </span>
-                          </div>
-                          <p className="text-zinc-400">{preset.summary}</p>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setFeatureTitle(preset.title);
-                            setFeatureContent(preset.content);
-                            if (generationPath === 'engine') handlePrepareEngine(preset.content, preset.title);
-                            else handleExtractFeature(preset.content, preset.title);
-                          }}
-                          disabled={isExtracting}
-                          className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-cyan-300 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Extract User Stories & Spec-Kit</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <FeatureSourceInput
+              source={importTab}
+              title={featureTitle}
+              content={featureContent}
+              githubUrl={githubUrl}
+              isProcessing={isExtracting}
+              actionLabel={generationPath === 'engine' ? 'Prepare Spec-Kit Engine Work Packet' : 'Extract User Stories & Generate Spec-Kit'}
+              onSourceChange={setImportTab}
+              onTitleChange={setFeatureTitle}
+              onContentChange={setFeatureContent}
+              onGithubUrlChange={(url) => {
+                setGithubUrl(url);
+                setFeatureContent(`Feature from GitHub Issue: ${url}`);
+              }}
+              onFileSelect={handleFileUpload}
+              onClearFile={() => setFeatureContent('')}
+              onPrimaryAction={handlePrimaryAction}
+              onPresetSelect={(content, title) => {
+                setFeatureTitle(title);
+                setFeatureContent(content);
+                if (generationPath === 'engine') handlePrepareEngine(content, title);
+                else handleExtractFeature(content, title);
+              }}
+            />
           )}
 
-          {/* Step 2: Extracted User Stories & Spec-Kit Preview */}
+          {/* Step 2: review extracted artifacts before choosing their destination. */}
           {extractedResult && (
-            <div className="space-y-6">
-              {/* Feature Header Banner */}
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-zinc-900 to-cyan-950/80 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    <h3 className="text-base font-bold text-zinc-100">{extractedResult.title}</h3>
-                  </div>
-                  <p className="text-zinc-300 max-w-2xl">{extractedResult.summary}</p>
-                </div>
-
-                <button
-                  onClick={() => setExtractedResult(null)}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium shrink-0 self-start sm:self-auto"
-                >
-                  Edit Input / Re-Extract
-                </button>
-              </div>
-
-              {/* Preview Section Tabs */}
-              <div className="p-1 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-wrap items-center text-xs">
-                <button
-                  onClick={() => setPreviewTab('stories')}
-                  className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    previewTab === 'stories'
-                      ? 'bg-zinc-800 text-indigo-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>User Stories ({extractedResult.userStories?.length || 0})</span>
-                </button>
-
-                <button
-                  onClick={() => setPreviewTab('requirements')}
-                  className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    previewTab === 'requirements'
-                      ? 'bg-zinc-800 text-cyan-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Requirements ({extractedResult.functionalRequirements?.length || 0})</span>
-                </button>
-
-                <button
-                  onClick={() => setPreviewTab('plan')}
-                  className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    previewTab === 'plan'
-                      ? 'bg-zinc-800 text-purple-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Workflow className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Tech Stack & Plan</span>
-                </button>
-
-                <button
-                  onClick={() => setPreviewTab('tasks')}
-                  className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                    previewTab === 'tasks'
-                      ? 'bg-zinc-800 text-emerald-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <ListTodo className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Task Breakdown ({extractedResult.tasks?.length || 0})</span>
-                </button>
-              </div>
-
-              {/* Preview Content: User Stories */}
-              {previewTab === 'stories' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between px-1 text-xs"><p className="font-medium text-zinc-400">Review each story’s audience, need, outcome, and testable behavior.</p><span className="rounded-full bg-indigo-500/10 px-2.5 py-1 font-bold text-indigo-200">{extractedResult.userStories?.length || 0} stories</span></div>
-                  {extractedResult.userStories?.map((story, idx) => <UserStoryPreview key={story.id || idx} story={story} index={idx} />)}
-                </div>
-              )}
-
-              {/* Preview Content: Requirements */}
-              {previewTab === 'requirements' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  {extractedResult.functionalRequirements?.map((fr: any) => (
-                    <div key={fr.id} className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-cyan-400">{fr.id}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono">
-                          {fr.category}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-zinc-100">{fr.title}</h4>
-                      <p className="text-zinc-400">{fr.description}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Preview Content: Plan */}
-              {previewTab === 'plan' && (
-                <div className="space-y-4 text-xs">
-                  <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2">
-                    <h4 className="font-bold text-zinc-200">Recommended Technology Stack</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {extractedResult.techStack?.map((st: any, idx: number) => (
-                        <div key={idx} className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800/80">
-                          <div className="font-bold text-cyan-300">{st.technology}</div>
-                          <div className="text-[10px] text-zinc-400">{st.category} — {st.justification}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Preview Content: Tasks */}
-              {previewTab === 'tasks' && (
-                <div className="space-y-2.5 text-xs">
-                  {extractedResult.tasks?.map((t: any) => (
-                    <div key={t.id} className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-emerald-400">{t.id}</span>
-                          <span className="font-bold text-zinc-100">{t.title}</span>
-                          <span className="text-[10px] px-2 py-0.2 rounded bg-zinc-900 text-zinc-400">{t.phase}</span>
-                        </div>
-                        <p className="text-zinc-400">{t.description}</p>
-                      </div>
-                      <span className="text-[11px] font-mono text-zinc-400 shrink-0">{t.estimatedHours || 3}h</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Destination Actions */}
-              <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3 pt-4">
-                <div className="text-xs font-bold text-zinc-300">Choose Spec-Kit Project Destination:</div>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <button
-                    onClick={handleCreateNewProject}
-                    className="flex-1 w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>Create New Spec-Kit Project ({extractedResult.title})</span>
-                  </button>
-
-                  {activeProject && onMergeIntoActiveProject && (
-                    <button
-                      onClick={handleMergeToActive}
-                      className="flex-1 w-full py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Merge Feature into "{activeProject.name}"</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+            <FeatureExtractionPreview
+              result={extractedResult}
+              activeProjectName={activeProject?.name}
+              canMerge={Boolean(activeProject && onMergeIntoActiveProject)}
+              tab={previewTab}
+              onTabChange={setPreviewTab}
+              onReExtract={() => setExtractedResult(null)}
+              onCreateProject={handleCreateNewProject}
+              onMerge={handleMergeToActive}
+            />
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

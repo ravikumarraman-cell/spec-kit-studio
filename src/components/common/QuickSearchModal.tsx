@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, ArrowRight, FileText, CheckSquare, Workflow, ShieldCheck, Bot, Activity } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../types/speckit';
+import { Modal } from './Modal';
 
 interface QuickSearchModalProps {
   isOpen: boolean;
@@ -23,15 +24,10 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
         e.preventDefault();
         if (isOpen) onClose();
       }
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   // Filter items based on query
   const matchingStories = project.spec.userStories.filter(
@@ -47,7 +43,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Quick search" className="items-start justify-center px-4 pt-20">
       <div className="w-full max-w-xl rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl overflow-hidden flex flex-col text-xs">
         {/* Search Input Bar */}
         <div className="p-3 border-b border-zinc-800 flex items-center gap-2">
@@ -194,6 +190,6 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

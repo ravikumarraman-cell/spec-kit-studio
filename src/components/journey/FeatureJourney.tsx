@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, CircleAlert, Play, ShieldCheck } from 'lucide-react';
 import { FeatureJourney as JourneyState, SpecKitProject, ViewTab } from '../../types/speckit';
-import { ConnectorJob, connectorClient, SpecKitArtifact } from '../../lib/connector';
+import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
 import { LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
 import { getStudioSettings } from '../../lib/studioSettings';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
-import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, getJourneyStage } from '../../lib/featureJourney';
+import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, getJourneyStage, nextFeatureJourneyStage } from '../../lib/featureJourney';
 import { FeatureInbox } from './FeatureInbox';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
@@ -72,7 +72,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     setAgentStageId(stageId);
     try {
       setConnectorSessionToken(connectorToken);
-      const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', connectorToken);
+      const client = configuredConnectorClient(connectorToken);
       let job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction);
       setAgentJob(job);
       while (job.status === 'running') { await new Promise((resolve) => window.setTimeout(resolve, 750)); job = await client.getJob(job.id); setAgentJob(job); }
@@ -99,8 +99,11 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const readiness = useMemo(() => featureJourneyStages.map((stage) => ({ stage, ready: stage.ready(project) })), [project]);
   const activeFeature = project.featureInbox?.at(-1);
   useEffect(() => {
-    const next = getJourneyStage(current.id + 1);
-    if (journey.activeStage === current.id && journey.completedStages.includes(current.id) && current.ready(project) && next.id !== current.id) {
+    // `getJourneyStage` deliberately falls back to Stage 1 for an invalid id.
+    // Do not use that fallback for progression: a completed final stage has no
+    // successor, and treating it as Stage 1 creates a visible 8 → 1 loop.
+    const next = nextFeatureJourneyStage(current.id);
+    if (next && journey.activeStage === current.id && journey.completedStages.includes(current.id) && current.ready(project)) {
       onSaveJourney({ ...journey, activeStage: next.id, updatedAt: new Date().toISOString() });
     }
   }, [current, journey, onSaveJourney, project]);
@@ -108,7 +111,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     const repositoryPath = project.importedRepo?.repoUrl;
     const expectedKind = current.id === 4 ? 'plan' : current.id === 5 ? 'tasks' : null;
     if (!repositoryPath || !expectedKind || (expectedKind === 'plan' && activeFeature?.architecturePlan?.path && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature)) || (expectedKind === 'tasks' && activeFeature?.deliveryPlan?.path && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature))) { setDiscoveredArtifact(null); return; }
-    const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', connectorToken);
+    const client = configuredConnectorClient(connectorToken);
     client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => setDiscoveredArtifact(artifacts.filter((item) => item.kind === expectedKind && isFeatureArtifactScoped(item.content, activeFeature)).sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0] || null)).catch(() => setDiscoveredArtifact(null));
   }, [activeFeature?.architecturePlan?.acceptedAt, activeFeature?.deliveryPlan?.acceptedAt, connectorToken, current.id, project.importedRepo?.repoUrl]);
   const acceptEngineReview = () => {

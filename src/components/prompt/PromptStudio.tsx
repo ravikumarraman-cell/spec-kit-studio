@@ -10,7 +10,6 @@ import {
   Zap,
   RefreshCw,
   Cpu,
-  Focus,
   ChevronDown,
   Play,
   ShieldCheck,
@@ -24,12 +23,15 @@ import { AgentTarget, portableFeatureTaskPrompt, portableTaskPrompt } from '../.
 import { generationApi } from '../../lib/api/generation';
 import { actionableFeatureDeliveryTasks, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
-import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, connectorClient, repositoryEvidenceSnapshot } from '../../lib/connector';
+import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, configuredConnectorClient, configuredConnectorUrl, repositoryEvidenceSnapshot } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
 import { LocalAgentId, localAgentLabels } from '../../lib/agentAvailability';
 import { TaskDecisionGate } from './TaskDecisionGate';
+import { FeatureCodeChanges } from './FeatureCodeChanges';
+import { FeatureImplementationHistory } from './FeatureImplementationHistory';
+import { FeatureExecutionFocus } from './FeatureExecutionFocus';
 import { FeatureTaskDecisionAnswers, decisionsComplete, featureTaskDecisionGate, formatApprovedDecisions, recommendedDecisionAnswers } from '../../lib/featureTaskDecisions';
 
 interface PromptStudioProps {
@@ -56,6 +58,39 @@ function evidenceChangedFiles(job: ConnectorJob): string[] {
     .map((line) => line.slice(3).trim())
     .filter(Boolean)
     .map((file) => file.includes(' -> ') ? file.split(' -> ').at(-1) || file : file);
+}
+
+function jobFailureGuidance(output: string): { heading: string; detail: string; next: string } {
+  const text = output.toLowerCase();
+  if (/hang|timed out|stopped after|timeout/.test(text)) return {
+    heading: 'Verification did not finish',
+    detail: 'The run was stopped while a command was still waiting. Any changed files are retained below; no successful result has been recorded.',
+    next: 'Review the changed files and the last diagnostic, then fix or isolate the slow check before retrying this task.',
+  };
+  if (/assertionerror|\bfailed\b|\berror\b/.test(text)) return {
+    heading: 'One or more checks need attention',
+    detail: 'The agent returned a non-success result. Studio preserved its evidence but will not treat the task as complete.',
+    next: 'Use the last diagnostic and changed-file list below to make a focused correction, then retry only this task.',
+  };
+  return {
+    heading: 'The run did not complete',
+    detail: 'Studio preserved the available evidence. It cannot safely infer whether the task is complete.',
+    next: 'Review the captured output and changed files before deciding whether to fix, retry, or discard partial work.',
+  };
+}
+
+function verificationFindings(markdown: string): string[] {
+  const heading = markdown.search(/^##\s+.*(?:verification|test).*(?:evidence|result|report)/im);
+  if (heading < 0) return [];
+  const remainder = markdown.slice(heading);
+  const nextHeading = remainder.slice(3).search(/^##\s+/m);
+  const section = nextHeading < 0 ? remainder : remainder.slice(0, nextHeading + 3);
+  return section
+    .split('\n')
+    .filter((line) => /\b(fail(?:ed|ure)?|hang|unresolved|blocked|did not complete|not marked passed|interrupted)\b/i.test(line))
+    .map((line) => line.replace(/^\s*[-*|]\s*/, '').replace(/\|/g, ' · ').replace(/`/g, '').trim())
+    .filter((line) => line.length > 20)
+    .slice(0, 8);
 }
 
 export const PromptStudio: React.FC<PromptStudioProps> = memo(({
@@ -89,12 +124,13 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const [verificationJob, setVerificationJob] = useState<ConnectorJob | null>(null);
   const [recoveredEvidence, setRecoveredEvidence] = useState<ConnectorJobEvidence | null>(null);
   const [isRecoveringEvidence, setIsRecoveringEvidence] = useState(false);
+  const [artifactFindings, setArtifactFindings] = useState<string[]>([]);
 
   const restoreActiveConnectorJob = async () => {
     const repositoryPath = project.importedRepo?.repoUrl;
     if (!repositoryPath) return false;
     const job = await activeConnectorJob(
-      window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318',
+      configuredConnectorUrl(),
       getConnectorSessionToken(),
       repositoryPath,
     );
@@ -113,7 +149,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   useEffect(() => {
     if (!codexJob || codexJob.status !== 'running') return;
     let cancelled = false;
-    const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', getConnectorSessionToken());
+    const client = configuredConnectorClient();
     const refresh = async () => {
       try {
         const job = await client.getJob(codexJob.id);
@@ -129,6 +165,25 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     void refresh();
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [codexJob?.id, codexJob?.status]);
+
+  useEffect(() => {
+    const repositoryPath = project.importedRepo?.repoUrl;
+    if (!codexJob || codexJob.ok || codexJob.status === 'running' || !repositoryPath || !activeFeature) {
+      setArtifactFindings([]);
+      return undefined;
+    }
+    let cancelled = false;
+    configuredConnectorClient()
+      .readSpecKitArtifacts(repositoryPath)
+      .then(({ artifacts }) => {
+        const plan = artifacts
+          .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, activeFeature))
+          .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+        if (!cancelled) setArtifactFindings(verificationFindings(plan?.content || ''));
+      })
+      .catch(() => { if (!cancelled) setArtifactFindings([]); });
+    return () => { cancelled = true; };
+  }, [codexJob?.id, codexJob?.status, codexJob?.ok, project.importedRepo?.repoUrl, activeFeature]);
 
   const reviewedFeatureTaskIds = useMemo(
     () => activeFeature?.implementationReceipts?.map((receipt) => receipt.taskId) || [],
@@ -238,7 +293,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setHasReviewedResult(false);
     setReceiptSaved(false);
     try {
-      const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', getConnectorSessionToken());
+      const client = configuredConnectorClient();
       let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt);
       setCodexJob(job);
       while (job.status === 'running') {
@@ -268,7 +323,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const cancelCodexRun = async () => {
     if (!codexJob || codexJob.status !== 'running') return;
     try {
-      const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', getConnectorSessionToken());
+      const client = configuredConnectorClient();
       setCodexJob(await client.cancelJob(codexJob.id));
     } catch (error) {
       setRunError(agentFailureGuidance('codex', error instanceof Error ? error.message : 'Studio could not stop Codex.'));
@@ -280,7 +335,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     if (!repositoryPath) return;
     setRunError('');
     try {
-      const client = connectorClient(window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318', getConnectorSessionToken());
+      const client = configuredConnectorClient();
       let job = await client.startFeatureVerification(repositoryPath);
       setVerificationJob(job);
       while (job.status === 'running') {
@@ -304,7 +359,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setReceiptSaved(false);
     try {
       const evidence = await repositoryEvidenceSnapshot(
-        window.localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318',
+        configuredConnectorUrl(),
         getConnectorSessionToken(),
         repositoryPath,
       );
@@ -348,39 +403,23 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       />
 
       {activeFeature && featureTasks.length > 0 && !useSharedTasks && (
-        <section className="rounded-2xl border border-cyan-400/25 bg-gradient-to-r from-cyan-500/10 via-zinc-950 to-violet-500/10 p-5">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-cyan-400/10 p-2.5"><Focus className="h-5 w-5 text-cyan-300" /></div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">Feature in focus · Stage 7</p>
-              <h2 className="mt-1 text-lg font-bold text-zinc-100">{activeFeature.title}</h2>
-              <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-400">{activeFeature.summary}</p>
-              <p className="mt-3 text-[11px] text-zinc-300"><span className="font-bold text-cyan-200">{actionableFeatureTasks.length} task{actionableFeatureTasks.length === 1 ? '' : 's'} ready to run</span>{featureTasks.length !== actionableFeatureTasks.length ? ` · ${featureTasks.length - actionableFeatureTasks.length} already completed or reviewed` : ''}. Studio resumes at the next task; it never prompts you to rerun recorded work.</p>
-            </div>
-          </div>
-        </section>
+        <FeatureExecutionFocus
+          title={activeFeature.title}
+          summary={activeFeature.summary}
+          readyTaskCount={actionableFeatureTasks.length}
+          reviewedTaskCount={featureTasks.length - actionableFeatureTasks.length}
+        />
       )}
 
-      {activeFeature && (activeFeature.implementationReceipts?.length || 0) > 0 && !useSharedTasks && (
-        <details className="group rounded-2xl border border-emerald-400/20 bg-zinc-900/50 p-4">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-bold text-zinc-100"><FileCheck2 className="h-4 w-4 text-emerald-300" />Completed & reviewed work <span className="rounded-md bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-200">{activeFeature.implementationReceipts?.length}</span></span>
-            <span className="flex items-center gap-1 text-[11px] text-zinc-500">View evidence <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" /></span>
-          </summary>
-          <p className="mt-3 text-xs text-zinc-400">Recorded results stay here for this feature. They are history, not tasks that Studio will ask you to run again.</p>
-          <div className="mt-4 space-y-3">
-            {activeFeature.implementationReceipts!.map((receipt) => {
-              const task = featureTasks.find((item) => item.id === receipt.taskId);
-              return (
-                <article key={receipt.jobId} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 text-xs">
-                  <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-mono font-bold text-emerald-200">{receipt.taskId}</p><p className="mt-1 font-semibold text-zinc-100">{task?.title || 'Recorded feature task'}</p></div><p className="text-[11px] text-zinc-500">Reviewed {new Date(receipt.recordedAt).toLocaleString()}</p></div>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-2"><div className="rounded-lg border border-zinc-800 bg-zinc-900/45 p-3"><p className="font-semibold text-zinc-200">Produced files</p><pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-zinc-400">{receipt.changedFiles.join('\n') || 'No changed-file list was retained for this earlier run. Its recorded output is preserved at right.'}</pre></div><div className="rounded-lg border border-zinc-800 bg-zinc-900/45 p-3"><p className="font-semibold text-zinc-200">Verification & agent output</p><pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-zinc-400">{receipt.verificationSummary || receipt.diffStat || 'No output was retained.'}</pre></div></div>
-                  {receipt.diffStat && <details className="mt-3 text-[11px]"><summary className="cursor-pointer text-zinc-500 hover:text-zinc-300">View Git diff summary</summary><pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] text-zinc-400">{receipt.diffStat}</pre></details>}
-                </article>
-              );
-            })}
-          </div>
-        </details>
+      {activeFeature && !useSharedTasks && (
+        <FeatureImplementationHistory
+          receipts={activeFeature.implementationReceipts || []}
+          tasks={featureTasks}
+        />
+      )}
+
+      {activeFeature && !useSharedTasks && (
+        <FeatureCodeChanges repositoryPath={project.importedRepo?.repoUrl} receipts={activeFeature.implementationReceipts || []} />
       )}
 
       {/* Target Task and Agent Configuration Grid */}
@@ -524,6 +563,18 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
             {receiptSaved && <p className="mt-2 text-[11px] text-emerald-200">The task is now recorded as reviewed and Studio will move to the next actionable task.</p>}
           </section>}
           {codexJob && <div className="px-5 pb-5"><AgentJobStatus job={codexJob} preparingLabel={`${selectedAgentLabel} is implementing ${selectedTask?.id || 'the selected task'} locally…`} />
+            {!codexJob.ok && codexJob.status !== 'running' && (() => {
+              const guidance = jobFailureGuidance(codexJob.output);
+              const files = evidenceChangedFiles(codexJob);
+              const diagnostic = codexJob.output.trim().slice(-2_500);
+              return <section className="mt-4 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">
+                <p className="font-bold text-amber-100">{guidance.heading}</p>
+                <p className="mt-1 leading-relaxed text-zinc-300">{guidance.detail}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Changed files to review ({files.length})</p><pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-zinc-400">{files.join('\n') || 'No Git-tracked file changes were captured.'}</pre></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Last useful diagnostic</p><pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[10px] text-zinc-400">{diagnostic || 'The local agent did not return diagnostic output.'}</pre></div></div>
+                <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3"><p className="font-semibold text-amber-100">Recommended next action</p><p className="mt-1 leading-relaxed text-zinc-300">{guidance.next}</p><p className="mt-2 text-[11px] text-zinc-500">Do not record this task as reviewed yet. Studio will keep it actionable until a successful run is reviewed.</p></div>
+                {artifactFindings.length > 0 && <div className="mt-3 rounded-lg border border-violet-400/20 bg-violet-500/5 p-3"><p className="font-semibold text-violet-100">Feature verification findings</p><p className="mt-1 text-[11px] text-zinc-400">Studio read the feature-scoped verification record and pulled out the unresolved items for you.</p><ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-zinc-300">{artifactFindings.map((finding, index) => <li key={`${index}-${finding}`}>{finding}</li>)}</ul></div>}
+              </section>;
+            })()}
             {codexJob.ok && <section className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs">
               <p className="font-bold text-emerald-100">Codex finished. Review the evidence before recording this task.</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="rounded-lg bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Changed files ({completedChangedFiles.length})</p><p className="mt-1 max-h-20 overflow-auto font-mono text-[10px] text-zinc-400">{completedChangedFiles.join('\n') || 'No source or artifact file changes were detected.'}</p></div><div className="rounded-lg bg-zinc-950/70 p-3"><p className="font-semibold text-zinc-200">Diff summary</p><pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap text-[10px] text-zinc-400">{codexJob.evidence?.diffStat || (completedChangedFiles.length ? 'New or untracked files are listed at left; Git does not produce a diff stat until they are added.' : 'No diff summary was available.')}</pre></div></div>

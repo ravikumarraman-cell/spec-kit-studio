@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, X, RefreshCw, CheckCircle2, Zap, Layers } from 'lucide-react';
 import { SpecKitProject, FeatureSpec } from '../../types/speckit';
 import { generationApi } from '../../lib/api/generation';
+import { Modal } from './Modal';
 
 interface AiSpecModalProps {
   isOpen: boolean;
@@ -24,8 +25,6 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const toggleFocusArea = (area: string) => {
     if (focusAreas.includes(area)) {
@@ -87,7 +86,7 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="AI Spec Generator" className="items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-6 space-y-5 text-xs">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
@@ -166,6 +165,6 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

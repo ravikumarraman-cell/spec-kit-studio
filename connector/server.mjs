@@ -496,6 +496,10 @@ async function installSpecKit(root) {
   // from initialization: installation changes the developer toolchain; init changes a repo.
   return uvCommand(['tool', 'install', 'specify-cli'], root, 180_000);
 }
+async function installSpecKitExtension(root, extension) {
+  if (!new Set(['bug', 'assess']).has(extension)) throw new Error('Unsupported Spec Kit extension.');
+  return specifyCommand(['extension', 'add', extension], root, 180_000);
+}
 async function installUv(root) {
   // Keep Studio's prerequisite self-contained: system Python and Homebrew remain untouched.
   const createEnvironment = await command('python3', ['-m', 'venv', managedToolsDir], root, 120_000);
@@ -527,6 +531,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/spec-kit/status') { const root = await safeRoot(payload.repositoryPath); const uv = await uvCommand(['--version'], root); const version = uv.ok ? await specifyCommand(['version'], root) : { ok: false, output: 'uv is not available.' }; const check = version.ok ? await specifyCommand(['self', 'check'], root) : null; return send(req, res, 200, { installed: version.ok, version, check, prerequisites: { uvAvailable: uv.ok, uvOutput: uv.output } }); }
     if (req.method === 'POST' && req.url === '/v1/prerequisites/install-uv') { if (payload.confirmation !== 'INSTALL_UV') return send(req, res, 400, { error: 'Explicit uv installation confirmation is required.' }); return send(req, res, 200, await installUv(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/install') { if (payload.confirmation !== 'INSTALL_SPEC_KIT') return send(req, res, 400, { error: 'Explicit installation confirmation is required.' }); return send(req, res, 200, await installSpecKit(await safeRoot(payload.repositoryPath))); }
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/extension/install') { if (payload.confirmation !== 'INSTALL_SPEC_KIT_EXTENSION') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, await installSpecKitExtension(await safeRoot(payload.repositoryPath), payload.extension)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/initialize') { if (payload.confirmation !== 'INITIALIZE_SPEC_KIT') return send(req, res, 400, { error: 'Explicit initialization confirmation is required.' }); return send(req, res, 200, await initializeSpecKit(await safeRoot(payload.repositoryPath), payload.integration)); }
     if (req.method === 'POST' && req.url === '/v1/validate') return send(req, res, 200, validate(payload.project));
     if (req.method === 'POST' && req.url === '/v1/workspace/preview') return send(req, res, 200, { changes: await preview(await safeRoot(payload.repositoryPath), payload.files) });

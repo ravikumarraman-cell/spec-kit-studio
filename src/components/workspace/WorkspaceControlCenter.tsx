@@ -6,8 +6,9 @@ import { createWorkspaceFiles } from '../../lib/workspaceFiles';
 import { EditorHeader } from '../common/EditorHeader';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
 import { AgentJobStatus } from '../common/AgentJobStatus';
+import { workflowBaselineContext } from '../../lib/workflowContext';
 
-interface Props { project: SpecKitProject; onTruthAttached: (report: TruthReport) => void; onOpenJourney: () => void; onOpenFeatureImport: () => void; }
+interface Props { project: SpecKitProject; onTruthAttached: (report: TruthReport) => void; onOpenJourney: () => void; onOpenFeatureImport: () => void; onOpenWorkflow: () => void; }
 type BaselineResult = { label: string; ok: boolean; output: string };
 const defaultUrl = localStorage.getItem('speckit_connector_url') || 'http://127.0.0.1:4318';
 function explainError(raw: string) {
@@ -22,7 +23,7 @@ function Step({ number, title, description, state, children }: { number: number;
   return <div className={`rounded-2xl border p-4 ${state === 'current' ? 'bg-zinc-900/80 border-cyan-500/25' : 'bg-zinc-900/40 border-zinc-800'} ${state === 'pending' ? 'opacity-60' : ''}`}><div className="flex gap-3"><div className={`h-7 w-7 shrink-0 rounded-full border flex items-center justify-center text-xs font-black ${tone}`}>{state === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : number}</div><div className="min-w-0 flex-1"><h3 className="font-bold text-zinc-100">{title}</h3><p className="mt-1 text-zinc-400 leading-relaxed">{description}</p>{children && <div className="mt-3">{children}</div>}</div></div></div>;
 }
 
-export function WorkspaceControlCenter({ project, onTruthAttached, onOpenJourney, onOpenFeatureImport }: Props) {
+export function WorkspaceControlCenter({ project, onTruthAttached, onOpenJourney, onOpenFeatureImport, onOpenWorkflow }: Props) {
   const [baseUrl, setBaseUrl] = useState(defaultUrl); const [token, setToken] = useState(() => getConnectorSessionToken()); const [repositoryPath, setRepositoryPath] = useState('');
   const [integration, setIntegration] = useState('copilot'); const [truth, setTruth] = useState<TruthReport | null>(null); const [cliInstalled, setCliInstalled] = useState<boolean | null>(null); const [uvAvailable, setUvAvailable] = useState<boolean | null>(null);
   const [setupMessage, setSetupMessage] = useState('Choose a clean repository, then scan it.'); const [setupError, setSetupError] = useState(''); const [busyAction, setBusyAction] = useState<string | null>(null); const [connectionOpen, setConnectionOpen] = useState(false);
@@ -56,6 +57,10 @@ export function WorkspaceControlCenter({ project, onTruthAttached, onOpenJourney
   const apply = () => { if (!changes.length || !window.confirm(`Write ${changes.length} reviewed Studio artifacts? Project summaries go under .specify/studio/; feature packages go only under specs/<feature-slug>/.`)) return; action('apply', async () => { const result = await client.apply(repositoryPath, files); setChanges([]); setDiagnostics(`Applied ${result.applied.length} reviewed artifact(s).`); }); };
   const firstBaseline = baseline.length === 0 && !baselineSkipped; const blockingBaseline = baseline.filter((result) => !ignoredBaselineChecks.includes(result.label)); const baselinePassed = baselineSkipped || (baseline.length > 0 && blockingBaseline.every((result) => result.ok)); const dependenciesMissing = truth?.baselineCommands.some((item) => item.runner === 'npm') && baseline.some((result) => /command not found|ERR_MODULE_NOT_FOUND|Could not resolve ['\"](?:vite|@vitejs)/i.test(result.output));
 
+  const workflowContext = workflowBaselineContext(project);
+  if (ready && baselinePassed && project.workflowFocus && project.workflowFocus !== 'feature') {
+    return <div className="mx-auto max-w-3xl space-y-6 pb-12"><EditorHeader icon={HardDrive} iconColor="text-cyan-400" title="Connected Workspace" subtitle="Repository evidence is ready for the selected workflow." badgeLabel="Baseline recorded" badgeColor="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" /><section className="rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-zinc-900 to-zinc-900 p-6"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">{workflowContext.label}</p><h2 className="mt-2 text-xl font-bold text-zinc-100">{workflowContext.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">{workflowContext.description}</p><div className="mt-5 flex flex-wrap gap-2"><button type="button" onClick={onOpenWorkflow} className="rounded-lg bg-cyan-400 px-4 py-2.5 text-xs font-bold text-zinc-950">Continue · {workflowContext.action}</button><button type="button" onClick={onOpenJourney} className="rounded-lg border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">Switch to Feature Journey</button></div><p className="mt-4 text-[11px] text-zinc-500">The baseline is shared repository evidence. The next step belongs only to the workflow you selected.</p></section></div>;
+  }
   const nextTitle = !truth ? 'Connect a repository' : !ready ? cliInstalled === false && uvAvailable === false ? 'Install uv first' : cliInstalled === false ? 'Install the official Spec-Kit CLI' : cliInstalled ? 'Initialize this fresh clone' : 'Checking your setup' : firstBaseline ? 'Establish a clean baseline' : baselinePassed ? 'Create your first feature specification' : 'Resolve the baseline checks';
   const nextDescription = !truth ? 'We will read the repository first. No files are changed during a scan.' : !ready ? setupMessage : firstBaseline ? 'Run the checks this repository already provides before planning feature work.' : baselinePassed ? 'Your repository and official workflow are ready. Define the feature next, then return here to validate and export it.' : 'At least one baseline check failed. Review its result before creating a feature.';
 

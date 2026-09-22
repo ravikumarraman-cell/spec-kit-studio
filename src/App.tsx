@@ -6,6 +6,7 @@ import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
+import { WorkflowAwarenessBanner } from './components/workflow/WorkflowAwarenessBanner';
 import { approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
 
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
@@ -130,7 +131,8 @@ function AppContent() {
 
         {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-          <JourneyHandoff project={activeProject} activeTab={activeTab} onOpenJourney={() => setActiveTab('overview')} onNavigate={setActiveTab} onApproveStage={handleApproveJourneyStage} />
+          {(!activeProject.workflowFocus || activeProject.workflowFocus === 'feature') && <JourneyHandoff project={activeProject} activeTab={activeTab} onOpenJourney={() => setActiveTab('overview')} onNavigate={setActiveTab} onApproveStage={handleApproveJourneyStage} />}
+          <WorkflowAwarenessBanner project={activeProject} activeTab={activeTab} onOpenWorkflow={() => setActiveTab('workflows')} />
           <Suspense fallback={<div className="py-16 text-center text-xs theme-text-muted">Loading workspace…</div>}><AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -140,7 +142,7 @@ function AppContent() {
               transition={{ duration: 0.15 }}
             >
               {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} />}
-              {activeTab === 'workflows' && <ProcessStudio project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onSelectWorkflow={saveWorkflowFocus} />}
+              {activeTab === 'workflows' && <ProcessStudio key={activeProject.id} project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onOpenWorkspace={() => setActiveTab('workspace')} onSelectWorkflow={saveWorkflowFocus} />}
 
               {activeTab === 'import' && (
                 <RepoImportStudio
@@ -150,7 +152,7 @@ function AppContent() {
               )}
 
               {activeTab === 'workspace' && (
-                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} onOpenJourney={() => setActiveTab('overview')} onOpenFeatureImport={handleStartFeatureFromWorkspace} />
+                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} onOpenJourney={() => setActiveTab('overview')} onOpenFeatureImport={handleStartFeatureFromWorkspace} onOpenWorkflow={() => setActiveTab('workflows')} />
               )}
 
               {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onSaveStackProfile={saveStackProfile} onOpenWorkspace={() => setActiveTab('workspace')} />}

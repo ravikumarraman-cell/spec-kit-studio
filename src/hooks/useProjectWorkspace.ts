@@ -79,6 +79,13 @@ export function useProjectWorkspace() {
 
   const selectProject = useCallback((id: string) => {
     storageService.setActiveProjectId(id);
+    const selected = storageService.getActiveProject();
+    // A completed feature is the safe default when re-entering a workspace.
+    // Independent workflows remain available, but require a fresh explicit choice
+    // so an old bug/assessment context cannot masquerade as the active journey.
+    if (selected.journey?.completedStages.includes(8) && selected.workflowFocus !== 'feature') {
+      storageService.updateActiveProject({ ...selected, workflowFocus: 'feature', updatedAt: new Date().toISOString() });
+    }
     refresh();
   }, [refresh]);
 

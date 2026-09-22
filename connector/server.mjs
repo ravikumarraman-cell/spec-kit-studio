@@ -193,19 +193,35 @@ async function scan(root) {
   const branch = await command('git', ['branch', '--show-current'], root);
   const remotes = await command('git', ['remote', '-v'], root);
   const baselineCommands = await discoverBaselineCommands(root, files);
+  const dependencyReadiness = await Promise.all([...new Set(baselineCommands
+    .filter((item) => item.runner === 'npm')
+    .map((item) => item.workingDirectory))].map(async (workingDirectory) => {
+      const folder = path.join(root, workingDirectory);
+      const [nodeModulesInstalled, hasPackageLock, hasShrinkwrap] = await Promise.all([
+        fs.stat(path.join(folder, 'node_modules')).then((stat) => stat.isDirectory()).catch(() => false),
+        fs.stat(path.join(folder, 'package-lock.json')).then((stat) => stat.isFile()).catch(() => false),
+        fs.stat(path.join(folder, 'npm-shrinkwrap.json')).then((stat) => stat.isFile()).catch(() => false),
+      ]);
+      return { workingDirectory, manager: 'npm', nodeModulesInstalled, hasLockfile: hasPackageLock || hasShrinkwrap };
+    }));
   const agents = await discoverLocalAgents(root);
   return {
     repositoryPath: root, repositoryName: path.basename(root), scannedAt: new Date().toISOString(), files,
     filesTruncated: files.length >= 1200, manifests: files.filter((file) => /(^|\/)(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|pom\.xml|build\.gradle|Dockerfile|schema\.prisma)$/.test(file)),
-    technologies: techEvidence(files, packageJson), packageScripts: packageJson?.scripts || {}, baselineCommands, agents,
+    technologies: techEvidence(files, packageJson), packageScripts: packageJson?.scripts || {}, baselineCommands, dependencyReadiness, agents,
     git: { available: git.ok, branch: branch.output || null, status: git.output || '', remotes: remotes.output || '' },
-    specKit: { detected: files.some((file) => file.startsWith('.specify/')), featureFile: files.includes('.specify/feature.json') },
+    specKit: {
+      detected: files.some((file) => file.startsWith('.specify/')),
+      featureFile: files.includes('.specify/feature.json'),
+      artifactFiles: files.filter((file) => /^(?:specs\/[^/]+\/(?:spec|plan|tasks)\.md|\.specify\/(?:bugs|assessments)\/[^/]+\/[^/]+\.md)$/i.test(file)).slice(0, 200),
+      hasWorkflowSetup: files.some((file) => file === '.specify/workflows/workflow-registry.json' || file === '.specify/integration.json'),
+    },
   };
 }
 async function readSpecKitArtifacts(root) {
   const files = await walk(root, '', [], 5000);
   const candidates = files
-    .filter((file) => /(^|\/)(spec|plan|tasks)\.md$/i.test(file) && (file.startsWith('specs/') || file.startsWith('.specify/')))
+    .filter((file) => (/^specs\/.+\/(spec|plan|tasks)\.md$/i.test(file) || /^\.specify\/bugs\/[^/]+\/(assessment|fix|test)\.md$/i.test(file) || /^\.specify\/assessments\/[^/]+\/(intake|research|problem|concept|decision)\.md$/i.test(file)))
     .map(async (file) => {
       const target = path.join(root, file);
       const [content, stat] = await Promise.all([fs.readFile(target, 'utf8'), fs.stat(target)]);

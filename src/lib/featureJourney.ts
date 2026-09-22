@@ -93,6 +93,15 @@ export function approveJourneyStage(journey: FeatureJourney, stageId: number, no
   return { ...journey, completedStages, activeStage: nextStage?.id || stageId, updatedAt: now };
 }
 
+/**
+ * Shared sequential-workflow revision rule: keep evidence, but invalidate
+ * approvals from the edited stage onward so later conclusions are re-reviewed.
+ */
+export function reopenJourneyStage(journey: FeatureJourney, stageId: number, now = new Date().toISOString()): FeatureJourney {
+  const safeStage = getJourneyStage(stageId).id;
+  return { ...journey, activeStage: safeStage, completedStages: journey.completedStages.filter((completed) => completed < safeStage), updatedAt: now };
+}
+
 export function engineInstructionForStage(stageId: number, project: SpecKitProject): string | null {
   const nextTask = project.tasks.tasks.find((task) => task.status !== 'done');
   const instructions: Partial<Record<number, string>> = {

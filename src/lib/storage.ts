@@ -3,6 +3,7 @@ import { SAMPLE_PROJECTS } from './sampleData';
 import { createProjectWorkspace } from './projectFactory';
 import { saveProjectBackup } from './projectBackup';
 import { projectBackups } from './projectBackup';
+import { normalizeProcessCases } from './processCases';
 
 const STORAGE_KEY = 'speckit_studio_projects_v1';
 const ACTIVE_PROJECT_KEY = 'speckit_studio_active_project_id';
@@ -32,6 +33,11 @@ class StorageService {
       parsed.forEach((p) => {
         if (p.plan?.mermaidDiagram && p.plan.mermaidDiagram.includes('|@google/genai SDK|')) {
           p.plan.mermaidDiagram = p.plan.mermaidDiagram.replace('|@google/genai SDK|', '|"@google/genai SDK"|');
+          modified = true;
+        }
+        const normalizedCases = normalizeProcessCases(p.processCases);
+        if (JSON.stringify(normalizedCases) !== JSON.stringify(p.processCases)) {
+          p.processCases = normalizedCases;
           modified = true;
         }
       });

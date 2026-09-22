@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -7,7 +7,7 @@ import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWork
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
 import { WorkflowAwarenessBanner } from './components/workflow/WorkflowAwarenessBanner';
-import { approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
+import { approveJourneyStage, createFeatureJourney, getJourneyStage, reopenJourneyStage } from './lib/featureJourney';
 
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
 const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
@@ -38,6 +38,14 @@ function AppContent() {
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+
+  // Independent workflows own the landing surface. Restoring the generic
+  // Feature Overview alongside a Bug or Idea sidebar creates contradictory UI.
+  useEffect(() => {
+    if (activeProject?.workflowFocus && activeProject.workflowFocus !== 'feature' && activeTab === 'overview') {
+      setActiveTab('workflows');
+    }
+  }, [activeProject?.id, activeProject?.workflowFocus, activeTab]);
 
   // Modals State
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState<boolean>(false);
@@ -126,6 +134,7 @@ function AppContent() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           project={activeProject}
+          onReopenFeatureStage={(stageId) => saveJourney(reopenJourneyStage(activeProject.journey || createFeatureJourney(), stageId))}
           isCollapsed={!isSidebarOpen}
         />
 

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type ThemeId = 'system' | 'github-dark' | 'github-light' | 'warm-paper';
+export type ThemeId = 'system' | 'github-dark' | 'github-light' | 'warm-paper' | 'optum';
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -55,6 +55,16 @@ export const THEME_PRESETS: ThemeMeta[] = [
     textHex: '#1c1917',
     accentHex: '#c2410c',
   },
+  {
+    id: 'optum',
+    name: 'Optum-inspired',
+    mode: 'light',
+    description: 'A calm healthcare-inspired light palette: warm white, deep navy, clear blue, and restrained orange emphasis.',
+    bgHex: '#f7f7f5',
+    cardHex: '#ffffff',
+    textHex: '#002677',
+    accentHex: '#f58220',
+  },
 ];
 
 interface ThemeContextType {
@@ -71,7 +81,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeId>(() => {
     const saved = localStorage.getItem('speckit_theme_id') as ThemeId;
-    if (saved && (saved === 'system' || saved === 'github-dark' || saved === 'github-light' || saved === 'warm-paper')) {
+    if (saved && (saved === 'system' || saved === 'github-dark' || saved === 'github-light' || saved === 'warm-paper' || saved === 'optum')) {
       return saved;
     }
     // Backward compatibility for previously saved names
@@ -122,6 +132,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setTheme('github-light');
     } else if (theme === 'github-light') {
       setTheme('warm-paper');
+    } else if (theme === 'warm-paper') {
+      setTheme('optum');
     } else {
       setTheme('system');
     }
@@ -139,6 +151,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? 'obsidian'
         : theme === 'warm-paper'
         ? 'warm-paper'
+        : theme === 'optum'
+        ? 'optum'
         : 'nordic-light';
 
     root.setAttribute('data-theme', dataTheme);

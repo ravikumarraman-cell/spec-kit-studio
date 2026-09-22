@@ -5,6 +5,7 @@ import { FeatureImplementationReceipt } from '../../types/speckit';
 interface FeatureImplementationHistoryProps {
   receipts: FeatureImplementationReceipt[];
   tasks: readonly { id: string; title: string }[];
+  workflowLabel?: string;
 }
 
 /**
@@ -15,6 +16,7 @@ interface FeatureImplementationHistoryProps {
 export function FeatureImplementationHistory({
   receipts,
   tasks,
+  workflowLabel = 'Feature',
 }: FeatureImplementationHistoryProps) {
   if (!receipts.length) return null;
 
@@ -32,7 +34,7 @@ export function FeatureImplementationHistory({
       </summary>
 
       <p className="mt-3 text-xs text-zinc-400">
-        Recorded results stay here for this feature. They are history, not tasks that Studio will ask you to run again.
+        Recorded results stay here for this {workflowLabel.toLowerCase()}. They are history, not tasks that Studio will ask you to run again.
       </p>
 
       <div className="mt-4 space-y-3">

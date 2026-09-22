@@ -19,7 +19,7 @@ export function configuredConnectorClient(token = getConnectorSessionToken()) {
 export interface TruthReport {
   repositoryPath: string; repositoryName: string; scannedAt: string; files: string[]; filesTruncated: boolean;
   manifests: string[]; technologies: { category: string; name: string; version?: string; evidence: string; confidence: string }[];
-  packageScripts: Record<string, string>; baselineCommands: { id: string; label: string; runner: string; kind: string; commandName: string; args: string[]; workingDirectory: string }[]; agents: LocalAgentStatus[]; git: { available: boolean; branch: string | null; status: string; remotes: string }; specKit: { detected: boolean; featureFile: boolean };
+  packageScripts: Record<string, string>; baselineCommands: { id: string; label: string; runner: string; kind: string; commandName: string; args: string[]; workingDirectory: string }[]; dependencyReadiness: { workingDirectory: string; manager: 'npm'; nodeModulesInstalled: boolean; hasLockfile: boolean }[]; agents: LocalAgentStatus[]; git: { available: boolean; branch: string | null; status: string; remotes: string }; specKit: { detected: boolean; featureFile: boolean; artifactFiles: string[]; hasWorkflowSetup: boolean };
 }
 export interface ValidationResult { passed: boolean; errors: { code: string; message: string }[]; warnings: { code: string; message: string }[]; checkedAt: string; }
 export interface WorkspaceFile { path: string; content: string; }

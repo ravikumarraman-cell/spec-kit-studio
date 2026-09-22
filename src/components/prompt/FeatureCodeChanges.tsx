@@ -6,6 +6,7 @@ import { configuredConnectorClient, FeatureCodePreview } from '../../lib/connect
 interface Props {
   repositoryPath?: string;
   receipts: FeatureImplementationReceipt[];
+  workflowLabel?: string;
 }
 
 const codePath = (file: string) => /\.(py|[cm]?[jt]sx?|go|java|cs|rb|php|rs|kt|kts|scala|sh|sql|html|css|scss|vue|svelte|tf|bicep)$/i.test(file)
@@ -19,7 +20,7 @@ const areaFor = (file: string) => {
   return 'Application';
 };
 
-export function FeatureCodeChanges({ repositoryPath, receipts }: Props) {
+export function FeatureCodeChanges({ repositoryPath, receipts, workflowLabel = 'Feature' }: Props) {
   const paths = useMemo(() => [...new Set(receipts.flatMap((receipt) => receipt.changedFiles).filter(codePath))], [receipts]);
   const [files, setFiles] = useState<FeatureCodePreview[]>([]);
   const [selectedPath, setSelectedPath] = useState('');
@@ -51,7 +52,7 @@ export function FeatureCodeChanges({ repositoryPath, receipts }: Props) {
   return (
     <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/[0.08] via-zinc-950 to-violet-500/[0.06] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex gap-3"><div className="rounded-xl bg-cyan-400/10 p-2.5"><Code2 className="h-5 w-5 text-cyan-200" /></div><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Feature implementation</p><h3 className="mt-1 text-sm font-bold text-zinc-100">Code changes</h3><p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">Application code only. Planning artifacts, manifests, and other workspace context stay out of this view by default.</p></div></div>
+        <div className="flex gap-3"><div className="rounded-xl bg-cyan-400/10 p-2.5"><Code2 className="h-5 w-5 text-cyan-200" /></div><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">{workflowLabel} implementation</p><h3 className="mt-1 text-sm font-bold text-zinc-100">Code changes</h3><p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">Application code only. Planning artifacts, manifests, and other workspace context stay out of this view by default.</p></div></div>
         <button type="button" onClick={open} disabled={!repositoryPath || !paths.length || loading} className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"><FileCode2 className="h-3.5 w-3.5" />{loading ? 'Loading code…' : opened ? 'Refresh code' : `View ${paths.length} code file${paths.length === 1 ? '' : 's'}`}</button>
       </div>
       {!paths.length && <p className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-400">No recorded application-code files are available yet. Record the completed task evidence first; spec and planning files intentionally do not appear here.</p>}

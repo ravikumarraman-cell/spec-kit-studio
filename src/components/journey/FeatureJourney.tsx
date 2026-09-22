@@ -5,7 +5,7 @@ import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../
 import { LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
 import { getStudioSettings } from '../../lib/studioSettings';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
-import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, getJourneyStage, nextFeatureJourneyStage } from '../../lib/featureJourney';
+import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, getJourneyStage, nextFeatureJourneyStage, reopenJourneyStage } from '../../lib/featureJourney';
 import { FeatureInbox } from './FeatureInbox';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
@@ -64,7 +64,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     if (!stage.ready(project)) return;
     onSaveJourney(approveJourneyStage(journey, stage.id));
   };
-  const reopenStage = (stageId: number) => onSaveJourney({ ...journey, activeStage: stageId, updatedAt: new Date().toISOString() });
+  const reopenStage = (stageId: number) => onSaveJourney(reopenJourneyStage(journey, stageId));
   const startStage = (stage: FeatureJourneyStage) => {
     if (stage.id === 2) { onOpenFeatureImport(); return; }
     if (stage.destination) onNavigate(stage.destination);

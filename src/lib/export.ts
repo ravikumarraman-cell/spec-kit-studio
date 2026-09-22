@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
-import { FeatureInboxItem, SpecKitProject } from '../types/speckit';
+import { FeatureInboxItem, SpecKitProject, StudioProcessCase } from '../types/speckit';
 import { featureArtifactRoot, slugify } from './projectIdentity';
 import { resolveStackProfile } from './stackProfiles';
+import { processDefinitions } from './processCases';
 
 function featureSpecMarkdown(project: SpecKitProject, feature: FeatureInboxItem): string {
   const stories = project.spec.userStories.filter((story) => feature.userStoryIds.includes(story.id));
@@ -43,6 +44,47 @@ export async function generateFeaturePackageZip(project: SpecKitProject, feature
   const zip = new JSZip();
   const root = zip.folder(feature.slug || slugify(feature.title)) || zip;
   for (const file of createFeaturePackageFiles(project, feature)) root.file(file.path, file.content);
+  return zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * A portable, workflow-owned package for Bug Fix and Idea Assessment. It
+ * mirrors the feature-package contract: immutable reviewed artifacts plus a
+ * manifest, without copying application source out of its repository.
+ */
+export function createProcessCasePackageFiles(project: SpecKitProject, item: StudioProcessCase, artifacts: Array<{ path: string; content: string }>): Array<{ path: string; content: string }> {
+  const flow = processDefinitions[item.kind];
+  const root = flow.root(item.slug);
+  const artifactByPath = new Map(artifacts.map((artifact) => [artifact.path, artifact.content]));
+  const changedFiles = [...new Set((item.stepReceipts || []).flatMap((receipt) => receipt.changedFiles || []))];
+  const manifest = {
+    schemaVersion: 1,
+    packageType: `${item.kind}-workflow-handoff`,
+    studioProjectId: project.id,
+    workspace: project.name,
+    title: item.title,
+    slug: item.slug,
+    process: flow.label,
+    decision: item.kind === 'assessment' ? item.verdict || null : null,
+    sourceArtifactRoot: root,
+    exportedAt: new Date().toISOString(),
+    reviewedSteps: item.completedSteps,
+    executionReceipts: item.stepReceipts || [],
+    changedSourceFiles: changedFiles,
+    sourceCodePolicy: 'Source code remains in the connected repository. Review it through Studio’s local read-only code viewer or in the repository; it is intentionally not copied into this evidence package.',
+  };
+  const handoff = `# ${flow.label} handoff\n\n## Case\n${item.title}\n\n## Status\n${item.kind === 'assessment' ? `Decision: ${item.verdict}` : 'Complete and reviewed.'}\n\n## Included evidence\n${flow.steps.map((step) => `- ${root}${step.artifact}`).join('\n')}\n\n## Changed source files\n${changedFiles.map((path) => `- \`${path}\``).join('\n') || 'No source-code changes were recorded.'}\n\n## Source code\nSource files remain in the connected repository. Use Studio’s local read-only code review to inspect the exact diff and source.\n`;
+  return [
+    { path: 'manifest.json', content: JSON.stringify(manifest, null, 2) },
+    { path: 'HANDOFF.md', content: handoff },
+    ...flow.steps.map((step) => ({ path: `${root}${step.artifact}`, content: artifactByPath.get(`${root}${step.artifact}`) || `# ${step.artifact}\n\nArtifact was not available when the package was created.` })),
+  ];
+}
+
+export async function generateProcessCasePackageZip(project: SpecKitProject, item: StudioProcessCase, artifacts: Array<{ path: string; content: string }>): Promise<Blob> {
+  const zip = new JSZip();
+  const packageRoot = zip.folder(`${item.slug}-${item.kind}-handoff`) || zip;
+  for (const file of createProcessCasePackageFiles(project, item, artifacts)) packageRoot.file(file.path, file.content);
   return zip.generateAsync({ type: 'blob' });
 }
 

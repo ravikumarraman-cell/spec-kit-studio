@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, featureJourneyStages, getJourneyStageForTab, nextFeatureJourneyStage } from '../src/lib/featureJourney';
+import { approveJourneyStage, createFeatureJourney, engineInstructionForStage, featureJourneyStages, getJourneyStageForTab, nextFeatureJourneyStage, reopenJourneyStage } from '../src/lib/featureJourney';
 import { createProjectWorkspace } from '../src/lib/projectFactory';
 
 test('feature journey has one ordered, routable definition for every stage', () => {
@@ -25,6 +25,13 @@ test('stage approval is explicit, idempotent, and moves to the next configured s
 test('the final journey stage has no successor and never wraps back to Stage 1', () => {
   assert.equal(nextFeatureJourneyStage(7)?.id, 8);
   assert.equal(nextFeatureJourneyStage(8), undefined);
+});
+
+test('reopening a feature stage retains evidence history but invalidates downstream approvals', () => {
+  const journey = { ...createFeatureJourney(), activeStage: 5, completedStages: [1, 2, 3, 4] };
+  const reopened = reopenJourneyStage(journey, 3, '2026-01-03T00:00:00.000Z');
+  assert.equal(reopened.activeStage, 3);
+  assert.deepEqual(reopened.completedStages, [1, 2]);
 });
 
 test('impact-map readiness honors the approved repository review instead of incidental scan shape', () => {

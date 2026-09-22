@@ -61,6 +61,26 @@
     color-scheme: light;
   }
 
+  /* Optum-inspired: an original Studio palette based on a warm neutral canvas,
+     deep navy information hierarchy, clear blue actions, and orange emphasis. */
+  :root[data-theme="optum"] {
+    --bg-canvas: #f7f7f5;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #eef4f8;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --border-subtle: #d5dce5;
+    --border-strong: #8fa4b8;
+    --text-main: #002677;
+    --text-muted: #3c5268;
+    --text-faint: #60758a;
+    --accent-primary: #0067b9;
+    --accent-indigo: #002677;
+    --accent-purple: #5d3f95;
+    --accent-emerald: #147a56;
+    color-scheme: light;
+  }
+
   html, body {
     background-color: var(--bg-canvas);
     color: var(--text-main);
@@ -80,6 +100,11 @@
 :root[data-theme="warm-paper"]:not(.dark) {
   background-color: #faf8f5 !important;
   color: #1c1917 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) {
+  background-color: #f7f7f5 !important;
+  color: #002677 !important;
 }
 
 /* Universal High Contrast Card, Border & Background Rules for Light Mode */
@@ -306,4 +331,3 @@
 .theme-text-muted {
   color: var(--text-muted);
 }
-

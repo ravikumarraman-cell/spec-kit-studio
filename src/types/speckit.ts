@@ -237,6 +237,8 @@ export interface StudioProcessCase {
   input: string;
   currentStep: number;
   completedSteps: number[];
+  /** A durable record that Studio received a successful agent result for a step. Completion still requires review. */
+  stepReceipts?: Array<{ step: number; completedAt: string; summary?: string; changedFiles?: string[]; diffStat?: string; repositoryStatus?: string; command?: string }>;
   createdAt: string;
   updatedAt: string;
   verdict?: AssessmentVerdict;

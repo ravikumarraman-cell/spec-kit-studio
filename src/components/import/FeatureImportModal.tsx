@@ -153,7 +153,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     try {
       setConnectorSessionToken(connectorToken);
       const client = configuredConnectorClient(connectorToken);
-      let job = await client.startSpecKitAgent(repositoryPath, engineAgent, enginePrompt);
+      let job = await client.startSpecKitAgent(repositoryPath, engineAgent, enginePrompt, activeProject);
       setAgentJob(job);
       while (job.status === 'running') {
         await new Promise((resolve) => window.setTimeout(resolve, 750));

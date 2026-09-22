@@ -19,6 +19,7 @@ const AuditDashboard = lazy(() => import('./components/audit/AuditDashboard').th
 const CliExporter = lazy(() => import('./components/exporter/CliExporter').then((module) => ({ default: module.CliExporter })));
 const FeatureJourney = lazy(() => import('./components/journey/FeatureJourney').then((module) => ({ default: module.FeatureJourney })));
 const StudioSettings = lazy(() => import('./components/settings/StudioSettings').then((module) => ({ default: module.StudioSettings })));
+const ProcessStudio = lazy(() => import('./components/process/ProcessStudio').then((module) => ({ default: module.ProcessStudio })));
 // Global dialogs are reached only through explicit user intent. Keeping them
 // out of the app shell avoids paying their code cost during initial navigation.
 const QuickSearchModal = lazy(() => import('./components/common/QuickSearchModal').then((module) => ({ default: module.QuickSearchModal })));
@@ -31,8 +32,8 @@ function AppContent() {
   const { isDark } = useTheme();
   const {
     projects, activeProject, selectProject, createProject, resetProjects,
-    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, selectVersion,
+    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion,
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
@@ -138,7 +139,8 @@ function AppContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} />}
+              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} />}
+              {activeTab === 'workflows' && <ProcessStudio project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onSelectWorkflow={saveWorkflowFocus} />}
 
               {activeTab === 'import' && (
                 <RepoImportStudio
@@ -151,7 +153,7 @@ function AppContent() {
                 <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} onOpenJourney={() => setActiveTab('overview')} onOpenFeatureImport={handleStartFeatureFromWorkspace} />
               )}
 
-              {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onOpenWorkspace={() => setActiveTab('workspace')} />}
+              {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onSaveStackProfile={saveStackProfile} onOpenWorkspace={() => setActiveTab('workspace')} />}
 
               {activeTab === 'spec' && (
                 <SpecEditor

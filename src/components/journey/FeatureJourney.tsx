@@ -11,7 +11,9 @@ import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { JourneyProgress } from './JourneyProgress';
+import { FeatureRegistry } from './FeatureRegistry';
 import { canStartFeatureIntake, needsLegacyJourneyRepair } from '../../lib/workflowUx';
+import { featureArtifactRoot, identityIssues, legacyFeatureIdentity } from '../../lib/projectIdentity';
 
 function detectedAgent(): LocalAgentStatus | undefined {
   try {
@@ -43,9 +45,10 @@ interface Props {
   onOpenFeatureImport: () => void;
   onSaveJourney: (journey: JourneyState) => void;
   onSaveFeatureReview: (review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string } }) => void;
+  onUpdateFeatureIdentity: (featureId: string, identity: { featureKey?: string; slug?: string; branch?: string; worktreePath?: string; baselineCommit?: string }) => void;
 }
 
-export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSaveJourney, onSaveFeatureReview }: Props) {
+export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSaveJourney, onSaveFeatureReview, onUpdateFeatureIdentity }: Props) {
   const journey = project.journey || createFeatureJourney();
   const current = getJourneyStage(journey.activeStage);
   const [connectorToken, setConnectorToken] = useState(() => getConnectorSessionToken());
@@ -55,6 +58,8 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const [discoveredArtifact, setDiscoveredArtifact] = useState<SpecKitArtifact | null>(null);
   const [isRunningEngine, setIsRunningEngine] = useState(false);
   const [engineError, setEngineError] = useState('');
+  const [worktreePath, setWorktreePath] = useState('');
+  const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
   const complete = (stage: typeof current) => {
     if (!stage.ready(project)) return;
     onSaveJourney(approveJourneyStage(journey, stage.id));
@@ -66,7 +71,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   };
   const runEngineStage = async (stageIdOrEvent: number | React.MouseEvent = current.id) => {
     const stageId = typeof stageIdOrEvent === 'number' ? stageIdOrEvent : current.id;
-    const instruction = engineInstructionForStage(stageId, project); const agent = selectedAgent(); const repositoryPath = project.importedRepo?.repoUrl;
+    const instruction = engineInstructionForStage(stageId, project); const agent = selectedAgent(); const repositoryPath = stageId >= 7 ? (project.featureInbox?.at(-1)?.worktreePath || project.importedRepo?.repoUrl) : project.importedRepo?.repoUrl;
     if (!instruction || !agent || !repositoryPath) return;
     const stage = getJourneyStage(stageId);
     if (!window.confirm(`Run ${localAgentLabels[agent.id]} for Stage ${stageId}: ${stage.title}? You will review the result before the journey advances.`)) return;
@@ -75,7 +80,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     try {
       setConnectorSessionToken(connectorToken);
       const client = configuredConnectorClient(connectorToken);
-      let job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction);
+      const preflight = await client.preflight(repositoryPath, project, project.featureInbox?.at(-1)?.id);
+      if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' '));
+      if (stageId >= 7 && !preflight.evidence.isLinkedWorktree) throw new Error('Implementation is blocked in the main checkout. Create/select a linked Git worktree for this feature first.');
+      let job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, project, project.featureInbox?.at(-1)?.id);
       setAgentJob(job);
       while (job.status === 'running') { await new Promise((resolve) => window.setTimeout(resolve, 750)); job = await client.getJob(job.id); setAgentJob(job); }
       if (job.ok && (stageId === 4 || stageId === 5)) {
@@ -100,6 +108,27 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const readiness = useMemo(() => featureJourneyStages.map((stage) => ({ stage, ready: stage.ready(project) })), [project]);
   const readinessByStage = useMemo(() => new Map(readiness.map(({ stage, ready }) => [stage.id, ready])), [readiness]);
   const activeFeature = project.featureInbox?.at(-1);
+  const safetyIssues = identityIssues(project, activeFeature);
+  const createFeatureWorktree = async () => {
+    const repositoryPath = project.importedRepo?.repoUrl;
+    if (!activeFeature || !repositoryPath) return;
+    const branch = `feat/${activeFeature.slug || 'feature'}`;
+    if (!worktreePath.trim() || !window.confirm(`Create ${branch} in ${worktreePath}? Git will create a new linked worktree from the current commit.`)) return;
+    setIsCreatingWorktree(true); setEngineError('');
+    try {
+      const result = await configuredConnectorClient(connectorToken).createWorktree(repositoryPath, worktreePath.trim(), branch);
+      onUpdateFeatureIdentity(activeFeature.id, { branch: result.branch, worktreePath: result.repositoryPath, baselineCommit: result.baselineCommit });
+      setAcceptedNotice(`Linked worktree registered for ${activeFeature.featureKey}. Re-open Connected Workspace using ${result.repositoryPath} before implementation.`);
+    } catch (error) { setEngineError(error instanceof Error ? error.message : 'Studio could not create the worktree.'); }
+    finally { setIsCreatingWorktree(false); }
+  };
+  const migrateLegacyFeature = () => {
+    if (!activeFeature) return;
+    const ordinal = (project.featureInbox || []).findIndex((feature) => feature.id === activeFeature.id);
+    const identity = legacyFeatureIdentity(activeFeature, ordinal);
+    onUpdateFeatureIdentity(activeFeature.id, identity);
+    setAcceptedNotice(`Assigned ${identity.featureKey} and ${identity.slug}. Existing stage evidence was preserved.`);
+  };
   useEffect(() => {
     // `getJourneyStage` deliberately falls back to Stage 1 for an invalid id.
     // Do not use that fallback for progression: a completed final stage has no
@@ -154,15 +183,37 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     setDiscoveredArtifact(null);
   };
 
+  if (current.id === 8 && journey.completedStages.includes(8)) {
+    return <div className="feature-journey mx-auto max-w-5xl space-y-6 pb-12">
+      <section className="rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-zinc-900 to-zinc-900 p-6 md:p-8">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Feature Journey complete · 8 of 8 stages approved</p>
+        <h1 className="mt-2 text-2xl font-bold text-zinc-100">Handoff complete</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">{activeFeature?.title || 'This feature'} has a retained, editable history for every stage. No further agent execution or approval is required.</p>
+        <div className="mt-5 grid gap-3 text-xs sm:grid-cols-3">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-emerald-200">✓ Journey history retained</p><p className="mt-1 text-zinc-400">Specifications, plans, task evidence, and approvals remain available.</p></div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-cyan-200">✓ Feature package ready</p><p className="mt-1 text-zinc-400">Download the isolated package whenever you need a durable handoff record.</p></div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-violet-200">Edit with review</p><p className="mt-1 text-zinc-400">If artifacts change, revisit the affected stage and re-review it before delivery.</p></div>
+        </div>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button type="button" onClick={() => onNavigate('export')} className="rounded-lg bg-emerald-400 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Open handoff package</button>
+          <button type="button" onClick={() => onNavigate('prompt')} className="rounded-lg border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:bg-zinc-800">Review implementation history</button>
+        </div>
+      </section>
+      <FeatureRegistry project={project} />
+    </div>;
+  }
+
   return <div className="feature-journey mx-auto max-w-5xl space-y-6 pb-12">
     {isRunningEngine && <style>{'.feature-journey div:has(> label input[type="password"]) ~ pre { display: none; }'}</style>}
     <section className="rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-zinc-900 to-zinc-900 p-5 md:p-7"><div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div><div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Spec-Kit Engine guided workflow</div><h1 className="mt-1 text-2xl font-bold text-zinc-100">Add a feature without losing the thread</h1><p className="mt-2 max-w-2xl text-sm text-zinc-400">One stage at a time. Studio keeps the repository evidence, human approvals, and Engine work in the right order.</p></div><div className="min-w-36 rounded-xl border border-cyan-500/25 bg-zinc-950/60 p-3 text-center"><div className="text-2xl font-black text-cyan-300">{progress}%</div><div className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{completedCount} of 8 approved</div></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div></section>
 
     {canStartFeatureIntake(current.id) && <FeatureInbox project={project} onImport={onOpenFeatureImport} onNavigate={onNavigate} />}
+    <FeatureRegistry project={project} />
 
     {acceptedNotice && <div role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-100"><strong>Saved.</strong> {acceptedNotice}</div>}
 
-    {activeFeature && (activeFeature.impactMap?.acceptedAt || activeFeature.architecturePlan?.acceptedAt) && <section className="rounded-2xl border border-violet-400/25 bg-violet-500/5 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature evidence</p><h2 className="mt-1 font-bold text-zinc-100">{activeFeature.title}</h2><div className="mt-3 grid gap-2 sm:grid-cols-2">{activeFeature.impactMap?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">✓ Impact map accepted</p><p className="mt-1 text-[11px] text-zinc-400">Read-only architecture evidence retained for this feature.</p></div>}{activeFeature.architecturePlan?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-emerald-200">✓ Feature plan accepted</p><p className="mt-1 text-[11px] text-zinc-400">This plan is scoped to this feature, not the shared workspace plan.</p></div>}</div></section>}
+    {activeFeature && <section className="rounded-2xl border border-violet-400/25 bg-violet-500/5 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Active feature identity</p><h2 className="mt-1 font-bold text-zinc-100">{activeFeature.title}</h2><div className="mt-3 grid gap-2 sm:grid-cols-3"><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">{activeFeature.featureKey || 'Needs feature key'}</p><p className="mt-1 text-[11px] text-zinc-400">Feature key</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-emerald-200">{featureArtifactRoot(activeFeature)}</p><p className="mt-1 text-[11px] text-zinc-400">Owned artifact folder</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-zinc-200">{activeFeature.branch || 'Set branch before implementation'}</p><p className="mt-1 text-[11px] text-zinc-400">Expected branch</p></div></div>{safetyIssues.length > 0 && <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-amber-100"><p className="font-bold">Safety setup needed before agent execution</p><ul className="mt-1 list-disc space-y-1 pl-4 text-amber-200">{safetyIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul>{(!activeFeature.featureKey || !activeFeature.slug) && <button type="button" onClick={migrateLegacyFeature} className="mt-3 rounded-lg bg-amber-400 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-300">Migrate this existing feature safely</button>}</div>}{(activeFeature.impactMap?.acceptedAt || activeFeature.architecturePlan?.acceptedAt) && <div className="mt-3 grid gap-2 sm:grid-cols-2">{activeFeature.impactMap?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">✓ Impact map accepted</p><p className="mt-1 text-[11px] text-zinc-400">Read-only architecture evidence retained for this feature.</p></div>}{activeFeature.architecturePlan?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-emerald-200">✓ Feature plan accepted</p><p className="mt-1 text-[11px] text-zinc-400">This plan is scoped to this feature, not the shared workspace plan.</p></div>}</div>}</section>}
+    {activeFeature && !activeFeature.worktreePath && current.id === 7 && <section className="rounded-2xl border border-amber-400/25 bg-amber-500/5 p-4 text-xs"><p className="font-bold text-amber-100">Create this feature’s isolated worktree</p><p className="mt-1 text-amber-200">Implementation remains blocked in the main checkout. Choose a new empty folder inside your connector’s allowed roots.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={worktreePath} onChange={(event) => setWorktreePath(event.target.value)} placeholder="/absolute/allowed/path/to/feature-worktree" className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100" /><button type="button" onClick={createFeatureWorktree} disabled={isCreatingWorktree || !worktreePath.trim()} className="rounded-lg bg-amber-400 px-3 py-2 font-bold text-zinc-950 disabled:opacity-50">{isCreatingWorktree ? 'Creating…' : 'Create isolated worktree'}</button></div></section>}
 
     {activeFeature && needsLegacyJourneyRepair({ stageId: current.id, hasImpactMap: Boolean(activeFeature.impactMap?.acceptedAt), hasArchitecturePlan: Boolean(activeFeature.architecturePlan?.path), hasDeliveryPlan: Boolean(activeFeature.deliveryPlan?.acceptedAt) }) && <details className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><summary className="cursor-pointer font-bold text-amber-100">Some earlier Journey evidence needs attention</summary><p className="mt-1 text-amber-200">Your approved work is safe. Open only if you need to repair evidence created with an earlier Studio version.</p><div className="mt-4 space-y-3">{current.id > 3 && activeFeature && !activeFeature.impactMap?.acceptedAt && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Required repair</p><h2 className="mt-1 font-bold text-zinc-100">Ground the impact map for {activeFeature.title}</h2><p className="mt-1 text-zinc-300">This feature entered the Journey before Studio retained feature-scoped impact maps. Run the read-only review once, accept it, then continue without resetting approved work.</p><button type="button" onClick={() => runEngineStage(3)} disabled={isRunningEngine} className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-bold text-amber-100 hover:bg-amber-300/20 disabled:opacity-50">Run read-only impact map</button></section>}
 

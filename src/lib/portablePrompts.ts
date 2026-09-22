@@ -1,5 +1,6 @@
 import { FeatureInboxItem, SpecKitProject, TaskItem } from '../types/speckit';
 import { FeatureDeliveryTask } from './featureDeliveryTasks';
+import { resolveStackProfile } from './stackProfiles';
 
 export type AgentTarget = 'copilot' | 'codex' | 'claude' | 'gemini' | 'cursor';
 export function portableTaskPrompt(project: SpecKitProject, task: TaskItem, target: AgentTarget, evidence: string[] = []) {
@@ -19,6 +20,7 @@ export function portableFeatureTaskPrompt(
   target: AgentTarget,
   evidence: string[] = [],
 ) {
+  const profile = resolveStackProfile(project);
   const requirements = project.spec.functionalRequirements
     .filter((item) => feature.requirementIds.includes(item.id) && (task.requirementIds.length === 0 || task.requirementIds.includes(item.id)));
   const architecture = feature.architecturePlan?.content
@@ -46,6 +48,11 @@ ${evidence.length ? evidence.map((item) => `- ${item}`).join('\n') : '- Inspect 
 ${architecture}
 ## Constitution
 ${project.constitution.rules.map((rule) => `- [${rule.strictness}] ${rule.ruleStatement}`).join('\n') || '- No rules defined; request them before security or data-impacting work.'}
+
+## Stack execution contract
+${profile.label}: ${profile.guidance}
+- Run: ${profile.testCommands.join('; ') || 'the repository-declared checks'}.
+- Never edit: ${profile.prohibitedPaths.join(', ')}.
 
 ## Definition of done
 - Implement only ${task.id} for ${feature.title}; do not drift into shared workspace tasks.

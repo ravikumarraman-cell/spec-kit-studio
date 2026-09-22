@@ -53,6 +53,7 @@ interface TopUtilityBarProps {
 
 const TAB_TITLES: Record<ViewTab, string> = {
   overview: 'Workspace Hub',
+  workflows: 'Workflows',
   workspace: 'Connected Workspace',
   spec: 'Feature Spec',
   plan: 'Architecture Plan',

@@ -216,6 +216,41 @@ async function readSpecKitArtifacts(root) {
   artifacts.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
   return { artifacts };
 }
+function normalizeRemote(value) {
+  return String(value || '').trim().replace(/^git@([^:]+):/, 'https://$1/').replace(/\.git$/, '').replace(/\/$/, '').toLowerCase();
+}
+async function featurePreflight(root, project, featureId) {
+  const errors = [], warnings = [];
+  const feature = featureId ? (project?.featureInbox || []).find((item) => item.id === featureId) : null;
+  const [remote, branch, commit, gitDir] = await Promise.all([
+    command('git', ['config', '--get', 'remote.origin.url'], root),
+    command('git', ['branch', '--show-current'], root),
+    command('git', ['rev-parse', 'HEAD'], root),
+    command('git', ['rev-parse', '--git-dir'], root),
+  ]);
+  if (!project?.repositoryIdentity?.canonicalRemote) errors.push({ code: 'project-unbound', message: 'Studio project has no canonical repository identity. Scan Connected Workspace again before running an agent.' });
+  if (!remote.ok || !remote.output.trim()) errors.push({ code: 'origin-missing', message: 'The selected folder has no readable origin remote.' });
+  if (project?.repositoryIdentity?.canonicalRemote && normalizeRemote(remote.output) !== normalizeRemote(project.repositoryIdentity.canonicalRemote)) errors.push({ code: 'remote-mismatch', message: 'The selected folder does not match this Studio project’s canonical remote.' });
+  if (!branch.output.trim()) errors.push({ code: 'detached-head', message: 'The selected folder is in detached HEAD state. Use a named feature branch.' });
+  if (feature) {
+    if (!feature.featureKey || !feature.slug) errors.push({ code: 'feature-identity-missing', message: 'The active feature needs a feature key and slug before it can run safely.' });
+    if (feature.branch && feature.branch !== branch.output.trim()) errors.push({ code: 'branch-mismatch', message: `This feature expects ${feature.branch}, but the folder is on ${branch.output.trim()}.` });
+    if (feature.worktreePath && path.resolve(feature.worktreePath) !== root) errors.push({ code: 'worktree-mismatch', message: 'The selected folder is not the worktree registered for this feature.' });
+    if (!gitDir.output.includes('/worktrees/')) warnings.push({ code: 'main-checkout', message: 'This is the repository’s main checkout. Use a linked Git worktree before implementation work.' });
+  }
+  return { passed: errors.length === 0, errors, warnings, evidence: { remote: remote.output.trim(), branch: branch.output.trim(), commit: commit.output.trim(), isLinkedWorktree: gitDir.output.includes('/worktrees/') }, checkedAt: new Date().toISOString() };
+}
+async function createWorktree(root, targetPath, branch) {
+  if (!/^feat\/[a-z0-9][a-z0-9/_-]{2,120}$/i.test(String(branch || ''))) throw new Error('Use a feature branch such as feat/cai-142-export-csv.');
+  const target = path.resolve(String(targetPath || ''));
+  if (!allowedRoots.some((allowed) => target.startsWith(`${allowed}${path.sep}`))) throw new Error('Worktree destination must be inside STUDIO_ALLOWED_ROOTS.');
+  if (await fs.stat(target).then(() => true).catch(() => false)) throw new Error('Worktree destination already exists. Choose an empty, new folder.');
+  const baseline = await command('git', ['rev-parse', 'HEAD'], root);
+  if (!baseline.ok) throw new Error('Studio could not determine the current Git commit.');
+  const result = await command('git', ['worktree', 'add', '-b', branch, target, 'HEAD'], root, 60_000);
+  if (!result.ok) throw new Error(result.output || 'Git could not create the linked worktree.');
+  return { repositoryPath: target, branch, baselineCommit: baseline.output.trim() };
+}
 async function runBaselineCommand(root, commandId) {
   const files = await walk(root);
   const selected = (await discoverBaselineCommands(root, files)).find((item) => item.id === commandId);
@@ -416,6 +451,13 @@ function validate(project) {
   const errors = [], warnings = [];
   const requirements = new Set((project.spec?.functionalRequirements || []).map((item) => item.id));
   const tasks = project.tasks?.tasks || [];
+  const duplicates = (items) => items.map((item) => item?.id).filter(Boolean).filter((id, index, ids) => ids.indexOf(id) !== index);
+  for (const id of duplicates(project.spec?.functionalRequirements || [])) errors.push({ code: 'duplicate-requirement', message: `Requirement ID ${id} is duplicated; feature traceability would be ambiguous.` });
+  for (const id of duplicates(project.spec?.userStories || [])) errors.push({ code: 'duplicate-story', message: `User story ID ${id} is duplicated; feature traceability would be ambiguous.` });
+  for (const id of duplicates(tasks)) errors.push({ code: 'duplicate-task', message: `Task ID ${id} is duplicated; feature traceability would be ambiguous.` });
+  const features = project.featureInbox || [];
+  for (const key of features.map((feature) => feature.featureKey).filter(Boolean).filter((key, index, keys) => keys.indexOf(key) !== index)) errors.push({ code: 'duplicate-feature-key', message: `Feature key ${key} is duplicated.` });
+  for (const slug of features.map((feature) => feature.slug).filter(Boolean).filter((slug, index, slugs) => slugs.indexOf(slug) !== index)) errors.push({ code: 'duplicate-feature-slug', message: `Feature slug ${slug} is duplicated.` });
   for (const requirement of project.spec?.functionalRequirements || []) if (!requirement.description?.trim()) errors.push({ code: 'requirement-description', message: `${requirement.id} has no description.` });
   for (const story of project.spec?.userStories || []) if (!story.acceptanceCriteria?.length) errors.push({ code: 'acceptance-criteria', message: `${story.id} has no acceptance criteria.` });
   for (const task of tasks) {
@@ -479,6 +521,8 @@ const server = http.createServer(async (req, res) => {
     }
     const payload = await body(req);
     if (req.method === 'POST' && req.url === '/v1/repository/scan') return send(req, res, 200, await scan(await safeRoot(payload.repositoryPath)));
+    if (req.method === 'POST' && req.url === '/v1/feature/preflight') return send(req, res, 200, await featurePreflight(await safeRoot(payload.repositoryPath), payload.project, payload.featureId));
+    if (req.method === 'POST' && req.url === '/v1/worktree/create') { if (payload.confirmation !== 'CREATE_WORKTREE') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, await createWorktree(await safeRoot(payload.repositoryPath), payload.targetPath, payload.branch)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/artifacts/read') return send(req, res, 200, await readSpecKitArtifacts(await safeRoot(payload.repositoryPath)));
     if (req.method === 'POST' && req.url === '/v1/spec-kit/status') { const root = await safeRoot(payload.repositoryPath); const uv = await uvCommand(['--version'], root); const version = uv.ok ? await specifyCommand(['version'], root) : { ok: false, output: 'uv is not available.' }; const check = version.ok ? await specifyCommand(['self', 'check'], root) : null; return send(req, res, 200, { installed: version.ok, version, check, prerequisites: { uvAvailable: uv.ok, uvOutput: uv.output } }); }
     if (req.method === 'POST' && req.url === '/v1/prerequisites/install-uv') { if (payload.confirmation !== 'INSTALL_UV') return send(req, res, 400, { error: 'Explicit uv installation confirmation is required.' }); return send(req, res, 200, await installUv(await safeRoot(payload.repositoryPath))); }
@@ -489,9 +533,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/workspace/apply') { if (payload.confirmation !== 'APPLY') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, { applied: await apply(await safeRoot(payload.repositoryPath), payload.files) }); }
     if (req.method === 'POST' && req.url === '/v1/baseline/run') return send(req, res, 202, await startBaselineCommand(await safeRoot(payload.repositoryPath), payload.commandId));
     if (req.method === 'POST' && req.url === '/v1/dependencies/install') { if (payload.confirmation !== 'INSTALL_DEPENDENCIES') return send(req, res, 400, { error: 'Explicit dependency-install confirmation is required.' }); return send(req, res, 202, await startWorkspaceDependencyInstall(await safeRoot(payload.repositoryPath), payload.workingDirectory)); }
-    if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); return send(req, res, 202, startSpecKitAgent(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt)); }
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); const root = await safeRoot(payload.repositoryPath); if (payload.project) { const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' ')); } return send(req, res, 202, startSpecKitAgent(root, payload.agent, payload.prompt)); }
     if (req.method === 'POST' && req.url === '/v1/codex/task/run') { if (payload.confirmation !== 'RUN_CODEX_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let Codex edit a local repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), 'codex', payload.prompt, payload.taskId, payload.featureTitle)); }
-    if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
+    if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); const root = await safeRoot(payload.repositoryPath); const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed || !preflight.evidence.isLinkedWorktree) throw new Error([...preflight.errors.map((item) => item.message), ...(!preflight.evidence.isLinkedWorktree ? ['Implementation requires a linked Git worktree.'] : [])].join(' ')); return send(req, res, 202, startLocalAgentImplementation(root, payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/jobs/active') return send(req, res, 200, { job: activeJob(await safeRoot(payload.repositoryPath)) });
     if (req.method === 'POST' && req.url === '/v1/repository/evidence') return send(req, res, 200, { evidence: await repositoryEvidence(await safeRoot(payload.repositoryPath)) });

@@ -1,5 +1,6 @@
 import { FeatureExtractionPackage } from './api/imports';
 import { FeatureImportSource, FeatureInboxItem } from '../types/speckit';
+import { slugify } from './projectIdentity';
 
 /** Creates a compact, durable receipt without duplicating full specification artifacts. */
 export function createFeatureInboxItem(
@@ -10,9 +11,12 @@ export function createFeatureInboxItem(
 ): FeatureInboxItem {
   const timestamp = Date.parse(now) || Date.now();
   const title = extraction.title?.trim() || 'Untitled imported feature';
+  const featureKey = `FEAT-${new Date(now).getUTCFullYear()}-${existingCount + 1}`;
   return {
     id: `feature-${timestamp}-${existingCount + 1}`,
     title,
+    featureKey,
+    slug: `${featureKey.toLowerCase()}-${slugify(title)}`,
     summary: extraction.summary?.trim() || 'Imported feature artifacts awaiting review.',
     source,
     importedAt: now,

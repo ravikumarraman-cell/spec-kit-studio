@@ -1,5 +1,50 @@
 import JSZip from 'jszip';
-import { SpecKitProject } from '../types/speckit';
+import { FeatureInboxItem, SpecKitProject } from '../types/speckit';
+import { featureArtifactRoot, slugify } from './projectIdentity';
+import { resolveStackProfile } from './stackProfiles';
+
+function featureSpecMarkdown(project: SpecKitProject, feature: FeatureInboxItem): string {
+  const stories = project.spec.userStories.filter((story) => feature.userStoryIds.includes(story.id));
+  const requirements = project.spec.functionalRequirements.filter((requirement) => feature.requirementIds.includes(requirement.id));
+  return `# ${feature.featureKey || feature.title} — ${feature.title}\n\n${feature.summary}\n\n## User stories\n${stories.map((story) => `### ${story.id}: ${story.title}\nAs a ${story.asA}, I want to ${story.iWantTo}, so that ${story.soThat}.\n\n${story.acceptanceCriteria.map((criterion) => `- [ ] ${criterion}`).join('\n')}`).join('\n\n') || 'No linked user stories.'}\n\n## Functional requirements\n${requirements.map((requirement) => `- **${requirement.id}**: ${requirement.title} — ${requirement.description}`).join('\n') || 'No linked functional requirements.'}\n`;
+}
+
+/** A portable, feature-owned package. Its paths are safe to commit directly to a feature branch. */
+export function createFeaturePackageFiles(project: SpecKitProject, feature: FeatureInboxItem): Array<{ path: string; content: string }> {
+  const root = featureArtifactRoot(feature);
+  const manifest = {
+    schemaVersion: 1,
+    featureKey: feature.featureKey || null,
+    slug: feature.slug || slugify(feature.title),
+    studioProjectId: project.id,
+    canonicalRemote: project.repositoryIdentity?.canonicalRemote || null,
+    branch: feature.branch || null,
+    worktreePath: feature.worktreePath || null,
+    baselineCommit: feature.baselineCommit || null,
+    exportedAt: new Date().toISOString(),
+    source: feature.source,
+    status: feature.implementationReceipts?.length ? 'implementing' : feature.deliveryPlan?.acceptedAt ? 'planned' : 'draft',
+    stackProfile: resolveStackProfile(project),
+    governance: { dependencies: feature.dependencies || [], prohibitedPaths: feature.prohibitedPaths || resolveStackProfile(project).prohibitedPaths },
+  };
+  const files = [
+    { path: `${root}/manifest.json`, content: JSON.stringify(manifest, null, 2) },
+    { path: `${root}/spec.md`, content: featureSpecMarkdown(project, feature) },
+    { path: `${root}/impact-map.md`, content: feature.impactMap?.content || '# Impact map\n\nNot accepted yet.' },
+    { path: `${root}/plan.md`, content: feature.architecturePlan?.content || '# Feature plan\n\nNot accepted yet.' },
+    { path: `${root}/tasks.md`, content: feature.deliveryPlan?.content || '# Feature tasks\n\nNot accepted yet.' },
+    { path: `${root}/implementation-receipts.json`, content: JSON.stringify(feature.implementationReceipts || [], null, 2) },
+    { path: `${root}/ci-pr-template.md`, content: `# ${feature.featureKey || feature.title} handoff\n\n- [ ] Feature package committed from ${root}/\n- [ ] Required checks: ${resolveStackProfile(project).testCommands.join(', ') || 'repository-defined'}\n- [ ] Rollback and migration impact reviewed\n- [ ] No unresolved feature conflict\n- [ ] Environment deployment uses repository-scoped concurrency\n` },
+  ];
+  return files;
+}
+
+export async function generateFeaturePackageZip(project: SpecKitProject, feature: FeatureInboxItem): Promise<Blob> {
+  const zip = new JSZip();
+  const root = zip.folder(feature.slug || slugify(feature.title)) || zip;
+  for (const file of createFeaturePackageFiles(project, feature)) root.file(file.path, file.content);
+  return zip.generateAsync({ type: 'blob' });
+}
 
 export async function generateSpecKitZip(project: SpecKitProject): Promise<Blob> {
   const zip = new JSZip();

@@ -1,6 +1,8 @@
 import { SpecKitProject } from '../types/speckit';
 import { SAMPLE_PROJECTS } from './sampleData';
 import { createProjectWorkspace } from './projectFactory';
+import { saveProjectBackup } from './projectBackup';
+import { projectBackups } from './projectBackup';
 
 const STORAGE_KEY = 'speckit_studio_projects_v1';
 const ACTIVE_PROJECT_KEY = 'speckit_studio_active_project_id';
@@ -77,6 +79,7 @@ class StorageService {
   public updateActiveProject(updatedProject: SpecKitProject): void {
     const projects = this.getProjects();
     const index = projects.findIndex((p) => p.id === updatedProject.id);
+    if (index >= 0) saveProjectBackup(projects[index], 'before project update');
     const now = new Date().toISOString();
     const projectToSave = {
       ...updatedProject,
@@ -108,6 +111,8 @@ class StorageService {
       alert('Cannot delete the last remaining project.');
       return;
     }
+    const removed = projects.find((p) => p.id === id);
+    if (removed) saveProjectBackup(removed, 'before project deletion');
     projects = projects.filter((p) => p.id !== id);
     this.saveProjects(projects);
     this.setActiveProjectId(projects[0].id);
@@ -135,6 +140,14 @@ class StorageService {
   public resetToSampleProjects(): void {
     this.saveProjects(SAMPLE_PROJECTS);
     this.setActiveProjectId(SAMPLE_PROJECTS[0].id);
+  }
+
+  /** Explicit recovery only: callers choose a retained snapshot; no silent rollback occurs. */
+  public restoreProjectBackup(projectId: string, savedAt: string): boolean {
+    const snapshot = projectBackups(projectId).find((item) => item.savedAt === savedAt);
+    if (!snapshot) return false;
+    this.updateActiveProject(snapshot.project);
+    return true;
   }
 }
 

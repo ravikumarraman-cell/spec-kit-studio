@@ -12,7 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { SpecKitProject } from '../../types/speckit';
-import { generateSpecKitZip, downloadBlob } from '../../lib/export';
+import { generateFeaturePackageZip, generateSpecKitZip, downloadBlob } from '../../lib/export';
 import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
 import { ActionErrorNotice } from '../common/ActionErrorNotice';
@@ -42,6 +42,17 @@ export const CliExporter: React.FC<CliExporterProps> = memo(({ project }) => {
       setIsExporting(false);
     }
   };
+  const activeFeature = project.featureInbox?.at(-1);
+  const handleDownloadFeature = async () => {
+    if (!activeFeature) return;
+    try {
+      setIsExporting(true); setExportError(null);
+      const blob = await generateFeaturePackageZip(project, activeFeature);
+      downloadBlob(blob, `${activeFeature.slug || sanitizeName}-feature-package.zip`);
+    } catch (err) {
+      setExportError(userFacingActionError('package this feature', err, 'Couldn’t package this feature. Try again after reviewing its artifacts.'));
+    } finally { setIsExporting(false); }
+  };
 
   const commandSnippet = `curl -O https://raw.githubusercontent.com/github/spec-kit/main/specify.sh
 chmod +x specify.sh
@@ -58,8 +69,7 @@ chmod +x specify.sh
         subtitle="Export complete GitHub Spec-Kit file hierarchy with specify.sh CLI helper scripts and prompts."
         badgeLabel="100% Spec-Kit Parity"
         badgeColor="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-        extraActions={
-          <button
+        extraActions={<div className="flex flex-wrap gap-2"><button
             type="button"
             onClick={handleDownloadZip}
             disabled={isExporting}
@@ -67,11 +77,12 @@ chmod +x specify.sh
           >
             <Archive className="w-4 h-4" />
             <span>{isExporting ? 'Packaging ZIP...' : 'Download .spec-kit Repository (.zip)'}</span>
-          </button>
-        }
+          </button>{activeFeature && <button type="button" onClick={handleDownloadFeature} disabled={isExporting} className="px-4 py-2 rounded-xl border border-cyan-400/35 bg-cyan-500/10 text-cyan-100 text-xs font-semibold flex items-center gap-2 disabled:opacity-50"><Download className="w-4 h-4" />{isExporting ? 'Packaging…' : 'Download active feature package'}</button>}</div>}
       />
 
       <ActionErrorNotice message={exportError} onRetry={handleDownloadZip} retryLabel="Package again" />
+
+      {activeFeature && <div className="rounded-2xl border border-cyan-400/25 bg-cyan-500/5 p-4 text-xs text-zinc-300"><p className="font-bold text-cyan-100">Portable active-feature handoff</p><p className="mt-1 text-zinc-400">The feature package contains only <code>specs/{activeFeature.slug || sanitizeName}/</code>: a manifest, linked specification, impact map, accepted plan/tasks, and implementation receipts. Download it, inspect it, then commit that folder on the feature branch.</p></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (1/3): Directory Hierarchy Tree */}

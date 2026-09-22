@@ -39,9 +39,20 @@ function hasAcceptedDeliveryPlan(project: SpecKitProject) { const feature = late
 function allFeatureTasksReviewed(project: SpecKitProject) {
   const feature = latestFeature(project);
   const tasks = parseFeatureDeliveryTasks(feature?.deliveryPlan?.content);
-  if (!tasks.length) return project.tasks.tasks.length > 0 && project.tasks.tasks.every((task) => task.status === 'done');
+  const sharedTasksComplete = project.tasks.tasks.length > 0 && project.tasks.tasks.every((task) => task.status === 'done');
+  if (!tasks.length) return sharedTasksComplete;
   const reviewed = new Set(feature?.implementationReceipts?.map((receipt) => receipt.taskId) || []);
-  return tasks.every((task) => task.done || reviewed.has(task.id));
+  if (tasks.every((task) => task.done || reviewed.has(task.id))) return true;
+
+  // Workspaces created before feature-scoped receipts retain an explicit Stage 7
+  // human approval as their durable implementation evidence. Preserve that
+  // history for final handoff, but never apply this compatibility path to a
+  // feature that has its own receipt trail.
+  const legacyStageSevenComplete = Boolean(
+    project.journey?.completedStages.includes(7)
+    && !(feature?.implementationReceipts?.length),
+  );
+  return legacyStageSevenComplete;
 }
 
 export const featureJourneyStages: readonly FeatureJourneyStage[] = [

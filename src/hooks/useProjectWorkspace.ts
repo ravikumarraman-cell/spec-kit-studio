@@ -3,6 +3,7 @@ import { TruthReport } from '../lib/connector';
 import { FeatureExtractionPackage } from '../lib/api/imports';
 import { createFeatureInboxItem } from '../lib/featureInbox';
 import { storageService } from '../lib/storage';
+import { normalizeGitRemote } from '../lib/projectIdentity';
 import {
   FeatureSpec,
   FeatureJourney,
@@ -16,6 +17,7 @@ import {
   UserStory,
   FeatureImportSource,
   FeatureImplementationReceipt,
+  StudioProcessCase,
 } from '../types/speckit';
 
 type ImportedTask = Partial<TaskItem>;
@@ -98,6 +100,9 @@ export function useProjectWorkspace() {
   const saveConstitution = useCallback((constitution: ProjectConstitution) => updateActiveProject((project) => ({ ...project, constitution })), [updateActiveProject]);
   const saveAudit = useCallback((audit: SpecAuditResult) => updateActiveProject((project) => ({ ...project, audit })), [updateActiveProject]);
   const saveJourney = useCallback((journey: FeatureJourney) => updateActiveProject((project) => ({ ...project, journey })), [updateActiveProject]);
+  const saveStackProfile = useCallback((stackProfile: SpecKitProject['stackProfile']) => updateActiveProject((project) => ({ ...project, stackProfile })), [updateActiveProject]);
+  const saveProcessCases = useCallback((processCases: StudioProcessCase[]) => updateActiveProject((project) => ({ ...project, processCases })), [updateActiveProject]);
+  const saveWorkflowFocus = useCallback((workflowFocus: SpecKitProject['workflowFocus']) => updateActiveProject((project) => ({ ...project, workflowFocus })), [updateActiveProject]);
 
   const applyAiSpecData = useCallback((spec: FeatureSpec, plan?: ImplementationPlan, tasks?: TaskBreakdown) => {
     updateActiveProject((project) => ({ ...project, spec, plan: plan || project.plan, tasks: tasks || project.tasks }));
@@ -125,6 +130,11 @@ export function useProjectWorkspace() {
         keyDirectories: [...new Set(report.files.map((file) => file.split('/')[0]).filter((part) => part && !part.includes('.')))].slice(0, 12).map((part) => `/${part}`),
         suggestedNewFeatures: [],
         importedAt: report.scannedAt,
+      },
+      repositoryIdentity: {
+        canonicalRemote: normalizeGitRemote(report.git.remotes.split('\n').find((line) => /\borigin\b.*\(fetch\)/.test(line))?.split(/\s+/)[1] || report.repositoryPath),
+        lastScannedBranch: report.git.branch || undefined,
+        lastScannedAt: report.scannedAt,
       },
     }));
   }, [updateActiveProject]);
@@ -177,11 +187,15 @@ export function useProjectWorkspace() {
     });
   }, [updateActiveProject]);
 
+  const updateFeatureIdentity = useCallback((featureId: string, identity: Partial<Pick<import('../types/speckit').FeatureInboxItem, 'featureKey' | 'slug' | 'branch' | 'worktreePath' | 'baselineCommit'>>) => {
+    updateActiveProject((project) => ({ ...project, featureInbox: (project.featureInbox || []).map((feature) => feature.id === featureId ? { ...feature, ...identity } : feature) }));
+  }, [updateActiveProject]);
+
   const selectVersion = useCallback((version: string) => updateActiveProject((project) => ({ ...project, version })), [updateActiveProject]);
 
   return {
     projects, activeProject, selectProject, createProject, resetProjects,
-    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, selectVersion,
+    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion,
   };
 }

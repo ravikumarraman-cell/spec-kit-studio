@@ -59,3 +59,17 @@ test('a human-reviewed local implementation receipt unlocks Stage 7 without rely
 
   assert.equal(stage.ready(project), true);
 });
+
+test('an approved legacy Stage 7 unlocks final handoff without inventing receipts', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 8)!;
+  project.journey = { ...createFeatureJourney(), completedStages: [1, 2, 3, 4, 5, 6, 7], activeStage: 8 };
+  project.tasks.tasks.forEach((task) => { task.status = 'todo'; });
+  project.featureInbox = [{
+    id: 'feature-1', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'text',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: [], taskIds: ['T001'],
+    deliveryPlan: { path: 'specs/tenant-aide-funding-visibility/tasks.md', content: '- [ ] T001 [FR-001] Show funding status' },
+  }];
+
+  assert.equal(stage.ready(project), true);
+});

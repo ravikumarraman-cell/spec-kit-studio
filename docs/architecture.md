@@ -26,4 +26,4 @@ Screen event → hook use case → storage service → localStorage
                     SpecKitProject contract
 ```
 
-`useProjectWorkspace` is the single app-level adapter for the project aggregate. This lets a future API, IndexedDB, or cloud-backed repository replace the storage service without rewriting every screen.
+`useProjectWorkspace` is the single app-level adapter for the project aggregate. This lets a future API, IndexedDB, or cloud-backed repository replace the storage service without rewriting every screen. The aggregate also carries optional repository identity, stack-profile, feature identity, worktree, and governance metadata so legacy projects remain compatible.

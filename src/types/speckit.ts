@@ -189,6 +189,17 @@ export type FeatureImportSource = 'text' | 'file' | 'github' | 'preset' | 'repos
 
 export interface FeatureInboxItem {
   id: string;
+  /** Stable, tracker-friendly identity for safe concurrent feature work. */
+  featureKey?: string;
+  /** Filesystem-safe namespace; feature artifacts belong under specs/<slug>/. */
+  slug?: string;
+  branch?: string;
+  worktreePath?: string;
+  baselineCommit?: string;
+  allowedSourceRoots?: string[];
+  prohibitedPaths?: string[];
+  dependencies?: string[];
+  lifecycle?: 'draft' | 'planned' | 'implementing' | 'verifying' | 'handed-off';
   title: string;
   summary: string;
   source: FeatureImportSource;
@@ -215,6 +226,22 @@ export interface FeatureImplementationReceipt {
   verificationSummary: string;
 }
 
+/** Independent, evidence-preserving Spec Kit processes. They never advance the Feature Journey. */
+export type StudioProcessKind = 'bug' | 'assessment';
+export type AssessmentVerdict = 'go' | 'needs-clarification' | 'kill';
+export interface StudioProcessCase {
+  id: string;
+  kind: StudioProcessKind;
+  slug: string;
+  title: string;
+  input: string;
+  currentStep: number;
+  completedSteps: number[];
+  createdAt: string;
+  updatedAt: string;
+  verdict?: AssessmentVerdict;
+}
+
 export interface SpecKitProject {
   id: string;
   name: string;
@@ -227,10 +254,22 @@ export interface SpecKitProject {
   constitution: ProjectConstitution;
   audit?: SpecAuditResult;
   importedRepo?: ImportedRepository;
+  /** Immutable Git identity after a Connected Workspace scan. Optional for legacy projects. */
+  repositoryIdentity?: {
+    canonicalRemote: string;
+    defaultBranch?: string;
+    lastScannedBranch?: string;
+    lastScannedAt: string;
+  };
+  stackProfile?: { id: string; runtime?: string; packageManager?: string; testCommands?: string[]; allowedSourceRoots?: string[]; prohibitedPaths?: string[]; };
   /** Feature-level import history. Optional to keep persisted legacy workspaces compatible. */
   featureInbox?: FeatureInboxItem[];
+  /** Bug and idea-assessment case history, separate from feature delivery. */
+  processCases?: StudioProcessCase[];
+  /** The workflow the user is actively working in; it drives contextual navigation only. */
+  workflowFocus?: 'feature' | StudioProcessKind;
   journey?: FeatureJourney;
   version: string;
 }
 
-export type ViewTab = 'overview' | 'workspace' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import' | 'settings';
+export type ViewTab = 'overview' | 'workflows' | 'workspace' | 'spec' | 'plan' | 'tasks' | 'constitution' | 'prompt' | 'audit' | 'export' | 'import' | 'settings';

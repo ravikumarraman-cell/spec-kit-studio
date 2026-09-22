@@ -1,6 +1,7 @@
 import { SpecKitProject } from '../types/speckit';
 import { WorkspaceFile } from './connector';
 import { AgentTarget, portableTaskPrompt } from './portablePrompts';
+import { createFeaturePackageFiles } from './export';
 
 export function createWorkspaceFiles(project: SpecKitProject): WorkspaceFile[] {
   const requirements = project.spec.functionalRequirements.map((item) => `- **${item.id}** [${item.category}/${item.priority}]: ${item.title}\n  ${item.description}`).join('\n');
@@ -18,5 +19,6 @@ export function createWorkspaceFiles(project: SpecKitProject): WorkspaceFile[] {
   ];
   const targets: AgentTarget[] = ['copilot', 'codex', 'claude', 'gemini', 'cursor'];
   for (const task of project.tasks.tasks) for (const target of targets) files.push({ path: `.specify/studio/prompts/${task.id.toLowerCase()}.${target}.md`, content: portableTaskPrompt(project, task, target) });
+  for (const feature of project.featureInbox || []) files.push(...createFeaturePackageFiles(project, feature));
   return files;
 }

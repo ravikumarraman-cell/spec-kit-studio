@@ -127,7 +127,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const [artifactFindings, setArtifactFindings] = useState<string[]>([]);
 
   const restoreActiveConnectorJob = async () => {
-    const repositoryPath = project.importedRepo?.repoUrl;
+    const repositoryPath = activeFeature?.worktreePath || project.importedRepo?.repoUrl;
     if (!repositoryPath) return false;
     const job = await activeConnectorJob(
       configuredConnectorUrl(),
@@ -167,7 +167,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   }, [codexJob?.id, codexJob?.status]);
 
   useEffect(() => {
-    const repositoryPath = project.importedRepo?.repoUrl;
+    const repositoryPath = activeFeature?.worktreePath || project.importedRepo?.repoUrl;
     if (!codexJob || codexJob.ok || codexJob.status === 'running' || !repositoryPath || !activeFeature) {
       setArtifactFindings([]);
       return undefined;
@@ -294,7 +294,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setReceiptSaved(false);
     try {
       const client = configuredConnectorClient();
-      let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt);
+      let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt, project, activeFeature.id);
       setCodexJob(job);
       while (job.status === 'running') {
         await new Promise((resolve) => window.setTimeout(resolve, 750));

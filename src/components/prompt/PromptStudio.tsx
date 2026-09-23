@@ -10,7 +10,6 @@ import {
   Zap,
   RefreshCw,
   Cpu,
-  ChevronDown,
   Play,
   ShieldCheck,
   Square,
@@ -21,7 +20,7 @@ import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
 import { AgentTarget, portableFeatureTaskPrompt, portableTaskPrompt } from '../../lib/portablePrompts';
 import { generationApi } from '../../lib/api/generation';
-import { actionableFeatureDeliveryTasks, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
+import { actionableFeatureDeliveryTasks, featureDeliveryTaskProgress, nextActionableFeatureDeliveryTask, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, configuredConnectorClient, configuredConnectorUrl, repositoryEvidenceSnapshot } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
@@ -33,12 +32,16 @@ import { FeatureCodeChanges } from './FeatureCodeChanges';
 import { FeatureImplementationHistory } from './FeatureImplementationHistory';
 import { FeatureExecutionFocus } from './FeatureExecutionFocus';
 import { FeatureTaskDecisionAnswers, decisionsComplete, featureTaskDecisionGate, formatApprovedDecisions, recommendedDecisionAnswers } from '../../lib/featureTaskDecisions';
+import { featureImplementationBlocker, featureImplementationWorkspace } from '../../lib/featureWorktree';
+import { activeFeatureForProject } from '../../lib/featureJourney';
+import { currentFeatureDeliveryArtifact, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
 
 interface PromptStudioProps {
   project: SpecKitProject;
   initialTaskId?: string;
-  onRecordFeatureImplementation: (receipt: FeatureImplementationReceipt) => void;
+  onRecordFeatureImplementation: (featureId: string, receipt: FeatureImplementationReceipt) => boolean;
   onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
+  onOpenJourney?: () => void;
 }
 
 const AGENT_FRAMEWORKS: { name: string; desc: string; localAgent?: LocalAgentId }[] = [
@@ -99,15 +102,17 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   initialTaskId,
   onRecordFeatureImplementation,
   onRecoverFeatureDeliveryPlan,
+  onOpenJourney,
 }) => {
-  const activeFeature = project.featureInbox?.at(-1);
+  const activeFeature = activeFeatureForProject(project);
+  const implementationWorkspace = featureImplementationWorkspace(activeFeature);
+  const implementationBlocker = featureImplementationBlocker(project, activeFeature);
   const featureTasks = useMemo(
     () => activeFeature?.deliveryPlan && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path)
       ? parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content)
       : [],
     [activeFeature],
   );
-  const [useSharedTasks, setUseSharedTasks] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string>('Codex CLI');
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [customNotes, setCustomNotes] = useState('');
@@ -123,13 +128,15 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const [runError, setRunError] = useState('');
   const [hasReviewedResult, setHasReviewedResult] = useState(false);
   const [receiptSaved, setReceiptSaved] = useState(false);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+  const [pendingReviewedTaskIds, setPendingReviewedTaskIds] = useState<string[]>([]);
   const [verificationJob, setVerificationJob] = useState<ConnectorJob | null>(null);
   const [recoveredEvidence, setRecoveredEvidence] = useState<ConnectorJobEvidence | null>(null);
   const [isRecoveringEvidence, setIsRecoveringEvidence] = useState(false);
   const [artifactFindings, setArtifactFindings] = useState<string[]>([]);
 
   const restoreActiveConnectorJob = async () => {
-    const repositoryPath = activeFeature?.worktreePath || project.importedRepo?.repoUrl;
+    const repositoryPath = implementationWorkspace;
     if (!repositoryPath) return false;
     const job = await activeConnectorJob(
       configuredConnectorUrl(),
@@ -146,26 +153,27 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     restoreActiveConnectorJob().catch(() => undefined);
   // Reconnect when the connected repository changes. A repository has one active writer.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.importedRepo?.repoUrl]);
+  }, [implementationWorkspace]);
 
   useEffect(() => {
-    const repositoryPaths = [...new Set([activeFeature?.worktreePath, project.importedRepo?.repoUrl].filter((path): path is string => Boolean(path)))];
-    if (!activeFeature || repositoryPaths.length === 0 || !onRecoverFeatureDeliveryPlan
-      || (activeFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) return;
+    // Do not blend artifacts from a feature worktree and the main checkout.
+    // Their paths can be identical while their task state is legitimately not.
+    const repositoryPaths = activeFeature?.worktreePath
+      ? [activeFeature.worktreePath]
+      : project.importedRepo?.repoUrl ? [project.importedRepo.repoUrl] : [];
+    if (!activeFeature || repositoryPaths.length === 0 || !onRecoverFeatureDeliveryPlan) return;
     let cancelled = false;
     Promise.allSettled(repositoryPaths.map((repositoryPath) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)))
       .then((results) => {
-        const recovered = results
-          .flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : [])
-          .filter((artifact) => artifact.kind === 'tasks'
-            && isFeatureArtifactScoped(artifact.content, activeFeature, artifact.path)
-            && parseFeatureDeliveryTasks(artifact.content).length > 0)
-          .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-        if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
+        const artifacts = results.flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : []);
+        const current = currentFeatureDeliveryArtifact(activeFeature, artifacts);
+        if (!cancelled && needsFeatureDeliveryReconciliation(activeFeature, current)) {
+          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: activeFeature.deliveryPlan?.acceptedAt || new Date().toISOString() });
+        }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [activeFeature, onRecoverFeatureDeliveryPlan, project.importedRepo?.repoUrl]);
+  }, [activeFeature?.id, activeFeature?.deliveryPlan?.path, activeFeature?.deliveryPlan?.content, activeFeature?.worktreePath, onRecoverFeatureDeliveryPlan, project.importedRepo?.repoUrl]);
 
   useEffect(() => {
     if (!codexJob || codexJob.status !== 'running') return;
@@ -188,7 +196,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   }, [codexJob?.id, codexJob?.status]);
 
   useEffect(() => {
-    const repositoryPath = activeFeature?.worktreePath || project.importedRepo?.repoUrl;
+    const repositoryPath = implementationWorkspace;
     if (!codexJob || codexJob.ok || codexJob.status === 'running' || !repositoryPath || !activeFeature) {
       setArtifactFindings([]);
       return undefined;
@@ -204,19 +212,31 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       })
       .catch(() => { if (!cancelled) setArtifactFindings([]); });
     return () => { cancelled = true; };
-  }, [codexJob?.id, codexJob?.status, codexJob?.ok, project.importedRepo?.repoUrl, activeFeature]);
+  }, [codexJob?.id, codexJob?.status, codexJob?.ok, implementationWorkspace, activeFeature]);
 
   const reviewedFeatureTaskIds = useMemo(
-    () => activeFeature?.implementationReceipts?.map((receipt) => receipt.taskId) || [],
-    [activeFeature?.implementationReceipts],
+    () => [...new Set([...(activeFeature?.implementationReceipts?.map((receipt) => receipt.taskId) || []), ...pendingReviewedTaskIds])],
+    [activeFeature?.implementationReceipts, pendingReviewedTaskIds],
   );
+
+  // Keep the current feature's just-recorded receipt in the local queue while
+  // the persisted project state propagates. A feature change always begins
+  // from that feature's durable receipt list instead.
+  useEffect(() => {
+    setPendingReviewedTaskIds([]);
+  }, [activeFeature?.id]);
   const actionableFeatureTasks = useMemo(
     () => actionableFeatureDeliveryTasks(featureTasks, reviewedFeatureTaskIds),
     [featureTasks, reviewedFeatureTaskIds],
   );
-  // A feature implementation run must never quietly fall back to the shared
-  // workspace board. That board may contain unrelated historical tasks.
-  const taskOptions = useSharedTasks ? project.tasks.tasks : actionableFeatureTasks;
+  const featureTaskProgress = useMemo(
+    () => featureDeliveryTaskProgress(featureTasks, reviewedFeatureTaskIds),
+    [featureTasks, reviewedFeatureTaskIds],
+  );
+  // Feature implementation is deliberately isolated from the workspace board.
+  // A shared task can be useful general planning context, but it is never an
+  // eligible implementation handoff or evidence for the active feature.
+  const taskOptions = actionableFeatureTasks;
 
   // A task-board click is a one-time navigation hint, not a permanent lock on
   // the picker. Once a receipt is recorded, the regular next-actionable-task
@@ -241,8 +261,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const completedChangedFiles = codexJob ? evidenceChangedFiles(codexJob) : [];
   const recoveredChangedFiles = recoveredEvidence?.changedFiles || [];
   const decisionGate = useMemo(
-    () => !useSharedTasks && activeFeature && selectedTask ? featureTaskDecisionGate(selectedTask.id) : undefined,
-    [useSharedTasks, activeFeature, selectedTask],
+    () => activeFeature && selectedTask ? featureTaskDecisionGate(selectedTask.id) : undefined,
+    [activeFeature, selectedTask],
   );
   const decisionStorageKey = decisionGate && activeFeature ? `speckit:feature-decisions:${activeFeature.id}:${decisionGate.taskId}` : '';
   const decisionsReady = decisionsComplete(decisionGate, decisionAnswers, decisionsAccepted);
@@ -275,12 +295,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
 
   // Generated Master Prompt String: a portable implementation contract, not a promise of infallibility.
   const masterPrompt = useMemo(() => {
-    if (activeFeature && featureTasks.length > 0 && !useSharedTasks && selectedTask) {
+    if (activeFeature && featureTasks.length > 0 && selectedTask) {
       return `${portableFeatureTaskPrompt(project, activeFeature, selectedTask as (typeof featureTasks)[number], agentTarget)}${approvedDecisionText ? `\n## Studio operational policy defaults\n${approvedDecisionText}\n\nTreat these as the chosen working policy for this task. Document any dependency that requires product or operations confirmation; do not invent a replacement policy.\n` : ''}${customNotes ? `\n## Additional instructions\n${customNotes}\n` : ''}`;
     }
-    const fallback = selectedTask as TaskItem || { id: 'TASK', title: 'Implementation', description: 'Build task according to specification.', phase: 'Phase 1: Setup', status: 'todo', estimatedHours: 0, dependencies: [] };
+    const fallback: TaskItem = { id: 'TASK', title: 'Implementation', description: 'Build task according to specification.', phase: 'Phase 1: Setup', status: 'todo', estimatedHours: 0, dependencies: [] };
     return `${portableTaskPrompt(project, fallback, agentTarget)}${customNotes ? `\n## Additional instructions\n${customNotes}\n` : ''}`;
-  }, [project, activeFeature, featureTasks.length, useSharedTasks, selectedTask, approvedDecisionText, customNotes, agentTarget]);
+  }, [project, activeFeature, featureTasks.length, selectedTask, approvedDecisionText, customNotes, agentTarget]);
 
   const handleRunAiSimulation = async () => {
     setIsGenerating(true);
@@ -297,8 +317,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   };
 
   const runCodexLocally = async () => {
-    const repositoryPath = project.importedRepo?.repoUrl;
-    if (!activeFeature || !selectedTask || !repositoryPath || useSharedTasks || featureTasks.length === 0) {
+    const repositoryPath = implementationWorkspace;
+    if (implementationBlocker) {
+      setRunError(implementationBlocker);
+      return;
+    }
+    if (!activeFeature || !selectedTask || !repositoryPath || featureTasks.length === 0) {
       setRunError('Choose an accepted current-feature task and connect its repository before starting Codex.');
       return;
     }
@@ -354,8 +378,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   };
 
   const runFeatureVerification = async () => {
-    const repositoryPath = project.importedRepo?.repoUrl;
-    if (!repositoryPath) return;
+    const repositoryPath = implementationWorkspace;
+    if (!repositoryPath) { setRunError(featureImplementationBlocker(project, activeFeature) || 'Create an isolated worktree before verification.'); return; }
     setRunError('');
     try {
       const client = configuredConnectorClient();
@@ -373,8 +397,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   };
 
   const recoverTaskEvidence = async () => {
-    const repositoryPath = project.importedRepo?.repoUrl;
-    if (!repositoryPath || !selectedTask) return;
+    const repositoryPath = implementationWorkspace;
+    if (!repositoryPath || !selectedTask) { setRunError(featureImplementationBlocker(project, activeFeature) || 'Create an isolated worktree before recovering evidence.'); return; }
     setIsRecoveringEvidence(true);
     setRunError('');
     setRecoveredEvidence(null);
@@ -399,18 +423,36 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
 
   const retainReceipt = () => {
     const evidence = codexJob?.ok ? codexJob.evidence : recoveredEvidence;
-    if (!evidence || !selectedTask || !hasReviewedResult) return;
-    onRecordFeatureImplementation({
-      taskId: selectedTask.id,
-      jobId: codexJob?.ok ? codexJob.id : `recovered-${selectedTask.id}-${Date.now()}`,
+    if (!evidence || !selectedTask || !hasReviewedResult || !activeFeature) return;
+    const recordedTaskId = selectedTask.id;
+    const nextTask = nextActionableFeatureDeliveryTask(featureTasks, reviewedFeatureTaskIds, recordedTaskId);
+    const saved = onRecordFeatureImplementation(activeFeature.id, {
+      taskId: recordedTaskId,
+      jobId: codexJob?.ok ? codexJob.id : `recovered-${recordedTaskId}-${Date.now()}`,
       recordedAt: new Date().toISOString(),
       changedFiles: codexJob?.ok ? evidenceChangedFiles(codexJob) : evidence.changedFiles,
       diffStat: evidence.diffStat || '',
       verificationSummary: codexJob?.ok
         ? (verificationJob?.output || codexJob.output).slice(-8_000)
-        : `Recovered from a read-only Git evidence snapshot. Reviewer confirmed the current working-tree changes belong to ${selectedTask.id}.\n${(verificationJob?.output || evidence.repositoryStatus).slice(-8_000)}`,
+        : `Recovered from a read-only Git evidence snapshot. Reviewer confirmed the current working-tree changes belong to ${recordedTaskId}.\n${(verificationJob?.output || evidence.repositoryStatus).slice(-8_000)}`,
     });
-    setReceiptSaved(true);
+    if (!saved) {
+      setRunError('Studio could not attach this receipt to the active feature. The task remains selected; do not rerun it until this is resolved.');
+      return;
+    }
+    // The receipt is retained by the parent before the finished-run UI is
+    // cleared. Select only the next feature-scoped task; do not fall back to
+    // the shared task board or leave the old evidence attached to a new task.
+    setSelectedTaskId(nextTask?.id || '');
+    setPendingReviewedTaskIds((current) => [...new Set([...current, recordedTaskId])]);
+    setCodexJob(null);
+    setVerificationJob(null);
+    setRecoveredEvidence(null);
+    setHasReviewedResult(false);
+    setReceiptSaved(false);
+    setCompletionNotice(nextTask
+      ? `${recordedTaskId} was recorded. ${nextTask.id} is now selected as the next feature task.`
+      : `${recordedTaskId} was recorded. All feature-scoped tasks now have reviewed evidence.`);
   };
 
   return (
@@ -425,21 +467,28 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         badgeColor="bg-purple-500/10 text-purple-400 border-purple-500/20"
       />
 
-      {activeFeature && featureTasks.length > 0 && !useSharedTasks && (
+      {activeFeature && featureTasks.length > 0 && (
         <FeatureExecutionFocus
           title={activeFeature.title}
           summary={activeFeature.summary}
-          readyTaskCount={actionableFeatureTasks.length}
-          reviewedTaskCount={featureTasks.length - actionableFeatureTasks.length}
+          readyTaskCount={featureTaskProgress.readyTaskCount}
+          completedInPlanCount={featureTaskProgress.completedInPlanCount}
+          reviewedReceiptCount={featureTaskProgress.reviewedReceiptCount}
         />
       )}
 
-      {activeFeature && !useSharedTasks && (
+      {completionNotice && (
+        <div className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-100">
+          <span className="font-bold">Feature queue advanced.</span> {completionNotice}
+        </div>
+      )}
+
+      {activeFeature && (activeFeature.implementationReceipts?.length || 0) > 0 && (
         <details className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
           <summary className="cursor-pointer px-5 py-4 text-xs font-bold text-zinc-300 hover:text-zinc-100">Previous implementation evidence <span className="ml-1 font-normal text-zinc-500">Optional context · {activeFeature.implementationReceipts?.length || 0} reviewed task{activeFeature.implementationReceipts?.length === 1 ? '' : 's'}</span></summary>
           <div className="space-y-5 border-t border-zinc-800 p-5">
             <FeatureImplementationHistory receipts={activeFeature.implementationReceipts || []} tasks={featureTasks} />
-            <FeatureCodeChanges repositoryPath={project.importedRepo?.repoUrl} receipts={activeFeature.implementationReceipts || []} />
+            <FeatureCodeChanges repositoryPath={implementationWorkspace || undefined} receipts={activeFeature.implementationReceipts || []} />
           </div>
         </details>
       )}
@@ -448,10 +497,10 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
         {/* Task Selection */}
         <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
-          <label className="font-bold text-zinc-200 block">{useSharedTasks ? 'Select shared workspace task' : 'Select feature task to implement'}</label>
+          <label className="font-bold text-zinc-200 block">Select feature task to implement</label>
           <select
             value={selectedTaskId}
-            onChange={(e) => setSelectedTaskId(e.target.value)}
+            onChange={(e) => { setSelectedTaskId(e.target.value); setCompletionNotice(null); }}
             className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-medium focus:outline-none focus:border-purple-500/50"
           >
             {taskOptions.map((task) => (
@@ -461,38 +510,35 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
             ))}
           </select>
 
-          {!useSharedTasks && featureTasks.length === 0 && (
-            <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">Studio cannot find a parseable feature-scoped <code>tasks.md</code> yet. It is checking the connected repository now; do not use the shared workspace task as a substitute. If this message remains after a refresh, return to Stage 5 and review the feature delivery plan.</p>
+          {featureTasks.length === 0 && (
+            <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">Studio cannot find a parseable feature-scoped <code>tasks.md</code> yet. It is checking the connected repository now. If this message remains after a refresh, return to Stage 5 and review the feature delivery plan.</p>
           )}
 
-          {!useSharedTasks && featureTasks.length > 0 && actionableFeatureTasks.length === 0 && (
+          {featureTasks.length > 0 && (
+            <p className="rounded-lg border border-cyan-400/20 bg-cyan-500/5 p-3 text-[11px] leading-relaxed text-cyan-100">
+              <span className="font-bold">Feature implementation queue:</span> {actionableFeatureTasks.length} remaining of {featureTasks.length} task{featureTasks.length === 1 ? '' : 's'} in this feature’s <code>tasks.md</code>.
+            </p>
+          )}
+
+          {featureTasks.length > 0 && actionableFeatureTasks.length === 0 && (
             <p className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100">All feature tasks are already complete or have reviewed implementation receipts. There is nothing to rerun.</p>
           )}
 
           {selectedTask && (
             <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5 text-[11px]">
               <div className="text-zinc-400">
-                Scope: <strong className="text-zinc-200">{useSharedTasks ? ('phase' in selectedTask ? selectedTask.phase : 'Shared workspace') : activeFeature?.title || 'Current feature'}</strong>
+                Scope: <strong className="text-zinc-200">{activeFeature?.title || 'Current feature'}</strong>
               </div>
               <div className="text-zinc-400">
-                Requirement{(('requirementIds' in selectedTask && selectedTask.requirementIds.length > 1) ? 's' : '')}:{' '}
+                Requirement{selectedTask.requirementIds.length > 1 ? 's' : ''}:{' '}
                 <strong className="text-cyan-400 font-mono">
-                  {'requirementIds' in selectedTask ? selectedTask.requirementIds.join(', ') || 'Read feature spec' : selectedTask.mappedRequirementId || 'None'}
+                  {selectedTask.requirementIds.join(', ') || 'Read feature spec'}
                 </strong>
               </div>
-              {'description' in selectedTask && <p className="text-zinc-300 leading-snug">{selectedTask.description}</p>}
+              {selectedTask.detail && <p className="text-zinc-300 leading-snug">{selectedTask.detail}</p>}
             </div>
           )}
 
-          {activeFeature && featureTasks.length > 0 && (
-            <details className="group pt-1">
-              <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-300"><ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />Other workspace work</summary>
-              <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[11px] text-zinc-400">
-                Shared tasks are not evidence for {activeFeature.title}. <button type="button" onClick={() => { setUseSharedTasks(true); setSelectedTaskId(project.tasks.tasks[0]?.id || ''); }} className="ml-1 font-semibold text-violet-300 hover:text-violet-200">Open shared tasks intentionally</button>
-                {useSharedTasks && <button type="button" onClick={() => { setUseSharedTasks(false); setSelectedTaskId(actionableFeatureTasks[0]?.id || ''); }} className="ml-2 font-semibold text-cyan-300 hover:text-cyan-200">Return to feature tasks</button>}
-              </div>
-            </details>
-          )}
         </div>
 
         {/* Agent Profile Selector */}
@@ -544,7 +590,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         />
       </div>
 
-      {activeFeature && featureTasks.length > 0 && !useSharedTasks && (
+      {activeFeature && featureTasks.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-cyan-400/35 bg-zinc-950 shadow-[0_0_50px_rgba(34,211,238,0.06)]">
           <div className="border-b border-cyan-400/15 bg-gradient-to-r from-cyan-500/15 via-indigo-500/10 to-zinc-950 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -561,22 +607,23 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
             <div className="mt-4 grid gap-2 sm:grid-cols-3 text-[11px]">
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Feature</span><p className="mt-1 text-zinc-400">{activeFeature.title}</p></div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Task</span><p className="mt-1 font-mono text-cyan-200">{selectedTask?.id || 'Choose a task'}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Repository</span><p className="mt-1 truncate text-zinc-400">{project.importedRepo?.repoUrl || 'Connect a workspace first'}</p></div>
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Implementation worktree</span><p className="mt-1 truncate text-zinc-400">{implementationWorkspace || 'Create isolated worktree first'}</p></div>
             </div>
           </div>
+          {!implementationWorkspace && <div className="mx-5 mt-5 rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"><p className="font-bold">Implementation is safely blocked until this feature has its own worktree.</p><p className="mt-1 text-amber-200">The shared repository checkout is read-only for this feature. No Codex run has been started from this screen.</p>{onOpenJourney && <button type="button" onClick={onOpenJourney} className="mt-3 rounded-lg bg-amber-300 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-200">Set up isolated worktree</button>}</div>}
           <div className="flex flex-wrap items-center gap-3 p-5">
-            {selectedLocalAgent ? <button type="button" onClick={runCodexLocally} disabled={isRunningCodex || !project.importedRepo?.repoUrl || !selectedTask || !decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-4 w-4" />{isRunningCodex ? `${selectedAgentLabel} is running locally…` : decisionsReady ? `Run with ${selectedAgentLabel} locally` : 'Confirm required decisions to run'}</button> : <button type="button" onClick={() => copy(masterPrompt)} disabled={!decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Copy className="h-4 w-4" />{copied ? 'Prompt copied' : decisionsReady ? `Copy handoff for ${selectedAgentLabel}` : 'Confirm required decisions to copy'}</button>}
+            {selectedLocalAgent ? <button type="button" onClick={runCodexLocally} disabled={isRunningCodex || Boolean(implementationBlocker) || !selectedTask || !decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-4 w-4" />{isRunningCodex ? `${selectedAgentLabel} is running locally…` : implementationBlocker ? 'Set up worktree to run' : decisionsReady ? `Run with ${selectedAgentLabel} locally` : 'Confirm required decisions to run'}</button> : <button type="button" onClick={() => copy(masterPrompt)} disabled={!decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Copy className="h-4 w-4" />{copied ? 'Prompt copied' : decisionsReady ? `Copy handoff for ${selectedAgentLabel}` : 'Confirm required decisions to copy'}</button>}
             {isRunningCodex && <button type="button" onClick={cancelCodexRun} className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2.5 text-xs font-bold text-rose-200 hover:bg-rose-500/20"><Square className="h-3.5 w-3.5 fill-current" />Stop safely</button>}
             <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />One task per handoff keeps scope and token use bounded.</span>
           </div>
-          {!codexJob && !isRunningCodex && selectedTask && project.importedRepo?.repoUrl && (
-            <details className="mx-5 mb-5 rounded-xl border border-zinc-800 bg-zinc-900/45 px-4 py-3 text-xs">
-              <summary className="cursor-pointer font-semibold text-zinc-300">Earlier agent run finished, but its result panel is missing?</summary>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-zinc-400">
-                <p className="max-w-2xl leading-relaxed">Read a fresh Git snapshot for this repository and recover a review receipt for the selected task. This does not run an agent, edit files, commit, or push. Because Git cannot prove task ownership, you will still confirm the evidence yourself.</p>
-                <button type="button" onClick={recoverTaskEvidence} disabled={isRecoveringEvidence} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRecoveringEvidence ? 'animate-spin' : ''}`} />{isRecoveringEvidence ? 'Reading evidence…' : 'Recover task evidence'}</button>
+          {!codexJob && !isRunningCodex && selectedTask && implementationWorkspace && (
+            <section className="mx-5 mb-5 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">
+              <p className="font-bold text-amber-100">Already completed this task outside the current screen?</p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-zinc-400">
+                <p className="max-w-2xl leading-relaxed">Recover its current Git evidence and retain a review receipt for <span className="font-mono text-amber-100">{selectedTask.id}</span>. This is read-only: it does not run an agent, edit files, commit, or push. You will still confirm that the changes belong to this task before Studio records it.</p>
+                <button type="button" onClick={recoverTaskEvidence} disabled={isRecoveringEvidence} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-300/20 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRecoveringEvidence ? 'animate-spin' : ''}`} />{isRecoveringEvidence ? 'Reading evidence…' : 'Recover completed-task evidence'}</button>
               </div>
-            </details>
+            </section>
           )}
           {runError && <div className="mx-5 mb-5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-100">{runError}</div>}
           {recoveredEvidence && !codexJob && <section className="mx-5 mb-5 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">

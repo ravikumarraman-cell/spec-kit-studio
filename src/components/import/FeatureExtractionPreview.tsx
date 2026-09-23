@@ -53,10 +53,12 @@ export function FeatureExtractionPreview({
       {tab === 'tasks' && <div className="space-y-2.5 text-xs">{result.tasks?.map((task) => <div key={task.id} className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-start justify-between gap-3"><div className="space-y-1"><div className="flex items-center gap-2"><span className="font-mono font-bold text-emerald-400">{task.id}</span><span className="font-bold text-zinc-100">{task.title}</span><span className="text-[10px] px-2 py-0.2 rounded bg-zinc-900 text-zinc-400">{task.phase}</span></div><p className="text-zinc-400">{task.description}</p></div><span className="text-[11px] font-mono text-zinc-400 shrink-0">{task.estimatedHours || 3}h</span></div>)}</div>}
 
       <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3 pt-4">
-        <div className="text-xs font-bold text-zinc-300">Choose Spec-Kit Project Destination:</div>
+        <div className="text-xs font-bold text-zinc-300">Feature destination:</div>
+        {canMerge && activeProjectName && <p className="text-xs leading-relaxed text-cyan-100">This feature will be added to <strong>{activeProjectName}</strong> and continue its current Journey.</p>}
         <div className="flex flex-col sm:flex-row items-center gap-3">
-          <button type="button" onClick={onCreateProject} className="flex-1 w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><PlusCircle className="w-4 h-4" /><span>Create New Spec-Kit Project ({result.title})</span></button>
-          {canMerge && activeProjectName && <button type="button" onClick={onMerge} className="flex-1 w-full py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center justify-center gap-2"><Plus className="w-4 h-4" /><span>Merge Feature into "{activeProjectName}"</span></button>}
+          {canMerge && activeProjectName
+            ? <button type="button" onClick={onMerge} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Plus className="w-4 h-4" /><span>Add feature to this workspace</span></button>
+            : <button type="button" onClick={onCreateProject} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><PlusCircle className="w-4 h-4" /><span>Create Spec-Kit Project ({result.title})</span></button>}
         </div>
       </div>
     </div>

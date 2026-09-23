@@ -4,6 +4,8 @@ import { FeatureExtractionPackage } from '../lib/api/imports';
 import { createFeatureInboxItem } from '../lib/featureInbox';
 import { storageService } from '../lib/storage';
 import { normalizeGitRemote } from '../lib/projectIdentity';
+import { recordFeatureImplementationReceipt } from '../lib/featureReceipts';
+import { activeFeatureForProject } from '../lib/featureJourney';
 import {
   FeatureSpec,
   FeatureJourney,
@@ -155,16 +157,26 @@ export function useProjectWorkspace() {
     }));
   }, [updateActiveProject]);
 
-  const replaceFromImport = useCallback((project: SpecKitProject) => updateActiveProject(() => project), [updateActiveProject]);
+  const replaceFromImport = useCallback((project: SpecKitProject) => {
+    // A new imported project has a different ID from the workspace that opened
+    // the dialog. Persist and select it atomically; updating the old active
+    // project alone makes the UI fall back to that blank workspace on refresh.
+    const imported = storageService.saveImportedProject(project);
+    setActiveProject(imported);
+    setProjects(storageService.getProjects());
+    return imported;
+  }, []);
 
   const mergeImportedFeature = useCallback((stories: UserStory[], data: ImportedFeatureData) => {
     updateActiveProject((project) => {
       const now = new Date().toISOString();
       const extraction: FeatureExtractionPackage = { ...data, userStories: stories };
-      const featureInbox = [...(project.featureInbox || []), createFeatureInboxItem(extraction, data.source || 'unknown', project.featureInbox?.length || 0, now)];
+      const importedFeature = createFeatureInboxItem(extraction, data.source || 'unknown', project.featureInbox?.length || 0, now);
+      const featureInbox = [...(project.featureInbox || []), importedFeature];
       return {
         ...project,
         featureInbox,
+        journey: project.journey ? { ...project.journey, featureId: importedFeature.id, updatedAt: now } : project.journey,
         spec: {
           ...project.spec,
           userStories: [...project.spec.userStories, ...stories],
@@ -183,24 +195,20 @@ export function useProjectWorkspace() {
   const saveLatestFeatureReview = useCallback((review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string } }) => {
     updateActiveProject((project) => {
       const items = project.featureInbox || [];
-      if (!items.length) return project;
-      const index = items.length - 1;
-      return { ...project, featureInbox: items.map((item, itemIndex) => itemIndex === index ? { ...item, ...review } : item) };
+      const activeFeature = activeFeatureForProject(project);
+      if (!activeFeature || !items.length) return project;
+      return { ...project, featureInbox: items.map((item) => item.id === activeFeature.id ? { ...item, ...review } : item) };
     });
   }, [updateActiveProject]);
 
-  const saveLatestFeatureImplementation = useCallback((receipt: FeatureImplementationReceipt) => {
+  const saveFeatureImplementation = useCallback((featureId: string, receipt: FeatureImplementationReceipt) => {
+    let saved = false;
     updateActiveProject((project) => {
-      const items = project.featureInbox || [];
-      if (!items.length) return project;
-      const index = items.length - 1;
-      return {
-        ...project,
-        featureInbox: items.map((item, itemIndex) => itemIndex === index
-          ? { ...item, implementationReceipts: [...(item.implementationReceipts || []).filter((existing) => existing.taskId !== receipt.taskId), receipt] }
-          : item),
-      };
+      const updated = recordFeatureImplementationReceipt(project, featureId, receipt);
+      saved = updated !== project;
+      return updated;
     });
+    return saved;
   }, [updateActiveProject]);
 
   const updateFeatureIdentity = useCallback((featureId: string, identity: Partial<Pick<import('../types/speckit').FeatureInboxItem, 'featureKey' | 'slug' | 'branch' | 'worktreePath' | 'baselineCommit'>>) => {
@@ -218,6 +226,6 @@ export function useProjectWorkspace() {
   return {
     projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   };
 }

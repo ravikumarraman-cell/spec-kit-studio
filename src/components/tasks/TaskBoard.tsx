@@ -17,6 +17,7 @@ import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
 import { configuredConnectorClient } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
+import { currentFeatureDeliveryArtifact, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
 
 interface TaskBoardProps {
   projectId: string;
@@ -67,19 +68,24 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   }, [projectId, taskBreakdown]);
 
   useEffect(() => {
-    if (!focusFeature || !repositoryPath || !onRecoverFeatureDeliveryPlan
-      || (focusFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature, focusFeature.deliveryPlan.path))) return;
+    // Once created, a feature worktree is the only authoritative location.
+    // The main checkout can retain a different revision of the same artifact.
+    const repositoryPaths = focusFeature?.worktreePath
+      ? [focusFeature.worktreePath]
+      : repositoryPath ? [repositoryPath] : [];
+    if (!focusFeature || !repositoryPaths.length || !onRecoverFeatureDeliveryPlan) return;
     let cancelled = false;
-    configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
-      .then(({ artifacts }) => {
-        const recovered = artifacts
-          .filter((artifact) => artifact.kind === 'tasks' && isFeatureArtifactScoped(artifact.content, focusFeature, artifact.path))
-          .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-        if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
+    Promise.allSettled(repositoryPaths.map((path) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(path)))
+      .then((results) => {
+        const artifacts = results.flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : []);
+        const current = currentFeatureDeliveryArtifact(focusFeature, artifacts);
+        if (!cancelled && needsFeatureDeliveryReconciliation(focusFeature, current)) {
+          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: focusFeature.deliveryPlan?.acceptedAt || new Date().toISOString() });
+        }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [focusFeature, onRecoverFeatureDeliveryPlan, repositoryPath]);
+  }, [focusFeature?.id, focusFeature?.deliveryPlan?.path, focusFeature?.deliveryPlan?.content, focusFeature?.worktreePath, onRecoverFeatureDeliveryPlan, repositoryPath]);
 
   const handleUpdateStatus = useCallback(
     (taskId: string, newStatus: TaskStatus) => {
@@ -145,17 +151,32 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   );
   const completedTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'done'), [filteredTasks]);
 
+  // The active feature owns its own official tasks.md. Showing the workspace
+  // board beside it led people to believe its historical tasks were part of
+  // the feature queue. Keep the two views fully separate: feature mode shows
+  // only feature-scoped delivery evidence.
+  if (focusFeature) {
+    const hasFeaturePlan = Boolean(
+      focusFeature.deliveryPlan?.acceptedAt
+      && focusFeature.deliveryPlan.path
+      && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature, focusFeature.deliveryPlan.path),
+    );
+    return (
+      <div className="space-y-6 pb-12">
+        <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Feature implementation queue</p>
+          <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
+          {hasFeaturePlan ? <>
+            <p className="mt-1 text-xs text-zinc-300">Only the accepted tasks in this feature’s <code>tasks.md</code> are shown here and may be implemented for this feature.</p>
+            <FeatureDeliveryBoard content={focusFeature.deliveryPlan!.content} sourcePath={focusFeature.deliveryPlan!.path!} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} authorityLabel={focusFeature.worktreePath ? 'Registered feature worktree' : 'Connected repository'} />
+          </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> Return to Plan delivery to find or generate this feature’s <code>tasks.md</code>.</div>}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12">
-      {focusFeature && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature delivery plan</p>
-        <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
-        {focusFeature.deliveryPlan?.acceptedAt && focusFeature.deliveryPlan.path && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature, focusFeature.deliveryPlan.path) ? <>
-          <p className="mt-1 text-xs text-zinc-300">These are the accepted, feature-scoped delivery tasks. The project board below contains older shared work and is not evidence for this feature.</p>
-          <FeatureDeliveryBoard content={focusFeature.deliveryPlan.content} sourcePath={focusFeature.deliveryPlan.path} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} />
-        </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> The saved task artifact is shared workspace work, not evidence for this feature. Return to Plan delivery to find or generate feature-scoped <code>tasks.md</code>.</div>}
-        <p className="mt-3 text-[11px] text-zinc-500">{focusFeature.userStoryIds.length} stories · {focusFeature.requirementIds.length} requirements · {focusFeature.taskIds.length} task cards linked into the shared board</p>
-      </section>}
       {/* Unified Editor Header */}
       <EditorHeader
         icon={CheckSquare}

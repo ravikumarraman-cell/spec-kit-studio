@@ -12,6 +12,7 @@ import { StatCard } from '../common/StatCard';
 import { AuditScoreOverview } from './AuditScoreOverview';
 import { AuditRecommendations } from './AuditRecommendations';
 import { auditBlockers, auditPassesQualityGate } from '../../lib/auditGate';
+import { activeFeatureForProject } from '../../lib/featureJourney';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
@@ -21,10 +22,11 @@ interface AuditDashboardProps {
 }
 
 function localStructuralAudit(project: SpecKitProject): SpecAuditResult {
-  const hasFeatureScope = Boolean(project.featureInbox?.at(-1));
+  const activeFeature = activeFeatureForProject(project);
+  const hasFeatureScope = Boolean(activeFeature);
   const hasSpec = project.spec.userStories.length > 0 && project.spec.functionalRequirements.length > 0;
-  const hasPlan = Boolean(project.featureInbox?.at(-1)?.architecturePlan?.acceptedAt || project.plan.markdown?.trim());
-  const hasTasks = Boolean(project.featureInbox?.at(-1)?.deliveryPlan?.acceptedAt || project.tasks.markdown?.trim() || project.tasks.tasks.length);
+  const hasPlan = Boolean(activeFeature?.architecturePlan?.acceptedAt || project.plan.markdown?.trim());
+  const hasTasks = Boolean(activeFeature?.deliveryPlan?.acceptedAt || project.tasks.markdown?.trim() || project.tasks.tasks.length);
   const hasConstitution = project.constitution.rules.length > 0;
   const missing = [
     !hasFeatureScope && 'Missing an imported feature in focus.',

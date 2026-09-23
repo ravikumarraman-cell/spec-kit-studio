@@ -16,6 +16,7 @@ import { GenerationPathSelector } from './GenerationPathSelector';
 import { EngineWorkPacketPanel } from './EngineWorkPacketPanel';
 import { FeatureExtractionPreview, FeaturePreviewTab } from './FeatureExtractionPreview';
 import { Modal } from '../common/Modal';
+import { featureImportDestination } from '../../lib/featureImportRouting';
 
 interface FeatureImportModalProps {
   isOpen: boolean;
@@ -183,7 +184,16 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
 
   const handleCreateNewProject = () => {
     if (!extractedResult) return;
-    onImportComplete(createProjectFromFeatureExtraction(extractedResult, featureTitle));
+    // An intake opened from an active workspace always belongs there. This
+    // fallback supports only standalone intake before a workspace exists.
+    if (featureImportDestination(Boolean(activeProject), Boolean(activeProject && onMergeIntoActiveProject)) === 'active-workspace') {
+      handleMergeToActive();
+      return;
+    }
+    // New means a separate feature workspace, not a disconnected repository.
+    // Preserve the read-only connection evidence from the workspace where the
+    // user started the import so the new feature can continue at Stage 2.
+    onImportComplete(createProjectFromFeatureExtraction(extractedResult, featureTitle, undefined, activeProject || undefined));
     onClose();
   };
 

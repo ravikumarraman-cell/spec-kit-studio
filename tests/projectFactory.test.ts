@@ -11,3 +11,11 @@ test('project factory creates a complete, internally linked workspace', () => {
   assert.equal(project.tasks.tasks[0].id, 'TASK-001');
   assert.equal(project.constitution.rules[0].strictness, 'Mandatory');
 });
+
+test('projects created in the same millisecond still have distinct durable identities', () => {
+  const now = '2026-09-23T00:00:00.000Z';
+  const first = createProjectWorkspace('First', 'First workspace', now);
+  const second = createProjectWorkspace('Second', 'Second workspace', now);
+  assert.notEqual(first.id, second.id);
+  assert.notEqual(first.spec.id, second.spec.id);
+});

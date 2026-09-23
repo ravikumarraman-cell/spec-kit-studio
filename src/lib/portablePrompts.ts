@@ -58,6 +58,9 @@ ${profile.label}: ${profile.guidance}
 - Implement only ${task.id} for ${feature.title}; do not drift into shared workspace tasks.
 - Update or add tests that prove the mapped requirements.
 - Run the repository's relevant typecheck, test, and build commands when available.
+- Only after implementation and relevant verification pass, update exactly this
+  task's checklist entry in ${feature.deliveryPlan?.path || 'tasks.md'} from
+  [ ] to [x]. Never mark another task complete or alter task scope.
 - Report changed files, commands run, results, and unresolved assumptions.
 - Do not invent APIs, dependencies, credentials, or schema behavior.
 `;

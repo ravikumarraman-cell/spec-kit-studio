@@ -8,8 +8,12 @@ import {
 } from '../types/speckit';
 import { FeatureExtractionPackage } from './api/imports';
 import { createFeatureInboxItem } from './featureInbox';
+import { createUniqueId } from './ids';
 
 const defaultTaskPhase: TaskItem['phase'] = 'Phase 1: Setup';
+
+/** Repository evidence that a new, independent feature workspace may safely inherit. */
+export type ImportedProjectContext = Pick<SpecKitProject, 'importedRepo' | 'repositoryIdentity' | 'stackProfile'>;
 
 function toTaskPhase(value: string | undefined): TaskItem['phase'] {
   return value === 'Phase 1: Setup' || value === 'Phase 2: Core Infrastructure' || value === 'Phase 3: Integration' || value === 'Phase 4: Polish & Testing'
@@ -22,13 +26,14 @@ export function createProjectFromFeatureExtraction(
   extraction: FeatureExtractionPackage,
   fallbackTitle: string,
   now = new Date().toISOString(),
+  sourceWorkspace?: ImportedProjectContext,
 ): SpecKitProject {
   const timestamp = Date.parse(now) || Date.now();
   const title = extraction.title || fallbackTitle || 'Imported Feature Spec';
   const summary = extraction.summary || 'Imported feature specification package';
 
   const spec: FeatureSpec = {
-    id: `SPEC-${timestamp}`,
+    id: createUniqueId('spec', timestamp),
     title,
     summary,
     userStories: extraction.userStories || [],
@@ -42,7 +47,7 @@ export function createProjectFromFeatureExtraction(
   };
 
   const plan: ImplementationPlan = {
-    id: `PLAN-${timestamp}`,
+    id: createUniqueId('plan', timestamp),
     techStack: extraction.techStack || [
       { category: 'Frontend', technology: 'React 18 + Tailwind CSS', justification: 'Standard UI framework' },
       { category: 'Backend', technology: 'Express + TypeScript', justification: 'Scalable API server' },
@@ -66,7 +71,7 @@ export function createProjectFromFeatureExtraction(
   };
 
   const tasks: TaskBreakdown = {
-    id: `TASKS-${timestamp}`,
+    id: createUniqueId('tasks', timestamp),
     tasks: (extraction.tasks || []).map((task, index) => ({
       id: task.id || `TASK-${100 + index}`, title: task.title || `Task ${index + 1}`,
       phase: toTaskPhase(task.phase), description: task.description || 'Task description', status: 'todo',
@@ -77,7 +82,7 @@ export function createProjectFromFeatureExtraction(
   };
 
   const constitution: ProjectConstitution = {
-    id: `CONST-${timestamp}`, title: `${title} Governance Constitution`,
+    id: createUniqueId('constitution', timestamp), title: `${title} Governance Constitution`,
     rules: (extraction.constitutionRules || []).map((rule, index) => ({
       id: rule.id || `RULE-${index + 1}`, title: rule.title || 'Coding Standard', category: rule.category || 'Architecture',
       description: rule.description || 'Rule description', ruleStatement: rule.ruleStatement || 'Statement', strictness: rule.strictness || 'Mandatory',
@@ -85,9 +90,31 @@ export function createProjectFromFeatureExtraction(
     markdown: `# Constitution for ${title}`, lastUpdated: now,
   };
 
+  const inheritedRepository = sourceWorkspace?.importedRepo
+    ? {
+      ...sourceWorkspace.importedRepo,
+      detectedTechStack: sourceWorkspace.importedRepo.detectedTechStack.map((technology) => ({ ...technology })),
+      keyDirectories: [...sourceWorkspace.importedRepo.keyDirectories],
+      suggestedNewFeatures: [...sourceWorkspace.importedRepo.suggestedNewFeatures],
+    }
+    : undefined;
+
   return {
-    id: `PROJ-${timestamp}`, name: title, description: summary, createdAt: now, updatedAt: now,
+    id: createUniqueId('project', timestamp), name: title, description: summary, createdAt: now, updatedAt: now,
     spec, plan, tasks, constitution, version: '1.0.7',
     featureInbox: [createFeatureInboxItem({ ...extraction, title, summary }, 'unknown', 0, now)],
+    // A separate feature remains a separate Studio workspace, but it belongs
+    // to the repository the user was working in. Carry read-only connection
+    // evidence forward so Stage 1 does not needlessly start over.
+    ...(inheritedRepository ? { importedRepo: inheritedRepository } : {}),
+    ...(sourceWorkspace?.repositoryIdentity ? { repositoryIdentity: { ...sourceWorkspace.repositoryIdentity } } : {}),
+    ...(sourceWorkspace?.stackProfile ? {
+      stackProfile: {
+        ...sourceWorkspace.stackProfile,
+        testCommands: sourceWorkspace.stackProfile.testCommands ? [...sourceWorkspace.stackProfile.testCommands] : undefined,
+        allowedSourceRoots: sourceWorkspace.stackProfile.allowedSourceRoots ? [...sourceWorkspace.stackProfile.allowedSourceRoots] : undefined,
+        prohibitedPaths: sourceWorkspace.stackProfile.prohibitedPaths ? [...sourceWorkspace.stackProfile.prohibitedPaths] : undefined,
+      },
+    } : {}),
   };
 }

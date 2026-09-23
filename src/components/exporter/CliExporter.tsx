@@ -1,5 +1,5 @@
 import React, { useState, memo } from 'react';
-import {
+import { 
   Terminal,
   Download,
   Archive,
@@ -17,6 +17,7 @@ import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
 import { ActionErrorNotice } from '../common/ActionErrorNotice';
 import { userFacingActionError } from '../../lib/workflowUx';
+import { activeFeatureForProject } from '../../lib/featureJourney';
 
 interface CliExporterProps {
   project: SpecKitProject;
@@ -42,7 +43,7 @@ export const CliExporter: React.FC<CliExporterProps> = memo(({ project }) => {
       setIsExporting(false);
     }
   };
-  const activeFeature = project.featureInbox?.at(-1);
+  const activeFeature = activeFeatureForProject(project);
   const handleDownloadFeature = async () => {
     if (!activeFeature) return;
     try {

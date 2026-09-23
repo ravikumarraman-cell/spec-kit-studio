@@ -4,11 +4,34 @@ import { createProjectWorkspace } from './projectFactory';
 import { saveProjectBackup } from './projectBackup';
 import { projectBackups } from './projectBackup';
 import { normalizeProcessCases } from './processCases';
+import { createUniqueId } from './ids';
 
 const STORAGE_KEY = 'speckit_studio_projects_v1';
 const ACTIVE_PROJECT_KEY = 'speckit_studio_active_project_id';
 
-class StorageService {
+function copyRepositoryContext(source: SpecKitProject): Pick<SpecKitProject, 'importedRepo' | 'repositoryIdentity' | 'stackProfile'> {
+  return {
+    ...(source.importedRepo ? {
+      importedRepo: {
+        ...source.importedRepo,
+        detectedTechStack: source.importedRepo.detectedTechStack.map((technology) => ({ ...technology })),
+        keyDirectories: [...source.importedRepo.keyDirectories],
+        suggestedNewFeatures: [...source.importedRepo.suggestedNewFeatures],
+      },
+    } : {}),
+    ...(source.repositoryIdentity ? { repositoryIdentity: { ...source.repositoryIdentity } } : {}),
+    ...(source.stackProfile ? {
+      stackProfile: {
+        ...source.stackProfile,
+        testCommands: source.stackProfile.testCommands ? [...source.stackProfile.testCommands] : undefined,
+        allowedSourceRoots: source.stackProfile.allowedSourceRoots ? [...source.stackProfile.allowedSourceRoots] : undefined,
+        prohibitedPaths: source.stackProfile.prohibitedPaths ? [...source.stackProfile.prohibitedPaths] : undefined,
+      },
+    } : {}),
+  };
+}
+
+export class StorageService {
   private listeners: Set<() => void> = new Set();
 
   public subscribe(listener: () => void): () => void {
@@ -30,7 +53,16 @@ class StorageService {
       const parsed: SpecKitProject[] = JSON.parse(raw);
       // Clean up any legacy unquoted mermaid diagrams in cache
       let modified = false;
+      const seenProjectIds = new Set<string>();
       parsed.forEach((p) => {
+        // Repair historical timestamp-ID collisions without discarding either
+        // workspace. The first record retains its old ID so an existing active
+        // selection keeps working; later duplicates receive a fresh identity.
+        if (seenProjectIds.has(p.id)) {
+          p.id = createUniqueId('project');
+          modified = true;
+        }
+        seenProjectIds.add(p.id);
         if (p.plan?.mermaidDiagram && p.plan.mermaidDiagram.includes('|@google/genai SDK|')) {
           p.plan.mermaidDiagram = p.plan.mermaidDiagram.replace('|@google/genai SDK|', '|"@google/genai SDK"|');
           modified = true;
@@ -40,7 +72,31 @@ class StorageService {
           p.processCases = normalizedCases;
           modified = true;
         }
+        // Older workspaces selected the last inbox item implicitly. Persist
+        // that one-time legacy choice so later imports cannot retarget an
+        // in-progress journey, its artifacts, or its implementation receipts.
+        if (p.journey && !p.journey.featureId && p.featureInbox?.length) {
+          p.journey.featureId = p.featureInbox[p.featureInbox.length - 1].id;
+          modified = true;
+        }
       });
+
+      // Repair the short-lived legacy behavior where “Create New” retained
+      // the imported feature but dropped the connection from the workspace
+      // that launched the import. Only infer a parent when there is exactly
+      // one unambiguous connected workspace; otherwise require explicit user
+      // action rather than risking a repository mix-up.
+      const connectedProjects = parsed.filter((project) => project.importedRepo?.repoUrl && project.repositoryIdentity?.canonicalRemote);
+      const unboundImportedFeatures = parsed.filter((project) =>
+        !project.importedRepo &&
+        !project.repositoryIdentity &&
+        project.featureInbox?.length === 1,
+      );
+      if (connectedProjects.length === 1 && unboundImportedFeatures.length > 0) {
+        const repositoryContext = copyRepositoryContext(connectedProjects[0]);
+        unboundImportedFeatures.forEach((project) => Object.assign(project, repositoryContext));
+        modified = true;
+      }
       if (modified) {
         this.saveProjects(parsed);
       }
@@ -99,6 +155,31 @@ class StorageService {
     }
 
     this.saveProjects(projects);
+  }
+
+  /**
+   * Adds (or updates) a project created by an import and makes it the active
+   * workspace in the same persistence operation. Importing a feature must
+   * never leave the user looking at the workspace they came from.
+   */
+  public saveImportedProject(project: SpecKitProject): SpecKitProject {
+    const projects = this.getProjects();
+    const index = projects.findIndex((item) => item.id === project.id);
+    const projectToSave = { ...project, updatedAt: new Date().toISOString() };
+
+    if (index >= 0) {
+      projects[index] = projectToSave;
+    } else {
+      projects.unshift(projectToSave);
+    }
+
+    // Keep the project list and selected-project pointer coherent before
+    // notifying subscribers. Calling the public selector here would notify
+    // once while the new project was not yet visible and can briefly restore
+    // the prior workspace in React.
+    localStorage.setItem(ACTIVE_PROJECT_KEY, projectToSave.id);
+    this.saveProjects(projects);
+    return projectToSave;
   }
 
   public createNewProject(name: string, description: string): SpecKitProject {

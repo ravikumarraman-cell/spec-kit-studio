@@ -7,7 +7,8 @@ import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWork
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
 import { WorkflowAwarenessBanner } from './components/workflow/WorkflowAwarenessBanner';
-import { approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
+import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
+import { relatedFeatureWorkspaces } from './lib/featureWorkspaceRecovery';
 
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
 const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
@@ -34,7 +35,7 @@ function AppContent() {
   const {
     projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   } = useProjectWorkspace();
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
@@ -150,7 +151,7 @@ function AppContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} />}
+              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} relatedFeatureWorkspaces={relatedFeatureWorkspaces(activeProject, projects)} onSelectWorkspace={(id) => { selectProject(id); setActiveTab('overview'); }} />}
               {activeTab === 'workflows' && <ProcessStudio key={activeProject.id} project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onOpenWorkspace={() => setActiveTab('workspace')} onSelectWorkflow={saveWorkflowFocus} />}
 
               {activeTab === 'import' && (
@@ -181,7 +182,7 @@ function AppContent() {
                 <PlanEditor
                   projectId={activeProject.id}
                   plan={activeProject.plan}
-                  focusFeature={activeProject.featureInbox?.at(-1)}
+                  focusFeature={activeFeatureForProject(activeProject)}
                   onSavePlan={savePlan}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   isDarkMode={isDark}
@@ -198,7 +199,7 @@ function AppContent() {
                   projectId={activeProject.id}
                   taskBreakdown={activeProject.tasks}
                   spec={activeProject.spec}
-                  focusFeature={activeProject.featureInbox?.at(-1)}
+                  focusFeature={activeFeatureForProject(activeProject)}
                   onSaveTasks={saveTasks}
                   onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
                   onSelectTaskForPrompt={handleSelectTaskForPrompt}
@@ -220,10 +221,12 @@ function AppContent() {
                   project={activeProject}
                   initialTaskId={targetPromptTaskId}
                   onRecoverFeatureDeliveryPlan={(deliveryPlan) => saveLatestFeatureReview({ deliveryPlan })}
-                  onRecordFeatureImplementation={(receipt) => {
-                    saveLatestFeatureImplementation(receipt);
+                  onRecordFeatureImplementation={(featureId, receipt) => {
+                    const saved = saveFeatureImplementation(featureId, receipt);
                     setTargetPromptTaskId(undefined);
+                    return saved;
                   }}
+                  onOpenJourney={() => setActiveTab('overview')}
                 />
               )}
 

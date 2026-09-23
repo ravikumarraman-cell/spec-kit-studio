@@ -40,6 +40,8 @@ test('parses official feature tasks and carries only mapped feature evidence int
   assert.match(prompt, /FR-003: Show funding status/);
   assert.doesNotMatch(prompt, /Unrelated shared feature/);
   assert.match(prompt, /specs\/001-aide\/plan\.md/);
+  assert.match(prompt, /checklist entry/);
+  assert.match(prompt, /\[ \].*\[x\]/s);
 });
 
 test('parses numbered Spec-Kit task lists when an imported repository omits checklist markers', () => {

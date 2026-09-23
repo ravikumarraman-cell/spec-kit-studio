@@ -178,6 +178,8 @@ export interface SpecAuditResult {
 
 /** Human approvals for the guided, feature-scoped Spec-Kit workflow. */
 export interface FeatureJourney {
+  /** The feature this journey is currently operating on; never infer from inbox order. */
+  featureId?: string;
   activeStage: number;
   completedStages: number[];
   startedAt: string;

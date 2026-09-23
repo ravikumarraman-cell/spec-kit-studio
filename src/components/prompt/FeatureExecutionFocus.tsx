@@ -5,7 +5,8 @@ interface FeatureExecutionFocusProps {
   title: string;
   summary: string;
   readyTaskCount: number;
-  reviewedTaskCount: number;
+  completedInPlanCount: number;
+  reviewedReceiptCount: number;
 }
 
 /** The compact Stage 7 context anchor used before a local task handoff. */
@@ -13,7 +14,8 @@ export function FeatureExecutionFocus({
   title,
   summary,
   readyTaskCount,
-  reviewedTaskCount,
+  completedInPlanCount,
+  reviewedReceiptCount,
 }: FeatureExecutionFocusProps) {
   return (
     <section className="rounded-2xl border border-cyan-400/25 bg-gradient-to-r from-cyan-500/10 via-zinc-950 to-violet-500/10 p-5">
@@ -25,7 +27,8 @@ export function FeatureExecutionFocus({
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-400">{summary}</p>
           <p className="mt-3 text-[11px] text-zinc-300">
             <span className="font-bold text-cyan-200">{readyTaskCount} task{readyTaskCount === 1 ? '' : 's'} ready to run</span>
-            {reviewedTaskCount > 0 ? ` · ${reviewedTaskCount} already completed or reviewed` : ''}.
+            {completedInPlanCount > 0 ? ` · ${completedInPlanCount} already marked complete in tasks.md` : ''}
+            {reviewedReceiptCount > 0 ? ` · ${reviewedReceiptCount} Studio-reviewed receipt${reviewedReceiptCount === 1 ? '' : 's'}` : ''}.
             {' '}Studio resumes at the next task; it never prompts you to rerun recorded work.
           </p>
         </div>

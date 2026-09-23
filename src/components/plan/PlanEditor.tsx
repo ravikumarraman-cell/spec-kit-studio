@@ -20,6 +20,7 @@ import { FeatureArtifactViewer } from '../common/FeatureArtifactViewer';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { configuredConnectorClient } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
+import { currentFeatureArchitectureArtifact, needsFeatureArchitectureReconciliation } from '../../lib/featureArchitectureReconciliation';
 
 interface PlanEditorProps {
   projectId: string;
@@ -64,27 +65,27 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
   }, [projectId, plan]);
 
   useEffect(() => {
-    if (!focusFeature || !onRecoverFeatureArchitecturePlan
-      || (focusFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature, focusFeature.architecturePlan.path))) return;
+    if (!focusFeature || !onRecoverFeatureArchitecturePlan) return;
     let cancelled = false;
     const recover = (path: string, content: string) => {
       if (!cancelled) onRecoverFeatureArchitecturePlan({ path, content, acceptedAt: new Date().toISOString() });
     };
-    if (repositoryPath) {
-      configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
+    // Once implementation has a registered worktree, the main checkout is no
+    // longer a valid source for this feature's plan.
+    const authoritativePath = focusFeature.worktreePath || repositoryPath;
+    if (authoritativePath) {
+      configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(authoritativePath)
         .then(({ artifacts }) => {
-          const recovered = artifacts
-            .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, focusFeature, artifact.path))
-            .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-          if (recovered) recover(recovered.path, recovered.content);
-          else if (stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record. This is historical context; it was not regenerated and does not change repository files.\n\n## Feature summary\n\n${focusFeature.summary}\n\n## Shared architecture snapshot\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
+          const recovered = currentFeatureArchitectureArtifact(focusFeature, artifacts);
+          if (needsFeatureArchitectureReconciliation(focusFeature, recovered)) recover(recovered.path, recovered.content);
+          else if (!focusFeature.architecturePlan?.acceptedAt && stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record. This is historical context; it was not regenerated and does not change repository files.\n\n## Feature summary\n\n${focusFeature.summary}\n\n## Shared architecture snapshot\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
         })
-        .catch(() => { if (stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> The connected repository could not be read, so Studio retained the approved shared workspace architecture record as historical context.\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`); });
+        .catch(() => { if (!focusFeature.architecturePlan?.acceptedAt && stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> The connected repository could not be read, so Studio retained the approved shared workspace architecture record as historical context.\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`); });
     } else if (stageApproved) {
       recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record.\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
     }
     return () => { cancelled = true; };
-  }, [focusFeature, onRecoverFeatureArchitecturePlan, plan, repositoryPath, stageApproved]);
+  }, [focusFeature, focusFeature?.architecturePlan?.content, focusFeature?.architecturePlan?.path, focusFeature?.worktreePath, onRecoverFeatureArchitecturePlan, plan, repositoryPath, stageApproved]);
 
   const handleUpdateField = useCallback((field: keyof ImplementationPlan, value: any) => {
     setCurrentPlan((prev) => ({

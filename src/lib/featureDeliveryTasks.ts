@@ -11,6 +11,22 @@ export interface FeatureDeliveryTask {
   detail?: string;
 }
 
+export type FeatureDeliveryCompletionSource = 'reviewed-receipt' | 'tasks-md' | 'planned';
+
+/**
+ * A Studio-reviewed receipt is the strongest completion evidence. A checked
+ * line in tasks.md remains useful plan state, but must never be relabeled as
+ * reviewed implementation evidence.
+ */
+export function featureDeliveryCompletionSource(
+  task: FeatureDeliveryTask,
+  reviewedTaskIds: Iterable<string> = [],
+): FeatureDeliveryCompletionSource {
+  const reviewed = new Set(reviewedTaskIds);
+  if (reviewed.has(task.id)) return 'reviewed-receipt';
+  return task.done ? 'tasks-md' : 'planned';
+}
+
 /** Parse current Spec-Kit T001 tasks and Studio's older TASK-101 exports. */
 export function parseFeatureDeliveryTasks(content: string | undefined): FeatureDeliveryTask[] {
   if (!content) return [];
@@ -44,4 +60,33 @@ export function parseFeatureDeliveryTasks(content: string | undefined): FeatureD
 export function actionableFeatureDeliveryTasks(tasks: FeatureDeliveryTask[], reviewedTaskIds: Iterable<string> = []): FeatureDeliveryTask[] {
   const reviewed = new Set(reviewedTaskIds);
   return tasks.filter((task) => !task.done && !reviewed.has(task.id));
+}
+
+/**
+ * Keep the two completion signals separate in the UI. A checked entry in an
+ * imported tasks.md means the task is already complete in that delivery plan;
+ * it is not, by itself, a Studio-reviewed implementation receipt.
+ */
+export function featureDeliveryTaskProgress(tasks: FeatureDeliveryTask[], reviewedTaskIds: Iterable<string> = []) {
+  const reviewed = new Set(reviewedTaskIds);
+  return {
+    readyTaskCount: actionableFeatureDeliveryTasks(tasks, reviewed).length,
+    completedInPlanCount: tasks.filter((task) => task.done).length,
+    reviewedReceiptCount: tasks.filter((task) => reviewed.has(task.id)).length,
+  };
+}
+
+/**
+ * Return the task that should be selected immediately after a reviewer records
+ * evidence for one task. Keeping this rule here makes the transition explicit
+ * and prevents the UI from accidentally returning to a shared task board.
+ */
+export function nextActionableFeatureDeliveryTask(
+  tasks: FeatureDeliveryTask[],
+  reviewedTaskIds: Iterable<string> = [],
+  newlyReviewedTaskId?: string,
+): FeatureDeliveryTask | undefined {
+  const reviewed = new Set(reviewedTaskIds);
+  if (newlyReviewedTaskId) reviewed.add(newlyReviewedTaskId);
+  return actionableFeatureDeliveryTasks(tasks, reviewed)[0];
 }

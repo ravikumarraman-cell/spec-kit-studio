@@ -1,4 +1,5 @@
 import { FeatureInboxItem, SpecKitProject } from '../types/speckit';
+import { activeFeatureForProject } from './featureJourney';
 
 /**
  * Small, dependency-free identity helpers. They deliberately tolerate legacy
@@ -30,7 +31,7 @@ export function legacyFeatureIdentity(feature: FeatureInboxItem, ordinal: number
 
 export interface IdentityIssue { code: string; message: string; }
 
-export function identityIssues(project: SpecKitProject, feature = project.featureInbox?.at(-1)): IdentityIssue[] {
+export function identityIssues(project: SpecKitProject, feature = activeFeatureForProject(project)): IdentityIssue[] {
   const issues: IdentityIssue[] = [];
   if (!project.repositoryIdentity?.canonicalRemote) issues.push({ code: 'repository-unbound', message: 'This Studio project is not yet bound to a canonical Git remote. Re-scan Connected Workspace before running agents.' });
   if (feature && (!feature.featureKey || !feature.slug)) issues.push({ code: 'feature-unbound', message: `"${feature.title}" needs a feature key and slug before it can be executed safely.` });

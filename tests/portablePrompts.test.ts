@@ -3,6 +3,7 @@ import test from 'node:test';
 import { portableFeatureTaskPrompt, portableTaskPrompt } from '../src/lib/portablePrompts';
 import { createProjectWorkspace } from '../src/lib/projectFactory';
 import { parseFeatureDeliveryTasks } from '../src/lib/featureDeliveryTasks';
+import { isFeatureArtifactScoped } from '../src/lib/featureArtifactScope';
 
 test('portable prompt includes task, constitution, and evidence', () => {
   const project = createProjectWorkspace('Example', 'Example project');
@@ -46,4 +47,32 @@ test('parses numbered Spec-Kit task lists when an imported repository omits chec
 
   assert.deepEqual(tasks.map((task) => task.id), ['T001', 'T002']);
   assert.deepEqual(tasks[1].requirementIds, ['FR-002', 'NFR-001']);
+});
+
+test('accepts the official feature namespace when task lines do not repeat the feature title', () => {
+  const feature = { id: 'feature-1', title: 'Enhance Tenant Details UI', summary: '', source: 'repository' as const, importedAt: '', userStoryIds: [], requirementIds: [], taskIds: [] };
+  assert.equal(isFeatureArtifactScoped('- [ ] T001 [FR-001] Render the detail panel', feature, 'specs/001-enhance-tenant-details-ui/tasks.md'), true);
+});
+
+test('uses the stable feature slug for imported official paths after a display-title edit', () => {
+  const feature = { id: 'feature-1', slug: 'enhance-tenant-details-ui', title: 'Tenant profile refresh', summary: '', source: 'repository' as const, importedAt: '', userStoryIds: [], requirementIds: [], taskIds: [] };
+  assert.equal(isFeatureArtifactScoped('- [ ] T001 [FR-001] Render the detail panel', feature, 'specs/001-enhance-tenant-details-ui/tasks.md'), true);
+});
+
+test('does not mistake a shared workspace task file for a feature-scoped artifact', () => {
+  const feature = { id: 'feature-1', slug: 'enhance-tenant-details-ui', title: 'Enhance Tenant Details UI', summary: '', source: 'repository' as const, importedAt: '', userStoryIds: [], requirementIds: [], taskIds: [] };
+  assert.equal(isFeatureArtifactScoped('- [ ] T001 [FR-001] Render the detail panel', feature, '.specify/studio/tasks.md'), false);
+});
+
+test('deduplicates task ids and ignores prose that is not an executable task', () => {
+  const tasks = parseFeatureDeliveryTasks([
+    '# Delivery tasks',
+    'This plan contains T001 as an example only.',
+    '- [ ] T001 [FR-001] Build the panel',
+    '- [x] T001 [FR-001] Duplicate should not become a second task',
+    '* T002 [NFR-002] Add focused verification',
+  ].join('\n'));
+
+  assert.deepEqual(tasks.map((task) => task.id), ['T001', 'T002']);
+  assert.equal(tasks[0].done, false);
 });

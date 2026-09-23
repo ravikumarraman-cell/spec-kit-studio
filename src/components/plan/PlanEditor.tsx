@@ -65,7 +65,7 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
 
   useEffect(() => {
     if (!focusFeature || !onRecoverFeatureArchitecturePlan
-      || (focusFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature))) return;
+      || (focusFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature, focusFeature.architecturePlan.path))) return;
     let cancelled = false;
     const recover = (path: string, content: string) => {
       if (!cancelled) onRecoverFeatureArchitecturePlan({ path, content, acceptedAt: new Date().toISOString() });
@@ -74,7 +74,7 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
       configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
         .then(({ artifacts }) => {
           const recovered = artifacts
-            .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, focusFeature))
+            .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, focusFeature, artifact.path))
             .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
           if (recovered) recover(recovered.path, recovered.content);
           else if (stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record. This is historical context; it was not regenerated and does not change repository files.\n\n## Feature summary\n\n${focusFeature.summary}\n\n## Shared architecture snapshot\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
@@ -173,7 +173,7 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
       {focusFeature && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature architecture plan</p>
         <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
-        {focusFeature.architecturePlan?.acceptedAt && focusFeature.architecturePlan.path && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature) ? <>
+        {focusFeature.architecturePlan?.acceptedAt && focusFeature.architecturePlan.path && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature, focusFeature.architecturePlan.path) ? <>
           <p className="mt-1 text-xs text-zinc-300">This is the accepted, feature-scoped architecture plan. The shared architecture editor below is repository context, not this feature’s proposed design.</p>
           <FeatureArtifactViewer content={focusFeature.architecturePlan.content} artifactLabel="plan.md" sourcePath={focusFeature.architecturePlan.path} acceptedAt={focusFeature.architecturePlan.acceptedAt} />
         </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature architecture plan yet.</strong> The saved artifact does not demonstrate that it belongs to this feature, so Studio will not present it as evidence. Return to Design safely to find or generate a feature-scoped <code>plan.md</code>.</div>}

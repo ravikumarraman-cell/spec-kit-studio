@@ -36,10 +36,17 @@ function featureBrief(project: SpecKitProject) {
 function hasAcceptedImpactMap(project: SpecKitProject) { return Boolean(latestFeature(project)?.impactMap?.acceptedAt); }
 function hasAcceptedFeaturePlan(project: SpecKitProject) { const feature = latestFeature(project); const plan = feature?.architecturePlan; return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path)); }
 function hasAcceptedDeliveryPlan(project: SpecKitProject) { const feature = latestFeature(project); const plan = feature?.deliveryPlan; return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path) && parseFeatureDeliveryTasks(plan.content).length > 0); }
+function hasFeatureScopedDeliveryTasks(project: SpecKitProject) {
+  const feature = latestFeature(project);
+  const plan = feature?.deliveryPlan;
+  return Boolean(plan?.path && isFeatureArtifactScoped(plan.content, feature, plan.path) && parseFeatureDeliveryTasks(plan.content).length > 0);
+}
 function allFeatureTasksReviewed(project: SpecKitProject) {
   const feature = latestFeature(project);
-  const tasks = parseFeatureDeliveryTasks(feature?.deliveryPlan?.content);
+  const tasks = hasFeatureScopedDeliveryTasks(project) ? parseFeatureDeliveryTasks(feature?.deliveryPlan?.content) : [];
   const sharedTasksComplete = project.tasks.tasks.length > 0 && project.tasks.tasks.every((task) => task.status === 'done');
+  // Shared board work is legacy context only once a feature-scoped task plan
+  // exists. It must never complete or hand off the wrong feature.
   if (!tasks.length) return sharedTasksComplete;
   const reviewed = new Set(feature?.implementationReceipts?.map((receipt) => receipt.taskId) || []);
   if (tasks.every((task) => task.done || reviewed.has(task.id))) return true;
@@ -62,7 +69,13 @@ export const featureJourneyStages: readonly FeatureJourneyStage[] = [
   { id: 4, title: 'Design safely', shortLabel: 'Design safely', destination: 'plan', outcome: 'Approve a compatible technical plan.', evidence: 'Components, API contracts, schema changes, ADRs, test approach, and rollback considerations.', engineStep: 'speckit.plan + speckit.checklist', action: 'Run Codex to prepare architecture plan', handoffTitle: 'Architecture plan ready for review', handoffGuidance: 'Accept the feature-scoped plan, then verify its contracts, tests, risks, and rollback considerations before approving the design.', ready: (project) => hasAcceptedFeaturePlan(project), readyHint: 'Run, review, and accept a feature-scoped architecture plan before approval.' },
   { id: 5, title: 'Make delivery actionable', shortLabel: 'Plan delivery', destination: 'tasks', outcome: 'Approve a dependency-ordered, traceable delivery plan.', evidence: 'Tasks, requirement mappings, dependencies, phases, and test tasks.', engineStep: 'speckit.tasks + speckit.analyze', action: 'Run Codex to prepare delivery plan', handoffTitle: 'Delivery plan ready for review', handoffGuidance: 'Accept the feature-scoped task breakdown, then verify its mappings and dependency order before approving delivery planning.', ready: (project) => hasAcceptedDeliveryPlan(project), readyHint: 'Run, review, and accept feature-scoped delivery tasks before approval.' },
   { id: 6, title: 'Pass the quality gate', shortLabel: 'Quality gate', destination: 'audit', outcome: 'Resolve specification gaps before code changes begin.', evidence: 'Cross-artifact consistency report, unresolved ambiguities, and reviewer decisions.', engineStep: 'Studio Spec Quality Audit', action: 'Open Spec Quality Audit', handoffTitle: 'Quality-gate results ready for review', handoffGuidance: 'Resolve or explicitly document every blocking finding. The Journey will show when the quality threshold is met.', ready: (project) => auditPassesQualityGate(project.audit), readyHint: 'Run the audit and resolve its blocking gaps.' },
-  { id: 7, title: 'Implement deliberately', shortLabel: 'Implement', destination: 'prompt', outcome: 'Choose and execute one approved task or phase at a time.', evidence: 'Task-scoped agent prompt, changed files, command output, and focused test results.', engineStep: 'Task-scoped speckit.implement', action: 'Choose an implementation task', handoffTitle: 'Implementation work is ready to verify', handoffGuidance: 'Choose a task, review its scoped prompt, then deliberately run an agent and retain the verified implementation receipt.', ready: (project) => Boolean(latestFeature(project)?.implementationReceipts?.length) || project.tasks.tasks.some((task) => task.status === 'done'), readyHint: 'Choose and run one approved feature task, review its diff and verification results, then retain the implementation receipt.' },
+  { id: 7, title: 'Implement deliberately', shortLabel: 'Implement', destination: 'prompt', outcome: 'Choose and execute one approved task or phase at a time.', evidence: 'Task-scoped agent prompt, changed files, command output, and focused test results.', engineStep: 'Task-scoped speckit.implement', action: 'Choose an implementation task', handoffTitle: 'Implementation work is ready to verify', handoffGuidance: 'Choose a task, review its scoped prompt, then deliberately run an agent and retain the verified implementation receipt.', ready: (project) => {
+    // A durable feature receipt is authoritative even when a legacy import
+    // no longer exposes its original tasks.md. When that artifact is present,
+    // however, shared-board status can never substitute for feature evidence.
+    if (latestFeature(project)?.implementationReceipts?.length) return true;
+    return hasFeatureScopedDeliveryTasks(project) ? false : project.tasks.tasks.some((task) => task.status === 'done');
+  }, readyHint: 'Choose and run one approved feature task, review its diff and verification results, then retain the implementation receipt.' },
   { id: 8, title: 'Verify and hand off', shortLabel: 'Verify & hand off', destination: 'export', outcome: 'Review the final change set and retain a durable record.', evidence: 'Convergence findings, Git diff, verification results, and exported Spec-Kit artifacts.', engineStep: 'speckit.converge', action: 'Verify and export reviewed artifacts', handoffTitle: 'Handoff package ready for review', handoffGuidance: 'Export the reviewed artifacts and compare the final change set to the approved plan before marking the feature complete.', ready: allFeatureTasksReviewed, readyHint: 'Complete and retain review evidence for the approved feature tasks before final verification.' },
 ];
 

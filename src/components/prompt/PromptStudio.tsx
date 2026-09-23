@@ -102,7 +102,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
 }) => {
   const activeFeature = project.featureInbox?.at(-1);
   const featureTasks = useMemo(
-    () => activeFeature?.deliveryPlan && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature)
+    () => activeFeature?.deliveryPlan && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path)
       ? parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content)
       : [],
     [activeFeature],
@@ -151,14 +151,14 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   useEffect(() => {
     const repositoryPaths = [...new Set([activeFeature?.worktreePath, project.importedRepo?.repoUrl].filter((path): path is string => Boolean(path)))];
     if (!activeFeature || repositoryPaths.length === 0 || !onRecoverFeatureDeliveryPlan
-      || (activeFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature))) return;
+      || (activeFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) return;
     let cancelled = false;
     Promise.allSettled(repositoryPaths.map((repositoryPath) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)))
       .then((results) => {
         const recovered = results
           .flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : [])
           .filter((artifact) => artifact.kind === 'tasks'
-            && isFeatureArtifactScoped(artifact.content, activeFeature)
+            && isFeatureArtifactScoped(artifact.content, activeFeature, artifact.path)
             && parseFeatureDeliveryTasks(artifact.content).length > 0)
           .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
         if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
@@ -198,7 +198,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       .readSpecKitArtifacts(repositoryPath)
       .then(({ artifacts }) => {
         const plan = artifacts
-          .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, activeFeature))
+          .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, activeFeature, artifact.path))
           .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
         if (!cancelled) setArtifactFindings(verificationFindings(plan?.content || ''));
       })

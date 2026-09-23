@@ -67,6 +67,31 @@ test('a human-reviewed local implementation receipt unlocks Stage 7 without rely
   assert.equal(stage.ready(project), true);
 });
 
+test('a shared board task cannot advance an imported feature that has unreviewed feature-scoped tasks', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 7)!;
+  project.tasks.tasks[0].status = 'done';
+  project.featureInbox = [{
+    id: 'feature-1', slug: 'tenant-aide-funding-visibility', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'repository',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: ['FR-001'], taskIds: ['T001'],
+    deliveryPlan: { path: 'specs/001-tenant-aide-funding-visibility/tasks.md', acceptedAt: '2026-09-20', content: '- [ ] T001 [FR-001] Show funding status' },
+  }];
+
+  assert.equal(stage.ready(project), false);
+});
+
+test('Stage 5 rejects a reviewed task document unless it contains parseable feature tasks', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 5)!;
+  project.featureInbox = [{
+    id: 'feature-1', slug: 'tenant-aide-funding-visibility', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'repository',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: ['FR-001'], taskIds: [],
+    deliveryPlan: { path: 'specs/001-tenant-aide-funding-visibility/tasks.md', acceptedAt: '2026-09-20', content: '# Tenant AIDE Funding Visibility\n\nTasks will be added later.' },
+  }];
+
+  assert.equal(stage.ready(project), false);
+});
+
 test('an approved legacy Stage 7 unlocks final handoff without inventing receipts', () => {
   const project = createProjectWorkspace('Example', 'Example project');
   const stage = featureJourneyStages.find((item) => item.id === 8)!;

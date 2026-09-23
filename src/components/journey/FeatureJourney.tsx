@@ -10,6 +10,7 @@ import { FeatureInbox } from './FeatureInbox';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
+import { parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { JourneyProgress } from './JourneyProgress';
 import { FeatureRegistry } from './FeatureRegistry';
 import { canStartFeatureIntake, needsLegacyJourneyRepair } from '../../lib/workflowUx';
@@ -188,7 +189,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     const expectedKind = current.id === 4 ? 'plan' : current.id === 5 ? 'tasks' : null;
     if (!repositoryPath || !expectedKind || (expectedKind === 'plan' && activeFeature?.architecturePlan?.path && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature, activeFeature.architecturePlan.path)) || (expectedKind === 'tasks' && activeFeature?.deliveryPlan?.path && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) { setDiscoveredArtifact(null); return; }
     const client = configuredConnectorClient(connectorToken);
-    client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => setDiscoveredArtifact(artifacts.filter((item) => item.kind === expectedKind && isFeatureArtifactScoped(item.content, activeFeature)).sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0] || null)).catch(() => setDiscoveredArtifact(null));
+    client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => setDiscoveredArtifact(artifacts.filter((item) => item.kind === expectedKind
+      && isFeatureArtifactScoped(item.content, activeFeature, item.path)
+      && (expectedKind !== 'tasks' || parseFeatureDeliveryTasks(item.content).length > 0))
+      .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0] || null)).catch(() => setDiscoveredArtifact(null));
   }, [activeFeature?.architecturePlan?.acceptedAt, activeFeature?.deliveryPlan?.acceptedAt, connectorToken, current.id, project.importedRepo?.repoUrl]);
   useEffect(() => {
     // Prefer a durable, feature-scoped repository artifact over a duplicate
@@ -207,7 +211,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       onSaveFeatureReview({ architecturePlan: { path: discoveredArtifact.path, content: discoveredArtifact.content, acceptedAt } });
       setAcceptedNotice('Recovered the existing feature-scoped plan from the repository. Review it, then approve Stage 4 when you are satisfied.');
     }
-    if (current.id === 5 && !activeFeature.deliveryPlan?.acceptedAt) {
+    if (current.id === 5 && !activeFeature.deliveryPlan?.acceptedAt && parseFeatureDeliveryTasks(discoveredArtifact.content).length > 0) {
       onSaveFeatureReview({ deliveryPlan: { path: discoveredArtifact.path, content: discoveredArtifact.content, acceptedAt } });
       setAcceptedNotice('Recovered the existing feature-scoped tasks from the repository. Review them, then approve Stage 5 when you are satisfied.');
     }
@@ -215,7 +219,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   }, [activeFeature, current.id, discoveredArtifact, onSaveFeatureReview]);
   useEffect(() => {
     if (current.id !== 4 || !activeFeature || !journey.completedStages.includes(4)
-      || (activeFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature))) return;
+      || (activeFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature, activeFeature.architecturePlan.path))) return;
     onSaveFeatureReview({
       architecturePlan: {
         path: 'studio://recovered-legacy-architecture-context',

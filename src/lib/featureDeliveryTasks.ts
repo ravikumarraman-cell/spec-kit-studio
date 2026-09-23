@@ -14,7 +14,7 @@ export interface FeatureDeliveryTask {
 /** Parse current Spec-Kit T001 tasks and Studio's older TASK-101 exports. */
 export function parseFeatureDeliveryTasks(content: string | undefined): FeatureDeliveryTask[] {
   if (!content) return [];
-  return content.split('\n').flatMap((line) => {
+  const parsed = content.split('\n').flatMap((line) => {
     // Official Spec-Kit task files commonly use checklist lines, but imported
     // repositories also contain numbered task lists without checkboxes. Both
     // formats represent the same feature-scoped delivery evidence.
@@ -30,6 +30,11 @@ export function parseFeatureDeliveryTasks(content: string | undefined): FeatureD
       done: checked.toLowerCase() === 'x',
     }];
   });
+
+  // A task id is the stable identity used by receipts. Duplicate markdown
+  // lines must not create duplicate selectable work or make completion
+  // impossible. Keep the first authoritative occurrence in document order.
+  return parsed.filter((task, index) => parsed.findIndex((candidate) => candidate.id === task.id) === index);
 }
 
 /**

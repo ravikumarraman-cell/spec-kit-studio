@@ -68,12 +68,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
   useEffect(() => {
     if (!focusFeature || !repositoryPath || !onRecoverFeatureDeliveryPlan
-      || (focusFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature))) return;
+      || (focusFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature, focusFeature.deliveryPlan.path))) return;
     let cancelled = false;
     configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
       .then(({ artifacts }) => {
         const recovered = artifacts
-          .filter((artifact) => artifact.kind === 'tasks' && isFeatureArtifactScoped(artifact.content, focusFeature))
+          .filter((artifact) => artifact.kind === 'tasks' && isFeatureArtifactScoped(artifact.content, focusFeature, artifact.path))
           .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
         if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
       })
@@ -150,7 +150,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       {focusFeature && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Current feature delivery plan</p>
         <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
-        {focusFeature.deliveryPlan?.acceptedAt && focusFeature.deliveryPlan.path && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature) ? <>
+        {focusFeature.deliveryPlan?.acceptedAt && focusFeature.deliveryPlan.path && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature, focusFeature.deliveryPlan.path) ? <>
           <p className="mt-1 text-xs text-zinc-300">These are the accepted, feature-scoped delivery tasks. The project board below contains older shared work and is not evidence for this feature.</p>
           <FeatureDeliveryBoard content={focusFeature.deliveryPlan.content} sourcePath={focusFeature.deliveryPlan.path} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} />
         </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> The saved task artifact is shared workspace work, not evidence for this feature. Return to Plan delivery to find or generate feature-scoped <code>tasks.md</code>.</div>}

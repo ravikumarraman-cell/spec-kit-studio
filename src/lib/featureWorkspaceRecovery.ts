@@ -8,12 +8,9 @@ export function relatedFeatureWorkspaces(current: SpecKitProject, projects: Spec
   if (current.featureInbox?.length) return [];
   const identity = normalizeGitRemote(current.repositoryIdentity?.canonicalRemote || current.importedRepo?.repoUrl);
   const retained = projects.filter((candidate) => candidate.id !== current.id && Boolean(candidate.featureInbox?.length));
-  // If this workspace has not been scanned yet, identity cannot safely rule
-  // anything out. Offer read-only workspace choices rather than presenting an
-  // empty inbox as proof that the retained feature was deleted.
-  if (!identity) return retained;
+  // Without a shared durable repository identity, a workspace cannot safely
+  // claim another workspace's feature. Avoid a misleading recovery banner.
+  if (!identity) return [];
   const matching = retained.filter((candidate) => normalizeGitRemote(candidate.repositoryIdentity?.canonicalRemote || candidate.importedRepo?.repoUrl) === identity);
-  // A historical workspace may predate repository identity persistence. Keep
-  // it recoverable, but place known repository matches first.
-  return [...matching, ...retained.filter((candidate) => !matching.includes(candidate))];
+  return matching;
 }

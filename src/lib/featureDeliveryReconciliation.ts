@@ -3,6 +3,11 @@ import { isFeatureArtifactScoped } from './featureArtifactScope';
 import { parseFeatureDeliveryTasks } from './featureDeliveryTasks';
 import { FeatureInboxItem } from '../types/speckit';
 
+/** Use the repository copy that produced the accepted plan. */
+export function deliveryPlanRepositoryPath(feature: FeatureInboxItem | undefined, connectedRepositoryPath: string | undefined) {
+  return feature?.deliveryPlan?.repositoryPath || feature?.worktreePath || connectedRepositoryPath;
+}
+
 /**
  * Select the authoritative delivery artifact for one feature from a connector
  * scan. The saved Studio copy is a cache for offline review, never a reason to

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { portableFeatureTaskPrompt, portableTaskPrompt } from '../src/lib/portablePrompts';
+import { isFocusedVerificationTask, portableFeatureTaskPrompt, portableTaskPrompt } from '../src/lib/portablePrompts';
 import { createProjectWorkspace } from '../src/lib/projectFactory';
 import { parseFeatureDeliveryTasks } from '../src/lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../src/lib/featureArtifactScope';
@@ -42,6 +42,45 @@ test('parses official feature tasks and carries only mapped feature evidence int
   assert.match(prompt, /specs\/001-aide\/plan\.md/);
   assert.match(prompt, /checklist entry/);
   assert.match(prompt, /\[ \].*\[x\]/s);
+});
+
+test('keeps verification handoffs focused instead of embedding the entire architecture artifact', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  project.spec.functionalRequirements = [{
+    id: 'FR-001', title: 'Show percentage bars',
+    description: 'Render an accessible percentage bar for each supported service.',
+    category: 'Core', priority: 'High',
+  }];
+  const architectureContent = `# Architecture\n\n${'Planning detail that is not needed for a focused verification run. '.repeat(200)}`;
+  const feature = {
+    id: 'feature-1', title: 'Security bars', summary: 'Add percentage bars.', source: 'text' as const,
+    importedAt: '2026-09-20T00:00:00.000Z', userStoryIds: [], requirementIds: ['FR-001'], taskIds: ['T003'],
+    architecturePlan: { path: 'specs/001-security-bars/plan.md', content: architectureContent },
+    deliveryPlan: { path: 'specs/001-security-bars/tasks.md', content: '- [ ] T003 [FR-001] Run focused verification and review the allowed change scope' },
+  };
+  const [task] = parseFeatureDeliveryTasks(feature.deliveryPlan.content);
+  const prompt = portableFeatureTaskPrompt(project, feature, task, 'codex');
+
+  assert.equal(isFocusedVerificationTask(task), true);
+  assert.match(prompt, /Read only the sections relevant to this verification task/);
+  assert.doesNotMatch(prompt, /Planning detail that is not needed/);
+  assert.match(prompt, /Run only the focused repository checks/);
+  assert.ok(prompt.length < architectureContent.length, 'verification prompt must not embed the architecture body');
+});
+
+test('keeps architecture context inline for implementation tasks', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const feature = {
+    id: 'feature-1', title: 'Security bars', summary: 'Add percentage bars.', source: 'text' as const,
+    importedAt: '2026-09-20T00:00:00.000Z', userStoryIds: [], requirementIds: [], taskIds: ['T002'],
+    architecturePlan: { path: 'specs/001-security-bars/plan.md', content: '# Architecture\nImplement using the existing report row.' },
+    deliveryPlan: { path: 'specs/001-security-bars/tasks.md', content: '- [ ] T002 Implement the accessible percentage bar' },
+  };
+  const [task] = parseFeatureDeliveryTasks(feature.deliveryPlan.content);
+  const prompt = portableFeatureTaskPrompt(project, feature, task, 'codex');
+
+  assert.equal(isFocusedVerificationTask(task), false);
+  assert.match(prompt, /Implement using the existing report row/);
 });
 
 test('parses numbered Spec-Kit task lists when an imported repository omits checklist markers', () => {

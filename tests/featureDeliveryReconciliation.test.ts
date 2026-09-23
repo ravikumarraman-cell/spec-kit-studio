@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { currentFeatureDeliveryArtifact, needsFeatureDeliveryReconciliation } from '../src/lib/featureDeliveryReconciliation';
+import { currentFeatureDeliveryArtifact, deliveryPlanRepositoryPath, needsFeatureDeliveryReconciliation } from '../src/lib/featureDeliveryReconciliation';
 import { FeatureInboxItem } from '../src/types/speckit';
 
 const feature: FeatureInboxItem = {
@@ -39,4 +39,10 @@ test('keeps the registered worktree snapshot authoritative over a divergent main
   const mainCheckoutArtifact = { path: 'specs/tenant-details/tasks.md', kind: 'tasks', modifiedAt: '2026-09-23T04:00:00.000Z', content: '- [ ] T001 First task\n- [ ] T002 Second task' };
   assert.equal(currentFeatureDeliveryArtifact(feature, [worktreeArtifact])?.content, worktreeArtifact.content);
   assert.notEqual(currentFeatureDeliveryArtifact(feature, [worktreeArtifact])?.content, mainCheckoutArtifact.content);
+});
+
+test('keeps an accepted plan bound to the repository copy that produced it', () => {
+  const acceptedFromMain = { ...feature, worktreePath: '/repos/feature-worktree', deliveryPlan: { ...feature.deliveryPlan!, repositoryPath: '/repos/main' } };
+  assert.equal(deliveryPlanRepositoryPath(acceptedFromMain, '/repos/main'), '/repos/main');
+  assert.equal(deliveryPlanRepositoryPath({ ...feature, worktreePath: '/repos/feature-worktree' }, '/repos/main'), '/repos/feature-worktree');
 });

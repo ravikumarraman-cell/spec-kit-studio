@@ -13,6 +13,22 @@ export interface FeatureDeliveryTask {
 
 export type FeatureDeliveryCompletionSource = 'reviewed-receipt' | 'tasks-md' | 'planned';
 
+export type FeatureTaskExecutionMode = 'agent' | 'human-approval';
+
+/**
+ * Some official Spec-Kit task plans deliberately start with a human approval
+ * gate. Those tasks must not be presented as code work merely because they
+ * have a T-number. Classify them from their task contract, rather than from a
+ * project-specific task id, so imported plans get the same safe behavior.
+ */
+export function featureTaskExecutionMode(task: FeatureDeliveryTask | undefined): FeatureTaskExecutionMode {
+  if (!task) return 'agent';
+  const contract = `${task.title}\n${task.detail || ''}`;
+  const requiresHumanApproval = /\b(?:human[- ](?:review|approval)|approval gate|before implementation starts)\b/i.test(contract);
+  const changesApplicationCode = /`[^`]*\.(?:[cm]?[jt]sx?|css|scss|less|py|java|go|rb|cs|php|swift|kt|kts|rs)`/i.test(contract);
+  return requiresHumanApproval && !changesApplicationCode ? 'human-approval' : 'agent';
+}
+
 /**
  * A Studio-reviewed receipt is the strongest completion evidence. A checked
  * line in tasks.md remains useful plan state, but must never be relabeled as

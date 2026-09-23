@@ -12,6 +12,25 @@ class MemoryStorage {
   clear() { this.values.clear(); }
 }
 
+class FailingStorage extends MemoryStorage {
+  override setItem(key: string, value: string) {
+    if (key === 'speckit_studio_projects_v1') throw new Error('storage quota exceeded');
+    super.setItem(key, value);
+  }
+}
+
+class RecoveryPressureStorage extends MemoryStorage {
+  private failNextProjectWrite = true;
+
+  override setItem(key: string, value: string) {
+    if (key === 'speckit_studio_projects_v1' && this.failNextProjectWrite) {
+      this.failNextProjectWrite = false;
+      throw new DOMException('quota exceeded', 'QuotaExceededError');
+    }
+    super.setItem(key, value);
+  }
+}
+
 test('saving an imported project activates and retains its feature receipt', () => {
   const previousStorage = globalThis.localStorage;
   const memoryStorage = new MemoryStorage();
@@ -76,6 +95,40 @@ test('saving an imported project activates and retains its feature receipt', () 
     assert.equal(repaired.id, legacy.id);
     assert.equal(repaired.importedRepo?.repoUrl, '/workspace/cloud-asset-inventory');
     assert.equal(repaired.repositoryIdentity?.canonicalRemote, 'github.com/example/cloud-asset-inventory');
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage });
+  }
+});
+
+test('a failed workspace write reports failure and leaves the durable project unchanged', () => {
+  const previousStorage = globalThis.localStorage;
+  const memoryStorage = new FailingStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: memoryStorage });
+
+  try {
+    const storage = new StorageService();
+    const project = createProjectFromFeatureExtraction({ title: 'Durable import' }, 'Fallback');
+
+    assert.equal(storage.updateActiveProject(project), false);
+    assert.equal(memoryStorage.getItem('speckit_studio_projects_v1'), null);
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage });
+  }
+});
+
+test('primary workspace save reclaims optional recovery snapshots before failing for quota pressure', () => {
+  const previousStorage = globalThis.localStorage;
+  const memoryStorage = new RecoveryPressureStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: memoryStorage });
+
+  try {
+    memoryStorage.setItem('speckit_studio_project_backups_v1', JSON.stringify([{ projectId: 'old', savedAt: 'now' }]));
+    const storage = new StorageService();
+    const project = createProjectFromFeatureExtraction({ title: 'Quota-safe import' }, 'Fallback');
+
+    assert.equal(storage.saveProjects([project]), true);
+    assert.equal(memoryStorage.getItem('speckit_studio_project_backups_v1'), null);
+    assert.equal(storage.getProjects()[0].id, project.id);
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage });
   }

@@ -8,7 +8,6 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
 import { WorkflowAwarenessBanner } from './components/workflow/WorkflowAwarenessBanner';
 import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
-import { relatedFeatureWorkspaces } from './lib/featureWorkspaceRecovery';
 
 const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
 const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
@@ -91,7 +90,11 @@ function AppContent() {
     }
     setIsFeatureImportModalOpen(true);
   };
-  const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => { mergeImportedFeature(stories, data); setActiveTab('overview'); };
+  const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => {
+    const saved = mergeImportedFeature(stories, data);
+    if (saved) setActiveTab('overview');
+    return saved;
+  };
   const handleApproveJourneyStage = (stageId: number) => {
     const journey = activeProject.journey || createFeatureJourney();
     const stage = getJourneyStage(stageId);
@@ -151,7 +154,7 @@ function AppContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} relatedFeatureWorkspaces={relatedFeatureWorkspaces(activeProject, projects)} onSelectWorkspace={(id) => { selectProject(id); setActiveTab('overview'); }} />}
+              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} />}
               {activeTab === 'workflows' && <ProcessStudio key={activeProject.id} project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onOpenWorkspace={() => setActiveTab('workspace')} onSelectWorkflow={saveWorkflowFocus} />}
 
               {activeTab === 'import' && (

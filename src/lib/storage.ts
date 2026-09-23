@@ -1,8 +1,7 @@
 import { SpecKitProject } from '../types/speckit';
 import { SAMPLE_PROJECTS } from './sampleData';
 import { createProjectWorkspace } from './projectFactory';
-import { saveProjectBackup } from './projectBackup';
-import { projectBackups } from './projectBackup';
+import { projectBackups, releaseRecoverySnapshotsForStoragePressure, saveProjectBackup } from './projectBackup';
 import { normalizeProcessCases } from './processCases';
 import { createUniqueId } from './ids';
 
@@ -107,12 +106,34 @@ export class StorageService {
     }
   }
 
-  public saveProjects(projects: SpecKitProject[]): void {
+  /**
+   * Persists the complete workspace aggregate. Callers that drive a user
+   * decision (such as feature intake) must be able to distinguish a durable
+   * write from a browser-storage failure instead of optimistically advancing
+   * the UI.
+   */
+  public saveProjects(projects: SpecKitProject[]): boolean {
+    const serialized = JSON.stringify(projects);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+      localStorage.setItem(STORAGE_KEY, serialized);
       this.notify();
+      return true;
     } catch (err) {
+      // Full snapshots can consume localStorage quickly because each is a
+      // complete project aggregate. Release those optional copies and retry
+      // the primary workspace write once before reporting a real failure.
+      if (err instanceof DOMException && err.name === 'QuotaExceededError' && releaseRecoverySnapshotsForStoragePressure()) {
+        try {
+          localStorage.setItem(STORAGE_KEY, serialized);
+          this.notify();
+          return true;
+        } catch (retryError) {
+          console.error('Failed to save projects after releasing recovery snapshots', retryError);
+          return false;
+        }
+      }
       console.error('Failed to save projects to storage', err);
+      return false;
     }
   }
 
@@ -138,7 +159,7 @@ export class StorageService {
     return projects[0] || SAMPLE_PROJECTS[0];
   }
 
-  public updateActiveProject(updatedProject: SpecKitProject): void {
+  public updateActiveProject(updatedProject: SpecKitProject): boolean {
     const projects = this.getProjects();
     const index = projects.findIndex((p) => p.id === updatedProject.id);
     if (index >= 0) saveProjectBackup(projects[index], 'before project update');
@@ -154,7 +175,7 @@ export class StorageService {
       projects.unshift(projectToSave);
     }
 
-    this.saveProjects(projects);
+    return this.saveProjects(projects);
   }
 
   /**

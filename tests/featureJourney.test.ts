@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, engineInstructionForStage, featureJourneyStages, getJourneyStageForTab, nextFeatureJourneyStage, reopenJourneyStage } from '../src/lib/featureJourney';
+import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, engineInstructionForStage, featureIdForEnginePreflight, featureJourneyStages, getJourneyStageForTab, nextFeatureJourneyStage, reopenJourneyStage, repositoryPathForEngineStage, stageRequiresFeatureWorktree } from '../src/lib/featureJourney';
 import { createProjectWorkspace } from '../src/lib/projectFactory';
 
 test('feature journey has one ordered, routable definition for every stage', () => {
@@ -93,20 +93,89 @@ test('engine instructions are only supplied for Engine-capable stages and stay t
   assert.match(engineInstructionForStage(8, project) || '', /Do not commit, push/);
 });
 
-test('a human-reviewed local implementation receipt unlocks Stage 7 without relying on shared workspace task state', () => {
+test('compact delivery planning keeps a simple feature to three reviewable tasks', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const instruction = engineInstructionForStage(5, project, 'compact') || '';
+  assert.match(instruction, /exactly three individual tasks/i);
+  assert.match(instruction, /T001/);
+  assert.match(instruction, /T002/);
+  assert.match(instruction, /T003/);
+  assert.match(instruction, /Do not split a simple UI enhancement into more tasks/i);
+  assert.doesNotMatch(engineInstructionForStage(5, project) || '', /exactly three individual tasks/i);
+});
+
+test('only implementation and handoff stages require a feature worktree', () => {
+  for (const stageId of [1, 2, 3, 4, 5, 6]) {
+    assert.equal(stageRequiresFeatureWorktree(stageId), false, `Stage ${stageId} must run from the connected checkout`);
+  }
+  assert.equal(stageRequiresFeatureWorktree(7), true);
+  assert.equal(stageRequiresFeatureWorktree(8), true);
+});
+
+test('planning uses the connected checkout without feature branch preflight', () => {
+  const mainCheckout = '/repos/cloud-asset-inventory';
+  const worktree = '/repos/cloud-asset-inventory-feature';
+
+  for (const stageId of [3, 4]) {
+    assert.equal(repositoryPathForEngineStage(stageId, mainCheckout, worktree), mainCheckout);
+    assert.equal(featureIdForEnginePreflight(stageId, 'feature-123'), undefined);
+  }
+});
+
+test('implementation uses the registered worktree and feature-identity preflight', () => {
+  assert.equal(repositoryPathForEngineStage(7, '/repos/main', '/repos/feature'), '/repos/feature');
+  assert.equal(featureIdForEnginePreflight(7, 'feature-123'), 'feature-123');
+  assert.equal(repositoryPathForEngineStage(7, '/repos/main'), '/repos/main');
+});
+
+test('a re-planned delivery file uses the registered worktree when one exists', () => {
+  assert.equal(repositoryPathForEngineStage(5, '/repos/main', '/repos/feature-worktree'), '/repos/feature-worktree');
+  assert.equal(repositoryPathForEngineStage(5, '/repos/main'), '/repos/main');
+});
+
+test('discovering a feature-scoped plan cannot unlock Stage 4 until a reviewer accepts it', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 4)!;
+  project.featureInbox = [{
+    id: 'feature-1', slug: 'tenant-details', title: 'Tenant details', summary: 'Improve details.', source: 'text', importedAt: '2026-09-23',
+    userStoryIds: [], requirementIds: [], taskIds: [],
+    architecturePlan: { path: 'specs/001-tenant-details/plan.md', content: '# Tenant details\n\n## Plan' },
+  }];
+  project.journey = { ...createFeatureJourney(), featureId: 'feature-1', activeStage: 4, completedStages: [1, 2, 3] };
+
+  assert.equal(stage.ready(project), false);
+  project.featureInbox[0].architecturePlan!.acceptedAt = '2026-09-23T12:00:00.000Z';
+  assert.equal(stage.ready(project), true);
+});
+
+test('Stage 7 unlocks only after every official feature task has a reviewed receipt', () => {
   const project = createProjectWorkspace('Example', 'Example project');
   const stage = featureJourneyStages.find((item) => item.id === 7)!;
   project.tasks.tasks[0].status = 'todo';
   project.featureInbox = [{
-    id: 'feature-1', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'text',
-    importedAt: '2026-09-20', userStoryIds: [], requirementIds: [], taskIds: ['T001'],
+    id: 'feature-1', slug: 'tenant-aide-funding-visibility', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'text',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: [], taskIds: ['T001', 'T002'],
+    deliveryPlan: { path: 'specs/tenant-aide-funding-visibility/tasks.md', acceptedAt: '2026-09-20', content: '- [ ] T001 [FR-001] First\n- [ ] T002 [FR-001] Second' },
     implementationReceipts: [{
       taskId: 'T001', jobId: 'job-1', recordedAt: '2026-09-20',
       changedFiles: ['src/funding.ts'], diffStat: '1 file changed', verificationSummary: 'tests passed',
     }],
   }];
 
+  assert.equal(stage.ready(project), false);
+  project.featureInbox[0].implementationReceipts!.push({ taskId: 'T002', jobId: 'job-2', recordedAt: '2026-09-20', changedFiles: ['src/funding.test.ts'], diffStat: '1 file changed', verificationSummary: 'tests passed' });
   assert.equal(stage.ready(project), true);
+});
+
+test('a checked tasks.md line cannot substitute for a reviewed implementation receipt', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  const stage = featureJourneyStages.find((item) => item.id === 7)!;
+  project.featureInbox = [{
+    id: 'feature-1', slug: 'tenant-aide-funding-visibility', title: 'Tenant AIDE Funding Visibility', summary: 'Show funding status.', source: 'text',
+    importedAt: '2026-09-20', userStoryIds: [], requirementIds: [], taskIds: ['T001'],
+    deliveryPlan: { path: 'specs/tenant-aide-funding-visibility/tasks.md', acceptedAt: '2026-09-20', content: '- [x] T001 [FR-001] Already checked in the plan' },
+  }];
+  assert.equal(stage.ready(project), false);
 });
 
 test('a shared board task cannot advance an imported feature that has unreviewed feature-scoped tasks', () => {

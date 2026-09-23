@@ -35,6 +35,7 @@ export function createFeaturePackageFiles(project: SpecKitProject, feature: Feat
     { path: `${root}/plan.md`, content: feature.architecturePlan?.content || '# Feature plan\n\nNot accepted yet.' },
     { path: `${root}/tasks.md`, content: feature.deliveryPlan?.content || '# Feature tasks\n\nNot accepted yet.' },
     { path: `${root}/implementation-receipts.json`, content: JSON.stringify(feature.implementationReceipts || [], null, 2) },
+    { path: `${root}/superseded-implementation-receipts.json`, content: JSON.stringify(feature.supersededImplementationReceipts || [], null, 2) },
     { path: `${root}/ci-pr-template.md`, content: `# ${feature.featureKey || feature.title} handoff\n\n- [ ] Feature package committed from ${root}/\n- [ ] Required checks: ${resolveStackProfile(project).testCommands.join(', ') || 'repository-defined'}\n- [ ] Rollback and migration impact reviewed\n- [ ] No unresolved feature conflict\n- [ ] Environment deployment uses repository-scoped concurrency\n` },
   ];
   return files;

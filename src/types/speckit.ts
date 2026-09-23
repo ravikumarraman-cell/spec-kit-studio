@@ -214,9 +214,12 @@ export interface FeatureInboxItem {
   /** Stage 4 Engine plan retained with the feature that it was created for. */
   architecturePlan?: { path?: string; content: string; acceptedAt?: string };
   /** Stage 5 task breakdown retained with the feature it delivers. */
-  deliveryPlan?: { path?: string; content: string; acceptedAt?: string };
+  deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string };
   /** Human-reviewed local implementation receipts. A receipt never commits or pushes code. */
   implementationReceipts?: FeatureImplementationReceipt[];
+  /** Historical receipts from an earlier delivery-plan revision. They remain
+   * exportable evidence but never satisfy the current plan's completion gate. */
+  supersededImplementationReceipts?: FeatureImplementationReceipt[];
 }
 
 export interface FeatureImplementationReceipt {

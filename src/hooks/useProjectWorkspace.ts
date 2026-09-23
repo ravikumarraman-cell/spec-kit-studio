@@ -5,6 +5,7 @@ import { createFeatureInboxItem } from '../lib/featureInbox';
 import { storageService } from '../lib/storage';
 import { normalizeGitRemote } from '../lib/projectIdentity';
 import { recordFeatureImplementationReceipt } from '../lib/featureReceipts';
+import { reconcileDeliveryPlanReceipts } from '../lib/featureDeliveryPlanRevision';
 import { activeFeatureForProject } from '../lib/featureJourney';
 import {
   FeatureSpec,
@@ -73,10 +74,16 @@ export function useProjectWorkspace() {
   const updateActiveProject = useCallback((updater: (project: SpecKitProject) => SpecKitProject) => {
     const current = storageService.getActiveProject();
     const updated = { ...updater(current), updatedAt: new Date().toISOString() };
-    storageService.updateActiveProject(updated);
-    setActiveProject(updated);
+    if (!storageService.updateActiveProject(updated)) return null;
+
+    // Re-read after the write. This makes a feature import a durable
+    // transaction: the receipt must exist in the persisted aggregate before
+    // React state can claim the operation succeeded.
+    const persisted = storageService.getProjects().find((project) => project.id === updated.id);
+    if (!persisted) return null;
+    setActiveProject(persisted);
     setProjects(storageService.getProjects());
-    return updated;
+    return persisted;
   }, []);
 
   const selectProject = useCallback((id: string) => {
@@ -168,10 +175,12 @@ export function useProjectWorkspace() {
   }, []);
 
   const mergeImportedFeature = useCallback((stories: UserStory[], data: ImportedFeatureData) => {
-    updateActiveProject((project) => {
+    let importedFeatureId = '';
+    const updated = updateActiveProject((project) => {
       const now = new Date().toISOString();
       const extraction: FeatureExtractionPackage = { ...data, userStories: stories };
       const importedFeature = createFeatureInboxItem(extraction, data.source || 'unknown', project.featureInbox?.length || 0, now);
+      importedFeatureId = importedFeature.id;
       const featureInbox = [...(project.featureInbox || []), importedFeature];
       return {
         ...project,
@@ -190,14 +199,34 @@ export function useProjectWorkspace() {
         },
       };
     });
+    // The dialog may close only after the durable aggregate contains the new
+    // feature receipt. This protects against stale workspace selection and
+    // makes a failed browser persistence operation visible to the caller.
+    return Boolean(importedFeatureId && updated?.featureInbox?.some((feature) => feature.id === importedFeatureId));
   }, [updateActiveProject]);
 
-  const saveLatestFeatureReview = useCallback((review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string } }) => {
+  const saveLatestFeatureReview = useCallback((review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => {
     updateActiveProject((project) => {
       const items = project.featureInbox || [];
       const activeFeature = activeFeatureForProject(project);
       if (!activeFeature || !items.length) return project;
-      return { ...project, featureInbox: items.map((item) => item.id === activeFeature.id ? { ...item, ...review } : item) };
+      return {
+        ...project,
+        featureInbox: items.map((item) => {
+          if (item.id !== activeFeature.id) return item;
+          if (!review.deliveryPlan || item.deliveryPlan?.content === review.deliveryPlan.content) return { ...item, ...review };
+          const receiptRevision = reconcileDeliveryPlanReceipts(item.deliveryPlan?.content, review.deliveryPlan.content, item.implementationReceipts);
+          return {
+            ...item,
+            ...review,
+            implementationReceipts: receiptRevision.active,
+            supersededImplementationReceipts: [
+              ...(item.supersededImplementationReceipts || []),
+              ...receiptRevision.superseded,
+            ],
+          };
+        }),
+      };
     });
   }, [updateActiveProject]);
 

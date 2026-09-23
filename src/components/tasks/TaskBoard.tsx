@@ -17,7 +17,7 @@ import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
 import { configuredConnectorClient } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
-import { currentFeatureDeliveryArtifact, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
+import { currentFeatureDeliveryArtifact, deliveryPlanRepositoryPath, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
 
 interface TaskBoardProps {
   projectId: string;
@@ -28,7 +28,7 @@ interface TaskBoardProps {
   onSelectTaskForPrompt: (taskId: string, taskTitle: string) => void;
   focusFeature?: FeatureInboxItem;
   repositoryPath?: string;
-  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
+  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string; repositoryPath?: string }) => void;
 }
 
 const PHASES = [
@@ -70,9 +70,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   useEffect(() => {
     // Once created, a feature worktree is the only authoritative location.
     // The main checkout can retain a different revision of the same artifact.
-    const repositoryPaths = focusFeature?.worktreePath
-      ? [focusFeature.worktreePath]
-      : repositoryPath ? [repositoryPath] : [];
+    const authorityPath = deliveryPlanRepositoryPath(focusFeature, repositoryPath);
+    const repositoryPaths = authorityPath ? [authorityPath] : [];
     if (!focusFeature || !repositoryPaths.length || !onRecoverFeatureDeliveryPlan) return;
     let cancelled = false;
     Promise.allSettled(repositoryPaths.map((path) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(path)))
@@ -80,12 +79,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         const artifacts = results.flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : []);
         const current = currentFeatureDeliveryArtifact(focusFeature, artifacts);
         if (!cancelled && needsFeatureDeliveryReconciliation(focusFeature, current)) {
-          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: focusFeature.deliveryPlan?.acceptedAt || new Date().toISOString() });
+          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: focusFeature.deliveryPlan?.acceptedAt || new Date().toISOString(), repositoryPath: authorityPath });
         }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [focusFeature?.id, focusFeature?.deliveryPlan?.path, focusFeature?.deliveryPlan?.content, focusFeature?.worktreePath, onRecoverFeatureDeliveryPlan, repositoryPath]);
+  }, [focusFeature?.id, focusFeature?.deliveryPlan?.path, focusFeature?.deliveryPlan?.content, focusFeature?.deliveryPlan?.repositoryPath, focusFeature?.worktreePath, onRecoverFeatureDeliveryPlan, repositoryPath]);
 
   const handleUpdateStatus = useCallback(
     (taskId: string, newStatus: TaskStatus) => {
@@ -167,8 +166,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Feature implementation queue</p>
           <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
           {hasFeaturePlan ? <>
-            <p className="mt-1 text-xs text-zinc-300">Only the accepted tasks in this feature’s <code>tasks.md</code> are shown here and may be implemented for this feature.</p>
-            <FeatureDeliveryBoard content={focusFeature.deliveryPlan!.content} sourcePath={focusFeature.deliveryPlan!.path!} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} authorityLabel={focusFeature.worktreePath ? 'Registered feature worktree' : 'Connected repository'} />
+            <p className="mt-1 text-xs text-zinc-300">Only the accepted tasks in this feature’s official <code>tasks.md</code> are shown here and may be implemented for this feature. This count is deliberately separate from any draft or shared workspace board.</p>
+            <FeatureDeliveryBoard content={focusFeature.deliveryPlan!.content} sourcePath={focusFeature.deliveryPlan!.path!} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} authorityLabel={focusFeature.deliveryPlan?.repositoryPath === focusFeature.worktreePath ? 'Registered feature worktree' : 'Accepted planning repository'} />
           </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> Return to Plan delivery to find or generate this feature’s <code>tasks.md</code>.</div>}
         </section>
       </div>

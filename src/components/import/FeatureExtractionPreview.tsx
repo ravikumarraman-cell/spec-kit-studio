@@ -14,6 +14,9 @@ interface FeatureExtractionPreviewProps {
   onReExtract: () => void;
   onCreateProject: () => void;
   onMerge: () => void;
+  onOpenSavedFeature: () => void;
+  isSavingFeature?: boolean;
+  savedFeatureTitle?: string | null;
 }
 
 /** Read-only Spec-Kit output preview plus an explicit destination decision. */
@@ -26,6 +29,9 @@ export function FeatureExtractionPreview({
   onReExtract,
   onCreateProject,
   onMerge,
+  onOpenSavedFeature,
+  isSavingFeature = false,
+  savedFeatureTitle,
 }: FeatureExtractionPreviewProps) {
   const tabClass = (name: FeaturePreviewTab, activeClass: string) =>
     `flex-1 py-2 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${tab === name ? `bg-zinc-800 ${activeClass} shadow-xs` : 'text-zinc-400 hover:text-zinc-200'}`;
@@ -55,11 +61,13 @@ export function FeatureExtractionPreview({
       <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3 pt-4">
         <div className="text-xs font-bold text-zinc-300">Feature destination:</div>
         {canMerge && activeProjectName && <p className="text-xs leading-relaxed text-cyan-100">This feature will be added to <strong>{activeProjectName}</strong> and continue its current Journey.</p>}
-        <div className="flex flex-col sm:flex-row items-center gap-3">
+        {savedFeatureTitle
+          ? <div className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 p-4 text-xs text-emerald-100"><p className="font-bold">Feature saved in {activeProjectName}</p><p className="mt-1 text-emerald-200"><strong>{savedFeatureTitle}</strong> has a durable receipt in this workspace. It was not moved to another workspace.</p><button type="button" onClick={onOpenSavedFeature} className="mt-3 rounded-lg bg-emerald-500 px-3 py-2 font-bold text-emerald-950 hover:bg-emerald-400">Open Feature Journey</button></div>
+          : <div className="flex flex-col sm:flex-row items-center gap-3">
           {canMerge && activeProjectName
-            ? <button type="button" onClick={onMerge} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Plus className="w-4 h-4" /><span>Add feature to this workspace</span></button>
+            ? <button type="button" disabled={isSavingFeature} onClick={onMerge} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:cursor-wait disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Plus className="w-4 h-4" /><span>{isSavingFeature ? 'Saving feature to this workspace…' : 'Add feature to this workspace'}</span></button>
             : <button type="button" onClick={onCreateProject} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><PlusCircle className="w-4 h-4" /><span>Create Spec-Kit Project ({result.title})</span></button>}
-        </div>
+          </div>}
       </div>
     </div>
   );

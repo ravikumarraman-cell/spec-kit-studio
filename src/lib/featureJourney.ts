@@ -25,6 +25,9 @@ export interface FeatureJourneyStage {
   ready: (project: SpecKitProject) => boolean;
   readyHint: string;
 }
+
+/** Controls delivery-plan granularity without changing review or evidence rules. */
+export type DeliveryPlanMode = 'detailed' | 'compact';
 /**
  * Resolve feature context by durable identity. The last inbox item is only a
  * legacy migration fallback; new work must store journey.featureId explicitly.
@@ -66,7 +69,10 @@ function allFeatureTasksReviewed(project: SpecKitProject) {
   const tasks = hasFeatureScopedDeliveryTasks(project) ? parseFeatureDeliveryTasks(feature?.deliveryPlan?.content) : [];
   if (!tasks.length) return false;
   const reviewed = new Set(feature?.implementationReceipts?.map((receipt) => receipt.taskId) || []);
-  if (tasks.every((task) => task.done || reviewed.has(task.id))) return true;
+  // A checkbox in an imported tasks.md is planning state, not evidence that a
+  // reviewer accepted implementation. Every official task needs its own
+  // durable Studio receipt before the implementation stage can be approved.
+  if (tasks.every((task) => reviewed.has(task.id))) return true;
 
   // Workspaces created before feature-scoped receipts retain an explicit Stage 7
   // human approval as their durable implementation evidence. Preserve that
@@ -86,14 +92,7 @@ export const featureJourneyStages: readonly FeatureJourneyStage[] = [
   { id: 4, title: 'Design safely', shortLabel: 'Design safely', destination: 'plan', outcome: 'Approve a compatible technical plan.', evidence: 'Components, API contracts, schema changes, ADRs, test approach, and rollback considerations.', engineStep: 'speckit.plan + speckit.checklist', action: 'Run Codex to prepare architecture plan', handoffTitle: 'Architecture plan ready for review', handoffGuidance: 'Accept the feature-scoped plan, then verify its contracts, tests, risks, and rollback considerations before approving the design.', ready: (project) => hasAcceptedFeaturePlan(project), readyHint: 'Run, review, and accept a feature-scoped architecture plan before approval.' },
   { id: 5, title: 'Make delivery actionable', shortLabel: 'Plan delivery', destination: 'tasks', outcome: 'Approve a dependency-ordered, traceable delivery plan.', evidence: 'Tasks, requirement mappings, dependencies, phases, and test tasks.', engineStep: 'speckit.tasks + speckit.analyze', action: 'Run Codex to prepare delivery plan', handoffTitle: 'Delivery plan ready for review', handoffGuidance: 'Accept the feature-scoped task breakdown, then verify its mappings and dependency order before approving delivery planning.', ready: (project) => hasAcceptedDeliveryPlan(project), readyHint: 'Run, review, and accept feature-scoped delivery tasks before approval.' },
   { id: 6, title: 'Pass the quality gate', shortLabel: 'Quality gate', destination: 'audit', outcome: 'Resolve specification gaps before code changes begin.', evidence: 'Cross-artifact consistency report, unresolved ambiguities, and reviewer decisions.', engineStep: 'Studio Spec Quality Audit', action: 'Open Spec Quality Audit', handoffTitle: 'Quality-gate results ready for review', handoffGuidance: 'Resolve or explicitly document every blocking finding. The Journey will show when the quality threshold is met.', ready: (project) => Boolean(latestFeature(project)) && auditPassesQualityGate(project.audit), readyHint: 'Import and select a feature, then run the audit and resolve its blocking gaps.' },
-  { id: 7, title: 'Implement deliberately', shortLabel: 'Implement', destination: 'prompt', outcome: 'Choose and execute one approved task or phase at a time.', evidence: 'Task-scoped agent prompt, changed files, command output, and focused test results.', engineStep: 'Task-scoped speckit.implement', action: 'Choose an implementation task', handoffTitle: 'Implementation work is ready to verify', handoffGuidance: 'Choose a task, review its scoped prompt, then deliberately run an agent and retain the verified implementation receipt.', ready: (project) => {
-    // A durable feature receipt is authoritative even when a legacy import
-    // no longer exposes its original tasks.md. When that artifact is present,
-    // however, shared-board status can never substitute for feature evidence.
-    const feature = latestFeature(project);
-    if (!feature) return false;
-    return Boolean(feature.implementationReceipts?.length);
-  }, readyHint: 'Choose and run one approved feature task, review its diff and verification results, then retain the implementation receipt.' },
+  { id: 7, title: 'Implement deliberately', shortLabel: 'Implement', destination: 'prompt', outcome: 'Choose and execute one approved task or phase at a time.', evidence: 'Task-scoped agent prompt, changed files, command output, and focused test results.', engineStep: 'Task-scoped speckit.implement', action: 'Choose an implementation task', handoffTitle: 'Implementation work is ready to verify', handoffGuidance: 'Choose each task, review its scoped result, and retain a verified receipt for every task before approving implementation.', ready: allFeatureTasksReviewed, readyHint: 'Complete and retain a reviewed receipt for every task in the accepted feature delivery plan before approving this stage.' },
   { id: 8, title: 'Verify and hand off', shortLabel: 'Verify & hand off', destination: 'export', outcome: 'Review the final change set and retain a durable record.', evidence: 'Convergence findings, Git diff, verification results, and exported Spec-Kit artifacts.', engineStep: 'speckit.converge', action: 'Verify and export reviewed artifacts', handoffTitle: 'Handoff package ready for review', handoffGuidance: 'Export the reviewed artifacts and compare the final change set to the approved plan before marking the feature complete.', ready: allFeatureTasksReviewed, readyHint: 'Complete and retain review evidence for the approved feature tasks before final verification.' },
 ];
 
@@ -133,14 +132,43 @@ export function reopenJourneyStage(journey: FeatureJourney, stageId: number, now
   return { ...journey, activeStage: safeStage, completedStages: journey.completedStages.filter((completed) => completed < safeStage), updatedAt: now };
 }
 
-export function engineInstructionForStage(stageId: number, project: SpecKitProject): string | null {
+export function engineInstructionForStage(stageId: number, project: SpecKitProject, deliveryPlanMode: DeliveryPlanMode = 'detailed'): string | null {
   const nextTask = project.tasks.tasks.find((task) => task.status !== 'done');
   const instructions: Partial<Record<number, string>> = {
     3: `Feature Journey stage 3: inspect ${project.name} read-only and produce an evidence-backed impact map. Identify owning code paths, neighboring implementation, relevant tests, APIs, schemas, deployment workflows, and applicable constitution rules. Do not change files.`,
     4: `Feature Journey stage 4: use the integration-appropriate Spec-Kit plan workflow for the exact feature below.\n\n${featureBrief(project)}\n\nCreate an official feature-scoped plan.md under specs/<feature-slug>/plan.md. Its title and summary must name the feature in focus, and every proposed component, API, schema, test, risk, and rollback decision must trace to its requirements. Do not use or overwrite a workspace-wide .specify/studio/plan.md. Do not generate tasks or application code; stop for human review.`,
-    5: `Feature Journey stage 5: use the integration-appropriate Spec-Kit tasks workflow for the exact feature below, then run the read-only analysis workflow.\n\n${featureBrief(project)}\n\nCreate an official feature-scoped tasks.md under specs/<feature-slug>/tasks.md. Its title must name the feature in focus; every task must map to one of the listed requirements and include implementation plus verification work. Do not use or overwrite a workspace-wide .specify/studio/tasks.md. Do not implement code; stop for human review.`,
+    5: `Feature Journey stage 5: use the integration-appropriate Spec-Kit tasks workflow for the exact feature below, then run the read-only analysis workflow.\n\n${featureBrief(project)}\n\nCreate an official feature-scoped tasks.md under specs/<feature-slug>/tasks.md. Its title must name the feature in focus; every task must map to one of the listed requirements and include implementation plus verification work. Do not use or overwrite a workspace-wide .specify/studio/tasks.md. ${deliveryPlanMode === 'compact'
+      ? 'This is a compact demo plan. Replace this feature\'s existing feature-scoped tasks.md if one exists. Create exactly three individual tasks: T001 confirms only genuine human scope decisions; T002 implements the entire approved feature and its focused unit coverage; T003 runs focused verification and source-scope review. Keep test details and requirement traceability within these three tasks. Do not create separate setup, fixture, accessibility, responsive, or final-verification tasks. Do not split a simple UI enhancement into more tasks. Do not implement code; stop for human review.'
+      : 'Do not implement code; stop for human review.'}`,
     7: `Feature Journey stage 7: use the integration-appropriate Spec-Kit implement workflow for exactly this approved task in ${project.name}: ${nextTask?.id || 'the task selected in Studio'} — ${nextTask?.title || 'selected task'}. Respect checklist review state and task boundaries. Run focused checks, summarize changed files and results, then stop.`,
     8: `Feature Journey stage 8: run the integration-appropriate Spec-Kit converge workflow for ${project.name}. Compare implementation with approved artifacts and report remaining work, verification results, and review risks. Do not commit, push, or make unrelated changes.`,
   };
   return instructions[stageId] || null;
+}
+
+/**
+ * Planning produces reviewable Spec-Kit artifacts in the connected checkout.
+ * Only implementation and final convergence operate on feature code, so only
+ * those stages may require the feature's registered worktree and branch.
+ */
+export function stageRequiresFeatureWorktree(stageId: number): boolean {
+  return stageId >= 7;
+}
+
+/** Keep planning bound to the connected checkout and implementation bound to
+ * the isolated feature worktree when one has been registered. */
+export function repositoryPathForEngineStage(stageId: number, connectedRepositoryPath?: string, featureWorktreePath?: string): string | undefined {
+  // When a feature already has a worktree, replacement delivery plans belong
+  // there too. Otherwise an old same-path tasks.md in that worktree can
+  // overwrite the newer reviewed plan created in the main checkout.
+  if (stageId === 5 && featureWorktreePath) return featureWorktreePath;
+  return stageRequiresFeatureWorktree(stageId)
+    ? featureWorktreePath || connectedRepositoryPath
+    : connectedRepositoryPath;
+}
+
+/** Feature-identity preflight enforces the expected branch/worktree. That
+ * identity is intentionally absent before implementation is allowed. */
+export function featureIdForEnginePreflight(stageId: number, featureId?: string): string | undefined {
+  return stageRequiresFeatureWorktree(stageId) ? featureId : undefined;
 }

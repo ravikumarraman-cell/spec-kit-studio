@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { decisionsComplete, featureTaskDecisionGate, formatApprovedDecisions } from '../src/lib/featureTaskDecisions';
-import { actionableFeatureDeliveryTasks, featureDeliveryCompletionSource, featureDeliveryTaskProgress, FeatureDeliveryTask, nextActionableFeatureDeliveryTask } from '../src/lib/featureDeliveryTasks';
+import { actionableFeatureDeliveryTasks, featureDeliveryCompletionSource, featureTaskExecutionMode, featureDeliveryTaskProgress, FeatureDeliveryTask, nextActionableFeatureDeliveryTask } from '../src/lib/featureDeliveryTasks';
 
 test('requires explicit complete approval for T002', () => {
   const gate = featureTaskDecisionGate('T002');
@@ -54,4 +54,24 @@ test('keeps tasks.md completion separate from Studio-reviewed receipts', () => {
   assert.equal(featureDeliveryCompletionSource(tasks[0]), 'tasks-md');
   assert.equal(featureDeliveryCompletionSource(tasks[1], ['T002']), 'reviewed-receipt');
   assert.equal(featureDeliveryCompletionSource(tasks[0], ['T001']), 'reviewed-receipt');
+});
+
+test('keeps a document-only human approval gate out of the agent runner', () => {
+  const gate: FeatureDeliveryTask = {
+    id: 'T001',
+    requirementIds: [],
+    title: 'Confirm and record approved scope in `specs/001-feature/spec.md` before implementation starts.',
+    done: false,
+  };
+  assert.equal(featureTaskExecutionMode(gate), 'human-approval');
+});
+
+test('does not mistake a source or test task for a human approval gate', () => {
+  const implementation: FeatureDeliveryTask = {
+    id: 'T002',
+    requirementIds: [],
+    title: 'Confirm implementation behavior before implementation starts in `frontend/src/Widget.tsx`.',
+    done: false,
+  };
+  assert.equal(featureTaskExecutionMode(implementation), 'agent');
 });

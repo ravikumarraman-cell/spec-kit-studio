@@ -20,7 +20,7 @@ import { EditorHeader } from '../common/EditorHeader';
 import { useClipboard } from '../../hooks/useClipboard';
 import { AgentTarget, portableFeatureTaskPrompt, portableTaskPrompt } from '../../lib/portablePrompts';
 import { generationApi } from '../../lib/api/generation';
-import { actionableFeatureDeliveryTasks, featureDeliveryTaskProgress, nextActionableFeatureDeliveryTask, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
+import { actionableFeatureDeliveryTasks, featureTaskExecutionMode, featureDeliveryTaskProgress, nextActionableFeatureDeliveryTask, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, configuredConnectorClient, configuredConnectorUrl, repositoryEvidenceSnapshot } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
@@ -34,13 +34,14 @@ import { FeatureExecutionFocus } from './FeatureExecutionFocus';
 import { FeatureTaskDecisionAnswers, decisionsComplete, featureTaskDecisionGate, formatApprovedDecisions, recommendedDecisionAnswers } from '../../lib/featureTaskDecisions';
 import { featureImplementationBlocker, featureImplementationWorkspace } from '../../lib/featureWorktree';
 import { activeFeatureForProject } from '../../lib/featureJourney';
-import { currentFeatureDeliveryArtifact, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
+import { currentFeatureDeliveryArtifact, deliveryPlanRepositoryPath, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
+import { clearLocalAgentJobReference, readLocalAgentJobReference, saveLocalAgentJobReference } from '../../lib/localAgentJobSession';
 
 interface PromptStudioProps {
   project: SpecKitProject;
   initialTaskId?: string;
   onRecordFeatureImplementation: (featureId: string, receipt: FeatureImplementationReceipt) => boolean;
-  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
+  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string; repositoryPath?: string }) => void;
   onOpenJourney?: () => void;
 }
 
@@ -134,11 +135,28 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const [recoveredEvidence, setRecoveredEvidence] = useState<ConnectorJobEvidence | null>(null);
   const [isRecoveringEvidence, setIsRecoveringEvidence] = useState(false);
   const [artifactFindings, setArtifactFindings] = useState<string[]>([]);
+  const [hasConfirmedHumanReview, setHasConfirmedHumanReview] = useState(false);
 
   const restoreActiveConnectorJob = async () => {
     const repositoryPath = implementationWorkspace;
-    if (!repositoryPath) return false;
-    const job = await activeConnectorJob(
+    if (!repositoryPath || !activeFeature) return false;
+    const reference = readLocalAgentJobReference(project.id, activeFeature.id, repositoryPath);
+    let job: ConnectorJob | null = null;
+    if (reference) {
+      try {
+        // `active` intentionally returns only writers that are still running.
+        // The stored id lets us restore a terminal result for human review too.
+        job = await configuredConnectorClient(getConnectorSessionToken()).getJob(reference.jobId);
+        setSelectedTaskId(reference.taskId);
+      } catch (error) {
+        // Connector restarts discard its in-memory job history. Do not keep a
+        // stale id, but preserve it for transient pairing/network failures.
+        if (/job not found/i.test(error instanceof Error ? error.message : '')) {
+          clearLocalAgentJobReference(project.id, activeFeature.id);
+        }
+      }
+    }
+    if (!job) job = await activeConnectorJob(
       configuredConnectorUrl(),
       getConnectorSessionToken(),
       repositoryPath,
@@ -146,6 +164,9 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     if (!job) return false;
     setCodexJob(job);
     setIsRunningCodex(job.status === 'running');
+    setCompletionNotice(job.status === 'running'
+      ? 'Restored the active local run. Its live status is shown below.'
+      : 'Restored the finished local run. Review its result below before recording the task.');
     return true;
   };
 
@@ -158,9 +179,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   useEffect(() => {
     // Do not blend artifacts from a feature worktree and the main checkout.
     // Their paths can be identical while their task state is legitimately not.
-    const repositoryPaths = activeFeature?.worktreePath
-      ? [activeFeature.worktreePath]
-      : project.importedRepo?.repoUrl ? [project.importedRepo.repoUrl] : [];
+    const authorityPath = deliveryPlanRepositoryPath(activeFeature, project.importedRepo?.repoUrl);
+    const repositoryPaths = authorityPath ? [authorityPath] : [];
     if (!activeFeature || repositoryPaths.length === 0 || !onRecoverFeatureDeliveryPlan) return;
     let cancelled = false;
     Promise.allSettled(repositoryPaths.map((repositoryPath) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)))
@@ -168,12 +188,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         const artifacts = results.flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : []);
         const current = currentFeatureDeliveryArtifact(activeFeature, artifacts);
         if (!cancelled && needsFeatureDeliveryReconciliation(activeFeature, current)) {
-          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: activeFeature.deliveryPlan?.acceptedAt || new Date().toISOString() });
+          onRecoverFeatureDeliveryPlan({ path: current.path, content: current.content, acceptedAt: activeFeature.deliveryPlan?.acceptedAt || new Date().toISOString(), repositoryPath: authorityPath });
         }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [activeFeature?.id, activeFeature?.deliveryPlan?.path, activeFeature?.deliveryPlan?.content, activeFeature?.worktreePath, onRecoverFeatureDeliveryPlan, project.importedRepo?.repoUrl]);
+  }, [activeFeature?.id, activeFeature?.deliveryPlan?.path, activeFeature?.deliveryPlan?.content, activeFeature?.deliveryPlan?.repositoryPath, activeFeature?.worktreePath, onRecoverFeatureDeliveryPlan, project.importedRepo?.repoUrl]);
 
   useEffect(() => {
     if (!codexJob || codexJob.status !== 'running') return;
@@ -248,6 +268,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   const selectedTask = useMemo(() => {
     return taskOptions.find((task) => task.id === selectedTaskId) || taskOptions[0];
   }, [selectedTaskId, taskOptions]);
+  const selectedTaskExecutionMode = featureTaskExecutionMode(selectedTask);
+  const isHumanApprovalTask = selectedTaskExecutionMode === 'human-approval';
+
+  useEffect(() => {
+    setHasConfirmedHumanReview(false);
+  }, [selectedTask?.id]);
 
   useEffect(() => {
     if (taskOptions.length > 0 && !taskOptions.some((task) => task.id === selectedTaskId)) {
@@ -327,6 +353,10 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       return;
     }
     if (!selectedLocalAgent) return;
+    if (isHumanApprovalTask) {
+      setRunError(`${selectedTask.id} is a human approval gate. Record the reviewed approval below; Studio will not send it to an agent.`);
+      return;
+    }
     if (!decisionsReady) {
       setRunError(`Before ${selectedTask.id} can run, choose and explicitly confirm the required operational decisions above.`);
       return;
@@ -342,6 +372,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     try {
       const client = configuredConnectorClient();
       let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt, project, activeFeature.id);
+      saveLocalAgentJobReference({ jobId: job.id, projectId: project.id, featureId: activeFeature.id, taskId: selectedTask.id, repositoryPath });
       setCodexJob(job);
       while (job.status === 'running') {
         await new Promise((resolve) => window.setTimeout(resolve, 750));
@@ -440,6 +471,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       setRunError('Studio could not attach this receipt to the active feature. The task remains selected; do not rerun it until this is resolved.');
       return;
     }
+    clearLocalAgentJobReference(project.id, activeFeature.id);
     // The receipt is retained by the parent before the finished-run UI is
     // cleared. Select only the next feature-scoped task; do not fall back to
     // the shared task board or leave the old evidence attached to a new task.
@@ -453,6 +485,30 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setCompletionNotice(nextTask
       ? `${recordedTaskId} was recorded. ${nextTask.id} is now selected as the next feature task.`
       : `${recordedTaskId} was recorded. All feature-scoped tasks now have reviewed evidence.`);
+  };
+
+  const retainHumanApproval = () => {
+    if (!activeFeature || !selectedTask || !hasConfirmedHumanReview) return;
+    const recordedTaskId = selectedTask.id;
+    const nextTask = nextActionableFeatureDeliveryTask(featureTasks, reviewedFeatureTaskIds, recordedTaskId);
+    const saved = onRecordFeatureImplementation(activeFeature.id, {
+      taskId: recordedTaskId,
+      jobId: `human-approval-${recordedTaskId}-${Date.now()}`,
+      recordedAt: new Date().toISOString(),
+      changedFiles: [],
+      diffStat: 'Human approval gate — no application-code change was requested or recorded.',
+      verificationSummary: `Human approval gate for ${recordedTaskId}. Reviewer explicitly confirmed the feature specification and plan decisions before implementation began.`,
+    });
+    if (!saved) {
+      setRunError('Studio could not attach this human-approval receipt to the active feature. The gate remains open; do not continue until it is resolved.');
+      return;
+    }
+    setSelectedTaskId(nextTask?.id || '');
+    setPendingReviewedTaskIds((current) => [...new Set([...current, recordedTaskId])]);
+    setHasConfirmedHumanReview(false);
+    setCompletionNotice(nextTask
+      ? `${recordedTaskId} human approval was recorded. ${nextTask.id} is now selected as the next feature task.`
+      : `${recordedTaskId} human approval was recorded. All feature-scoped tasks now have reviewed evidence.`);
   };
 
   return (
@@ -494,7 +550,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       )}
 
       {/* Target Task and Agent Configuration Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+      <div className={`grid grid-cols-1 gap-4 text-xs ${isHumanApprovalTask ? '' : 'md:grid-cols-2'}`}>
         {/* Task Selection */}
         <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
           <label className="font-bold text-zinc-200 block">Select feature task to implement</label>
@@ -541,8 +597,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
 
         </div>
 
-        {/* Agent Profile Selector */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+        {/* Agent Profile Selector: human approval gates do not receive an agent. */}
+        {!isHumanApprovalTask && <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
           <label className="font-bold text-zinc-200 block">Target Agent Architecture</label>
           <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
             {AGENT_FRAMEWORKS.map((agent) => (
@@ -565,7 +621,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
               </div>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
 
       {decisionGate && (
@@ -576,8 +632,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         />
       )}
 
-      {/* Additional Instructions */}
-      <div className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2 text-xs">
+      {/* Additional Instructions only apply to agent handoffs. */}
+      {!isHumanApprovalTask && <div className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2 text-xs">
         <label className="font-bold text-zinc-300 block">
           Custom Directives & Extra Task Instructions (Optional)
         </label>
@@ -588,42 +644,42 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
           onChange={(e) => setCustomNotes(e.target.value)}
           className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-purple-500/50"
         />
-      </div>
+      </div>}
 
       {activeFeature && featureTasks.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-cyan-400/35 bg-zinc-950 shadow-[0_0_50px_rgba(34,211,238,0.06)]">
           <div className="border-b border-cyan-400/15 bg-gradient-to-r from-cyan-500/15 via-indigo-500/10 to-zinc-950 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-3">
-                <div className="rounded-xl bg-cyan-400/15 p-2.5"><Terminal className="h-5 w-5 text-cyan-200" /></div>
+                <div className="rounded-xl bg-cyan-400/15 p-2.5">{isHumanApprovalTask ? <FileCheck2 className="h-5 w-5 text-cyan-200" /> : <Terminal className="h-5 w-5 text-cyan-200" />}</div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Local execution · explicit approval required</p>
-                  <h2 className="mt-1 text-base font-bold text-zinc-100">{selectedLocalAgent ? `Run ${selectedTask?.id || 'selected task'} with ${selectedAgentLabel}` : `Send ${selectedTask?.id || 'selected task'} to ${selectedAgentLabel}`}</h2>
-                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">{selectedLocalAgent ? `${selectedAgentLabel} runs through your loopback connector inside the connected repository. Studio streams its work, captures Git evidence, and never commits, pushes, or marks work complete on its own.` : `Studio prepares a portable, feature-scoped handoff for ${selectedAgentLabel}. Copy it into that agent; Studio does not pretend it can control an unconnected CLI.`}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">{isHumanApprovalTask ? 'Human review gate · explicit approval required' : 'Local execution · explicit approval required'}</p>
+                  <h2 className="mt-1 text-base font-bold text-zinc-100">{isHumanApprovalTask ? `Approve ${selectedTask?.id || 'selected task'} before implementation` : selectedLocalAgent ? `Run ${selectedTask?.id || 'selected task'} with ${selectedAgentLabel}` : `Send ${selectedTask?.id || 'selected task'} to ${selectedAgentLabel}`}</h2>
+                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">{isHumanApprovalTask ? 'This official task is a product and traceability decision gate. Review the feature specification and plan, then record your approval. No agent run, code change, or Git recovery is needed.' : selectedLocalAgent ? `${selectedAgentLabel} runs through your loopback connector inside the connected repository. Studio streams its work, captures Git evidence, and never commits, pushes, or marks work complete on its own.` : `Studio prepares a portable, feature-scoped handoff for ${selectedAgentLabel}. Copy it into that agent; Studio does not pretend it can control an unconnected CLI.`}</p>
                 </div>
               </div>
-              <div className="rounded-lg border border-cyan-400/20 bg-zinc-950/70 px-3 py-2 text-[11px] text-cyan-100">{selectedLocalAgent ? 'Workspace-write only' : 'Portable prompt only'}<br /><span className="text-zinc-500">No commit · No push</span></div>
+              <div className="rounded-lg border border-cyan-400/20 bg-zinc-950/70 px-3 py-2 text-[11px] text-cyan-100">{isHumanApprovalTask ? 'Human-review only' : selectedLocalAgent ? 'Workspace-write only' : 'Portable prompt only'}<br /><span className="text-zinc-500">No commit · No push</span></div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-3 text-[11px]">
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Feature</span><p className="mt-1 text-zinc-400">{activeFeature.title}</p></div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Task</span><p className="mt-1 font-mono text-cyan-200">{selectedTask?.id || 'Choose a task'}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Implementation worktree</span><p className="mt-1 truncate text-zinc-400">{implementationWorkspace || 'Create isolated worktree first'}</p></div>
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">{isHumanApprovalTask ? 'Required evidence' : 'Implementation worktree'}</span><p className="mt-1 truncate text-zinc-400">{isHumanApprovalTask ? 'Reviewed feature spec and plan' : implementationWorkspace || 'Create isolated worktree first'}</p></div>
             </div>
           </div>
-          {!implementationWorkspace && <div className="mx-5 mt-5 rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"><p className="font-bold">Implementation is safely blocked until this feature has its own worktree.</p><p className="mt-1 text-amber-200">The shared repository checkout is read-only for this feature. No Codex run has been started from this screen.</p>{onOpenJourney && <button type="button" onClick={onOpenJourney} className="mt-3 rounded-lg bg-amber-300 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-200">Set up isolated worktree</button>}</div>}
+          {!isHumanApprovalTask && !implementationWorkspace && <div className="mx-5 mt-5 rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"><p className="font-bold">Implementation is safely blocked until this feature has its own worktree.</p><p className="mt-1 text-amber-200">The shared repository checkout is read-only for this feature. No Codex run has been started from this screen.</p>{onOpenJourney && <button type="button" onClick={onOpenJourney} className="mt-3 rounded-lg bg-amber-300 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-200">Set up isolated worktree</button>}</div>}
           <div className="flex flex-wrap items-center gap-3 p-5">
-            {selectedLocalAgent ? <button type="button" onClick={runCodexLocally} disabled={isRunningCodex || Boolean(implementationBlocker) || !selectedTask || !decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-4 w-4" />{isRunningCodex ? `${selectedAgentLabel} is running locally…` : implementationBlocker ? 'Set up worktree to run' : decisionsReady ? `Run with ${selectedAgentLabel} locally` : 'Confirm required decisions to run'}</button> : <button type="button" onClick={() => copy(masterPrompt)} disabled={!decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Copy className="h-4 w-4" />{copied ? 'Prompt copied' : decisionsReady ? `Copy handoff for ${selectedAgentLabel}` : 'Confirm required decisions to copy'}</button>}
+            {isHumanApprovalTask ? <><label className="flex max-w-2xl items-start gap-2 text-xs text-zinc-200"><input type="checkbox" checked={hasConfirmedHumanReview} onChange={(event) => setHasConfirmedHumanReview(event.target.checked)} className="mt-0.5 accent-cyan-300" />I reviewed the feature specification and plan and confirm this human gate is approved for implementation.</label><button type="button" onClick={retainHumanApproval} disabled={!hasConfirmedHumanReview} className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-emerald-500/15 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-45"><FileCheck2 className="h-4 w-4" />Record human approval</button></> : selectedLocalAgent ? <button type="button" onClick={runCodexLocally} disabled={isRunningCodex || Boolean(implementationBlocker) || !selectedTask || !decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-4 w-4" />{isRunningCodex ? `${selectedAgentLabel} is running locally…` : implementationBlocker ? 'Set up worktree to run' : decisionsReady ? `Run with ${selectedAgentLabel} locally` : 'Confirm required decisions to run'}</button> : <button type="button" onClick={() => copy(masterPrompt)} disabled={!decisionsReady} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-cyan-500/15 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"><Copy className="h-4 w-4" />{copied ? 'Prompt copied' : decisionsReady ? `Copy handoff for ${selectedAgentLabel}` : 'Confirm required decisions to copy'}</button>}
             {isRunningCodex && <button type="button" onClick={cancelCodexRun} className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2.5 text-xs font-bold text-rose-200 hover:bg-rose-500/20"><Square className="h-3.5 w-3.5 fill-current" />Stop safely</button>}
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />One task per handoff keeps scope and token use bounded.</span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />{isHumanApprovalTask ? 'This receipt records a human decision, not application-code work.' : 'One task per handoff keeps scope and token use bounded.'}</span>
           </div>
-          {!codexJob && !isRunningCodex && selectedTask && implementationWorkspace && (
-            <section className="mx-5 mb-5 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">
-              <p className="font-bold text-amber-100">Already completed this task outside the current screen?</p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-zinc-400">
-                <p className="max-w-2xl leading-relaxed">Recover its current Git evidence and retain a review receipt for <span className="font-mono text-amber-100">{selectedTask.id}</span>. This is read-only: it does not run an agent, edit files, commit, or push. You will still confirm that the changes belong to this task before Studio records it.</p>
-                <button type="button" onClick={recoverTaskEvidence} disabled={isRecoveringEvidence} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-300/20 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRecoveringEvidence ? 'animate-spin' : ''}`} />{isRecoveringEvidence ? 'Reading evidence…' : 'Recover completed-task evidence'}</button>
+          {!isHumanApprovalTask && !codexJob && !isRunningCodex && selectedTask && implementationWorkspace && (
+            <details className="mx-5 mb-5 rounded-xl border border-zinc-800 bg-zinc-900/35 text-xs">
+              <summary className="cursor-pointer px-4 py-3 font-semibold text-zinc-400 hover:text-zinc-200">Need to recover work completed outside Studio?</summary>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-4 py-3 text-zinc-400">
+                <p className="max-w-2xl leading-relaxed">Read the current Git evidence and retain a review receipt for <span className="font-mono text-zinc-200">{selectedTask.id}</span>. This is read-only: it does not run an agent, edit files, commit, or push. Use it only when this task was already completed outside Studio.</p>
+                <button type="button" onClick={recoverTaskEvidence} disabled={isRecoveringEvidence} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRecoveringEvidence ? 'animate-spin' : ''}`} />{isRecoveringEvidence ? 'Reading evidence…' : 'Recover external work evidence'}</button>
               </div>
-            </section>
+            </details>
           )}
           {runError && <div className="mx-5 mb-5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-100">{runError}</div>}
           {recoveredEvidence && !codexJob && <section className="mx-5 mb-5 rounded-xl border border-amber-300/35 bg-amber-400/5 p-4 text-xs">
@@ -661,7 +717,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       )}
 
       {/* Compiled Master Prompt Output */}
-      <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-5 space-y-3">
+      {!isHumanApprovalTask && <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-5 space-y-3">
         <div className="flex items-center justify-between text-xs text-zinc-400 font-mono pb-2 border-b border-zinc-900">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-purple-400" />
@@ -699,10 +755,10 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
           className="w-full p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 text-cyan-300 font-mono text-xs focus:outline-none leading-relaxed resize-y cursor-text"
           spellCheck={false}
         />
-      </div>
+      </div>}
 
       {/* Simulated AI Output Panel */}
-      {aiSimulationOutput && (
+      {!isHumanApprovalTask && aiSimulationOutput && (
         <div className="p-5 rounded-2xl bg-zinc-900/90 border border-purple-500/40 space-y-3 text-xs">
           <div className="flex items-center justify-between font-bold text-purple-300">
             <div className="flex items-center gap-2">

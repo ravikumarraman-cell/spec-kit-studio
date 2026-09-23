@@ -21,11 +21,11 @@ test('surfaces a feature retained in another workspace for the same repository w
   assert.equal(retained.featureInbox?.[0].title, 'Retained feature');
 });
 
-test('still surfaces retained feature workspaces before the current workspace has repository identity', () => {
+test('does not claim an unrelated retained feature before the current workspace has repository identity', () => {
   const current = createProjectWorkspace('Current', 'Current workspace');
   current.id = 'current';
   const retained = createProjectWorkspace('Retained feature', 'Separate workspace');
   retained.id = 'retained';
   retained.featureInbox = [{ id: 'feature-1', title: 'Retained feature', summary: '', source: 'text', importedAt: '', userStoryIds: [], requirementIds: [], taskIds: [] }];
-  assert.deepEqual(relatedFeatureWorkspaces(current, [current, retained]).map((workspace) => workspace.id), ['retained']);
+  assert.deepEqual(relatedFeatureWorkspaces(current, [current, retained]), []);
 });

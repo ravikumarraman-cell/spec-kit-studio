@@ -23,7 +23,7 @@ interface FeatureImportModalProps {
   onClose: () => void;
   onImportComplete: (project: SpecKitProject) => void;
   activeProject?: SpecKitProject | null;
-  onMergeIntoActiveProject?: (importedStories: UserStory[], importedData: any) => void;
+  onMergeIntoActiveProject?: (importedStories: UserStory[], importedData: any) => boolean;
   onOpenWorkspace?: () => void;
 }
 
@@ -68,6 +68,8 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   const [connectorToken, setConnectorToken] = useState(() => getConnectorSessionToken());
   const [agentJob, setAgentJob] = useState<ConnectorJob | null>(null);
   const [isRunningAgent, setIsRunningAgent] = useState(false);
+  const [isSavingFeature, setIsSavingFeature] = useState(false);
+  const [savedFeatureTitle, setSavedFeatureTitle] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -198,9 +200,25 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   };
 
   const handleMergeToActive = () => {
-    if (!extractedResult || !activeProject || !onMergeIntoActiveProject) return;
-    onMergeIntoActiveProject(extractedResult.userStories || [], { ...extractedResult, source: importTab });
-    onClose();
+    if (!extractedResult || !activeProject || !onMergeIntoActiveProject) {
+      setFileError('The active workspace is unavailable. Close this dialog, select the intended workspace, and try again.');
+      return;
+    }
+    setFileError(null);
+    setIsSavingFeature(true);
+    try {
+      const saved = onMergeIntoActiveProject(extractedResult.userStories || [], { ...extractedResult, source: importTab });
+      if (!saved) {
+        setFileError('Studio could not retain this feature in the current workspace. The dialog remains open; do not continue until this is resolved.');
+        return;
+      }
+      setSavedFeatureTitle(extractedResult.title || featureTitle || 'Imported feature');
+    } catch (error) {
+      console.error('Failed to save imported feature:', error);
+      setFileError(error instanceof Error ? `Studio could not retain this feature: ${error.message}` : 'Studio could not retain this feature in the current workspace.');
+    } finally {
+      setIsSavingFeature(false);
+    }
   };
 
   const loadEngineStories = async () => {
@@ -326,9 +344,12 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
               canMerge={Boolean(activeProject && onMergeIntoActiveProject)}
               tab={previewTab}
               onTabChange={setPreviewTab}
-              onReExtract={() => setExtractedResult(null)}
+              onReExtract={() => { setExtractedResult(null); setSavedFeatureTitle(null); }}
               onCreateProject={handleCreateNewProject}
               onMerge={handleMergeToActive}
+              onOpenSavedFeature={onClose}
+              isSavingFeature={isSavingFeature}
+              savedFeatureTitle={savedFeatureTitle}
             />
           )}
         </div>

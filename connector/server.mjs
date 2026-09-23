@@ -285,10 +285,26 @@ async function createWorktree(root, targetPath, branch) {
   const target = path.resolve(String(targetPath || ''));
   if (!allowedRoots.some((allowed) => target.startsWith(`${allowed}${path.sep}`))) throw new Error('Worktree destination must be inside STUDIO_ALLOWED_ROOTS.');
   if (await fs.stat(target).then(() => true).catch(() => false)) throw new Error('Worktree destination already exists. Choose an empty, new folder.');
-  const baseline = await command('git', ['rev-parse', 'HEAD'], root);
+  // A previously-created feature worktree can be removed outside Studio while
+  // its branch remains. Prune only Git's stale metadata, then attach the
+  // existing feature branch instead of failing with "branch already exists".
+  // This never deletes a worktree directory or a branch.
+  const pruned = await command('git', ['worktree', 'prune'], root);
+  if (!pruned.ok) throw new Error('Studio could not reconcile stale Git worktree metadata.');
+  const existingBranch = await command('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], root);
+  const baseline = await command('git', ['rev-parse', existingBranch.ok ? branch : 'HEAD'], root);
   if (!baseline.ok) throw new Error('Studio could not determine the current Git commit.');
-  const result = await command('git', ['worktree', 'add', '-b', branch, target, 'HEAD'], root, 60_000);
-  if (!result.ok) throw new Error(result.output || 'Git could not create the linked worktree.');
+  const args = existingBranch.ok
+    ? ['worktree', 'add', target, branch]
+    : ['worktree', 'add', '-b', branch, target, 'HEAD'];
+  const result = await command('git', args, root, 60_000);
+  if (!result.ok) {
+    const detail = result.output || 'Git could not create the linked worktree.';
+    if (existingBranch.ok && /already checked out/i.test(detail)) {
+      throw new Error(`The feature branch ${branch} is already attached to another worktree. Reuse that registered worktree or choose a different feature branch.`);
+    }
+    throw new Error(detail);
+  }
   return { repositoryPath: target, branch, baselineCommit: baseline.output.trim() };
 }
 async function runBaselineCommand(root, commandId) {

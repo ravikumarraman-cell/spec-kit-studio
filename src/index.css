@@ -331,3 +331,28 @@
 .theme-text-muted {
   color: var(--text-muted);
 }
+
+/* Local-agent runs own a workflow until their result is available. This shared
+   policy is deliberately selector-free: workflows opt in with one class and
+   the native `inert` attribute blocks pointer, keyboard, and assistive-tech
+   interaction with every action inside the locked surface. */
+.agent-run-locked button,
+.agent-run-locked input,
+.agent-run-locked select,
+.agent-run-locked textarea {
+  cursor: not-allowed !important;
+  filter: grayscale(0.65);
+  opacity: 0.45;
+}
+
+.agent-run-lock-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--text-main);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.75rem;
+}

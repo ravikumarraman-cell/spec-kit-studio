@@ -1,26 +1,14 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { SpecKitProject, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
+import { ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
 import { WorkflowAwarenessBanner } from './components/workflow/WorkflowAwarenessBanner';
-import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
+import { approveJourneyStage, createFeatureJourney, getJourneyStage } from './lib/featureJourney';
+import { WorkspaceView } from './app/WorkspaceView';
 
-const RepoImportStudio = lazy(() => import('./components/import/RepoImportStudio').then((module) => ({ default: module.RepoImportStudio })));
-const WorkspaceControlCenter = lazy(() => import('./components/workspace/WorkspaceControlCenter').then((module) => ({ default: module.WorkspaceControlCenter })));
-const SpecEditor = lazy(() => import('./components/spec/SpecEditor').then((module) => ({ default: module.SpecEditor })));
-const PlanEditor = lazy(() => import('./components/plan/PlanEditor').then((module) => ({ default: module.PlanEditor })));
-const TaskBoard = lazy(() => import('./components/tasks/TaskBoard').then((module) => ({ default: module.TaskBoard })));
-const ConstitutionEditor = lazy(() => import('./components/constitution/ConstitutionEditor').then((module) => ({ default: module.ConstitutionEditor })));
-const PromptStudio = lazy(() => import('./components/prompt/PromptStudio').then((module) => ({ default: module.PromptStudio })));
-const AuditDashboard = lazy(() => import('./components/audit/AuditDashboard').then((module) => ({ default: module.AuditDashboard })));
-const CliExporter = lazy(() => import('./components/exporter/CliExporter').then((module) => ({ default: module.CliExporter })));
-const FeatureJourney = lazy(() => import('./components/journey/FeatureJourney').then((module) => ({ default: module.FeatureJourney })));
-const StudioSettings = lazy(() => import('./components/settings/StudioSettings').then((module) => ({ default: module.StudioSettings })));
-const ProcessStudio = lazy(() => import('./components/process/ProcessStudio').then((module) => ({ default: module.ProcessStudio })));
 // Global dialogs are reached only through explicit user intent. Keeping them
 // out of the app shell avoids paying their code cost during initial navigation.
 const QuickSearchModal = lazy(() => import('./components/common/QuickSearchModal').then((module) => ({ default: module.QuickSearchModal })));
@@ -31,11 +19,11 @@ const NewProjectModal = lazy(() => import('./components/project/NewProjectModal'
 
 function AppContent() {
   const { isDark } = useTheme();
+  const workspace = useProjectWorkspace();
   const {
     projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
-    saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
-  } = useProjectWorkspace();
+    saveJourney, applyAiSpecData, replaceFromImport, mergeImportedFeature, selectVersion,
+  } = workspace;
   const [activeTab, setActiveTab] = useState<ViewTab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
@@ -77,11 +65,6 @@ function AppContent() {
   const handleSelectTaskForPrompt = (taskId: string) => {
     setTargetPromptTaskId(taskId);
     setActiveTab('prompt');
-  };
-
-  const handleImportRepoComplete = (newProject: SpecKitProject) => {
-    replaceFromImport(newProject);
-    setActiveTab('overview');
   };
   const handleStartFeatureFromWorkspace = () => {
     const journey = activeProject.journey || createFeatureJourney();
@@ -146,114 +129,19 @@ function AppContent() {
         <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
           {(!activeProject.workflowFocus || activeProject.workflowFocus === 'feature') && <JourneyHandoff project={activeProject} activeTab={activeTab} onOpenJourney={() => setActiveTab('overview')} onNavigate={setActiveTab} onApproveStage={handleApproveJourneyStage} />}
           <WorkflowAwarenessBanner project={activeProject} activeTab={activeTab} onOpenWorkflow={() => setActiveTab('workflows')} />
-          <Suspense fallback={<div className="py-16 text-center text-xs theme-text-muted">Loading workspace…</div>}><AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.15 }}
-            >
-              {activeTab === 'overview' && <FeatureJourney project={activeProject} onNavigate={setActiveTab} onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)} onSaveJourney={saveJourney} onSaveFeatureReview={saveLatestFeatureReview} onUpdateFeatureIdentity={updateFeatureIdentity} />}
-              {activeTab === 'workflows' && <ProcessStudio key={activeProject.id} project={activeProject} onSaveCases={saveProcessCases} onStartFeature={() => setIsFeatureImportModalOpen(true)} onOpenWorkspace={() => setActiveTab('workspace')} onSelectWorkflow={saveWorkflowFocus} />}
-
-              {activeTab === 'import' && (
-                <RepoImportStudio
-                  onImportComplete={handleImportRepoComplete}
-                  isDarkMode={isDark}
-                />
-              )}
-
-              {activeTab === 'workspace' && (
-                <WorkspaceControlCenter project={activeProject} onTruthAttached={attachTruth} onOpenJourney={() => setActiveTab('overview')} onOpenFeatureImport={handleStartFeatureFromWorkspace} onOpenWorkflow={() => setActiveTab('workflows')} />
-              )}
-
-              {activeTab === 'settings' && <StudioSettings project={activeProject} onSelectVersion={selectVersion} onSaveStackProfile={saveStackProfile} onOpenWorkspace={() => setActiveTab('workspace')} onRestoreSnapshot={restoreProjectSnapshot} />}
-
-              {activeTab === 'spec' && (
-                <SpecEditor
-                  projectId={activeProject.id}
-                  spec={activeProject.spec}
-                  onSaveSpec={saveSpec}
-                  onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
-                  onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
-                  featureInbox={activeProject.featureInbox}
-                />
-              )}
-
-              {activeTab === 'plan' && (
-                <PlanEditor
-                  projectId={activeProject.id}
-                  plan={activeProject.plan}
-                  focusFeature={activeFeatureForProject(activeProject)}
-                  onSavePlan={savePlan}
-                  onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
-                  isDarkMode={isDark}
-                  repositoryPath={activeProject.importedRepo?.repoUrl}
-                  stageApproved={Boolean(activeProject.journey?.completedStages.includes(4))}
-                  onRecoverFeatureArchitecturePlan={(architecturePlan) =>
-                    saveLatestFeatureReview({ architecturePlan })
-                  }
-                />
-              )}
-
-              {activeTab === 'tasks' && (
-                <TaskBoard
-                  projectId={activeProject.id}
-                  taskBreakdown={activeProject.tasks}
-                  spec={activeProject.spec}
-                  focusFeature={activeFeatureForProject(activeProject)}
-                  onSaveTasks={saveTasks}
-                  onTriggerAiGenerate={() => setIsAiSpecModalOpen(true)}
-                  onSelectTaskForPrompt={handleSelectTaskForPrompt}
-                  repositoryPath={activeProject.importedRepo?.repoUrl}
-                  onRecoverFeatureDeliveryPlan={(deliveryPlan) => saveLatestFeatureReview({ deliveryPlan })}
-                />
-              )}
-
-              {activeTab === 'constitution' && (
-                <ConstitutionEditor
-                  projectId={activeProject.id}
-                  constitution={activeProject.constitution}
-                  onSaveConstitution={saveConstitution}
-                />
-              )}
-
-              {activeTab === 'prompt' && (
-                <PromptStudio
-                  project={activeProject}
-                  initialTaskId={targetPromptTaskId}
-                  onRecoverFeatureDeliveryPlan={(deliveryPlan) => saveLatestFeatureReview({ deliveryPlan })}
-                  onRecordFeatureImplementation={(featureId, receipt) => {
-                    const saved = saveFeatureImplementation(featureId, receipt);
-                    setTargetPromptTaskId(undefined);
-                    return saved;
-                  }}
-                  onOpenJourney={() => setActiveTab('overview')}
-                />
-              )}
-
-              {activeTab === 'audit' && (
-                <AuditDashboard
-                  project={activeProject}
-                  onUpdateAudit={saveAudit}
-                  onOpenJourney={() => setActiveTab('overview')}
-                  onApproveQualityGate={() => {
-                    const qualityGate = getJourneyStage(6);
-                    if (!qualityGate.ready(activeProject)) return;
-                    saveJourney(approveJourneyStage(activeProject.journey || createFeatureJourney(), 6));
-                    setActiveTab('overview');
-                  }}
-                />
-              )}
-
-              {activeTab === 'export' && (
-                <CliExporter
-                  project={activeProject}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence></Suspense>
+          <WorkspaceView
+            activeTab={activeTab}
+            isDarkMode={isDark}
+            project={activeProject}
+            targetPromptTaskId={targetPromptTaskId}
+            workspace={workspace}
+            onNavigate={setActiveTab}
+            onOpenAiSpec={() => setIsAiSpecModalOpen(true)}
+            onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
+            onStartFeatureFromWorkspace={handleStartFeatureFromWorkspace}
+            onSelectPromptTask={handleSelectTaskForPrompt}
+            onPromptTaskHandled={() => setTargetPromptTaskId(undefined)}
+          />
         </main>
       </div>
 

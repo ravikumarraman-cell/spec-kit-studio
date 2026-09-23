@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@keyframes workspace-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-view-enter {
+  animation: workspace-view-enter 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-view-enter {
+    animation: none;
+  }
+}
+
 @layer base {
   /* Default / Obsidian Dark (GitHub / Linear dark standard) */
   :root[data-theme="obsidian"], :root.dark {

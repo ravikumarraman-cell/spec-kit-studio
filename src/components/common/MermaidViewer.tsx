@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 interface MermaidViewerProps {
@@ -22,13 +21,6 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, isDarkMode 
   const [isRendering, setIsRendering] = useState<boolean>(false);
 
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: isDarkMode ? 'dark' : 'default',
-      securityLevel: 'loose',
-      fontFamily: 'system-ui, sans-serif',
-    });
-
     let isMounted = true;
 
     async function renderChart() {
@@ -42,16 +34,23 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, isDarkMode 
       setError(null);
 
       try {
+        const { default: mermaid } = await import('mermaid');
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: isDarkMode ? 'dark' : 'default',
+          securityLevel: 'strict',
+          fontFamily: 'system-ui, sans-serif',
+        });
         const id = `mermaid-svg-${Math.random().toString(36).substring(2, 9)}`;
         const cleanedChart = sanitizeMermaidChart(chart);
         const { svg } = await mermaid.render(id, cleanedChart);
         if (isMounted) {
           setSvgContent(svg);
         }
-      } catch (err: any) {
-        console.error('Mermaid render error:', err);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Syntax error in Mermaid diagram definition.';
         if (isMounted) {
-          setError(err.message || 'Syntax error in Mermaid diagram definition.');
+          setError(message);
         }
       } finally {
         if (isMounted) {
@@ -83,7 +82,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ chart, isDarkMode 
   }
 
   return (
-    <div className="relative w-full overflow-x-auto rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-4 min-h-[160px] flex items-center justify-center">
+    <div className="relative w-full overflow-x-auto rounded-xl bg-zinc-900/60 border border-zinc-800/80 p-4 min-h-40 flex items-center justify-center">
       {isRendering && (
         <div className="absolute inset-0 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center gap-2 text-xs text-cyan-400 font-medium z-10">
           <RefreshCw className="w-4 h-4 animate-spin" />

@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { Type } from "@google/genai";
+import { asyncRoute } from '../middleware/errorHandling';
 import { getGeminiClient } from '../services/geminiClient';
 
 export function createGenerationRouter() {
   const router = Router();
 
 // Spec AI Generator / Refiner Endpoint
-router.post("/api/spec/generate", async (req, res) => {
-  try {
+router.post("/api/spec/generate", asyncRoute(async (req, res) => {
     const { topic, existingSpec, focusAreas } = req.body;
     const client = getGeminiClient();
 
@@ -101,15 +101,10 @@ Provide the output strictly in JSON format conforming to the schema. Include:
     const jsonText = response.text || "{}";
     const data = JSON.parse(jsonText);
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error generating spec:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to generate spec." });
-  }
-});
+}));
 
 // Implementation Plan AI Generator Endpoint
-router.post("/api/plan/generate", async (req, res) => {
-  try {
+router.post("/api/plan/generate", asyncRoute(async (req, res) => {
     const { specTitle, specSummary, requirements } = req.body;
     const client = getGeminiClient();
 
@@ -216,15 +211,10 @@ Generate a structured Plan containing:
 
     const data = JSON.parse(response.text || "{}");
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error generating plan:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to generate plan." });
-  }
-});
+}));
 
 // Tasks Breakdown AI Generator Endpoint
-router.post("/api/tasks/generate", async (req, res) => {
-  try {
+router.post("/api/tasks/generate", asyncRoute(async (req, res) => {
     const { specTitle, functionalRequirements, techStack } = req.body;
     const client = getGeminiClient();
 
@@ -287,11 +277,7 @@ For each task, provide:
 
     const data = JSON.parse(response.text || "{}");
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error generating tasks:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to generate tasks." });
-  }
-});
+}));
 
   return router;
 }

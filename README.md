@@ -63,6 +63,26 @@ Before release:
 npm run verify
 ```
 
+### Production runtime
+
+Build and run the hardened Express/Vite artifact:
+
+```bash
+npm ci
+npm run verify
+NODE_ENV=production npm start
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | unset | Enables Gemini-backed generation and audit routes |
+| `HOST` | `0.0.0.0` | HTTP bind address |
+| `PORT` | `3000` | HTTP port |
+| `REQUEST_BODY_LIMIT` | `10mb` | Maximum JSON request size |
+| `SHUTDOWN_GRACE_PERIOD_MS` | `10000` | Graceful shutdown deadline |
+
+Production responses include security headers, compression, request correlation, and structured request telemetry. Put the service behind TLS and preserve `x-request-id` at the edge. `GET /api/health` is the readiness endpoint.
+
 ### Local connector
 
 The optional connector is a loopback-only bridge for repository evidence, reviewed writes, and local agents.

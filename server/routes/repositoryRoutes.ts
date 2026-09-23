@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { Type } from "@google/genai";
+import { asyncRoute } from '../middleware/errorHandling';
 import { getGeminiClient } from '../services/geminiClient';
 
 export function createRepositoryRouter() {
   const router = Router();
 
 // Repository Analysis & Technology Detection Endpoint
-router.post("/api/repo/analyze", async (req, res) => {
-  try {
+router.post("/api/repo/analyze", asyncRoute(async (req, res) => {
     const { repoUrl, manifestContent, files } = req.body;
     const client = getGeminiClient();
 
@@ -77,15 +77,10 @@ Perform a thorough technology stack detection and repository analysis:
 
     const data = JSON.parse(response.text || "{}");
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error analyzing repository:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to analyze repository." });
-  }
-});
+}));
 
 // Generate Feature Specification & Plan for Imported Repo Endpoint
-router.post("/api/repo/generate-feature-for-imported", async (req, res) => {
-  try {
+router.post("/api/repo/generate-feature-for-imported", asyncRoute(async (req, res) => {
     const { importedRepo, selectedTechStack, newFeatureTitle, newFeatureGoal } = req.body;
     const client = getGeminiClient();
 
@@ -212,15 +207,10 @@ Generate a complete GitHub Spec-Kit specification package tailored specifically 
 
     const data = JSON.parse(response.text || "{}");
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error generating feature for imported repo:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to generate feature spec for imported repo." });
-  }
-});
+}));
 
 // Import Feature & Extract User Stories + Spec-Kit Endpoint
-router.post("/api/feature/import", async (req, res) => {
-  try {
+router.post("/api/feature/import", asyncRoute(async (req, res) => {
     const { featureContent, featureTitle, sourceType } = req.body;
     const client = getGeminiClient();
 
@@ -377,11 +367,7 @@ Analyze this feature input thoroughly. Extract and auto-generate a comprehensive
 
     const data = JSON.parse(response.text || "{}");
     res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Error importing feature:", err);
-    res.status(500).json({ success: false, error: err.message || "Failed to import feature and generate Spec-Kit." });
-  }
-});
+}));
 
   return router;
 }

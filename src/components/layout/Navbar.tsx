@@ -7,6 +7,7 @@ export interface NavbarProps {
   activeProject: SpecKitProject;
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
+  onDeleteProject: (id: string) => boolean;
   onOpenImportStudio?: () => void;
   onOpenFeatureImport?: () => void;
   onOpenIntegrations?: () => void;
@@ -27,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeProject,
   onSelectProject,
   onCreateProject,
+  onDeleteProject,
   onOpenImportStudio,
   onOpenFeatureImport,
   onOpenIntegrations,
@@ -47,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       onSelectTab={onSelectTab}
       onSelectProject={onSelectProject}
       onCreateProject={onCreateProject}
+      onDeleteProject={onDeleteProject}
       onOpenImportStudio={onOpenImportStudio}
       onOpenFeatureImport={onOpenFeatureImport}
       onOpenIntegrations={onOpenIntegrations}

@@ -96,6 +96,15 @@ export function useProjectWorkspace() {
     return created;
   }, []);
 
+  const deleteProject = useCallback((id: string) => {
+    // Storage preserves a recoverable snapshot before removal. Keep one
+    // workspace available so Studio never falls into an empty state.
+    if (storageService.getProjects().length <= 1) return false;
+    storageService.deleteProject(id);
+    refresh();
+    return true;
+  }, [refresh]);
+
   const resetProjects = useCallback(() => {
     storageService.resetToSampleProjects();
     refresh();
@@ -207,7 +216,7 @@ export function useProjectWorkspace() {
   }, [refresh]);
 
   return {
-    projects, activeProject, selectProject, createProject, resetProjects,
+    projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
     applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   };

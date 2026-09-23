@@ -25,6 +25,7 @@ import {
   Feather,
   Laptop,
   Settings
+  , Trash2
 } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../../types/speckit';
 import { useTheme, THEME_PRESETS, ThemeId } from '../../../context/ThemeContext';
@@ -37,6 +38,7 @@ interface TopUtilityBarProps {
   onSelectTab: (tab: ViewTab) => void;
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
+  onDeleteProject: (id: string) => boolean;
   onOpenImportStudio?: () => void;
   onOpenFeatureImport?: () => void;
   onOpenIntegrations?: () => void;
@@ -73,6 +75,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
   onSelectTab,
   onSelectProject,
   onCreateProject,
+  onDeleteProject,
   onOpenImportStudio,
   onOpenFeatureImport,
   onOpenIntegrations,
@@ -180,27 +183,42 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
                 {filteredProjects.map((proj) => {
                   const isActive = proj.id === activeProject.id;
                   return (
-                    <button
-                      key={proj.id}
-                      type="button"
-                      onClick={() => {
-                        onSelectProject(proj.id);
-                        setIsWorkspaceDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between transition-all ${
-                        isActive
-                          ? 'bg-indigo-600/20 text-indigo-200 font-bold border border-indigo-500/30'
-                          : 'hover:bg-zinc-800/60 text-zinc-300'
-                      }`}
-                    >
-                      <div className="truncate pr-2">
-                        <div className="truncate text-xs font-semibold">{proj.name}</div>
-                        <div className="text-[10px] text-zinc-500 truncate">
-                          v{proj.version || '1.0.7'} • {proj.spec.userStories?.length || 0} Stories
+                    <div key={proj.id} className={`group flex items-center rounded-xl transition-all ${
+                      isActive
+                        ? 'bg-indigo-600/20 text-indigo-200 font-bold border border-indigo-500/30'
+                        : 'hover:bg-zinc-800/60 text-zinc-300'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectProject(proj.id);
+                          setIsWorkspaceDropdownOpen(false);
+                        }}
+                        className="min-w-0 flex-1 px-3 py-2 text-left"
+                      >
+                        <div className="truncate pr-2">
+                          <div className="truncate text-xs font-semibold">{proj.name}</div>
+                          <div className="text-[10px] text-zinc-500 truncate">
+                            v{proj.version || '1.0.7'} • {proj.spec.userStories?.length || 0} Stories
+                          </div>
                         </div>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1 pr-2">
+                        {isActive && <CheckCircle2 className="w-4 h-4 text-indigo-400" />}
+                        {projects.length > 1 && <button
+                          type="button"
+                          aria-label={`Delete workspace ${proj.name}`}
+                          title={`Delete ${proj.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!window.confirm(`Delete workspace “${proj.name}”? A recoverable local snapshot will be retained. Its repository files will not be deleted.`)) return;
+                            onDeleteProject(proj.id);
+                            setIsWorkspaceDropdownOpen(false);
+                          }}
+                          className="rounded-md p-1 text-zinc-500 hover:bg-rose-500/15 hover:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+                        ><Trash2 className="h-3.5 w-3.5" /></button>}
                       </div>
-                      {isActive && <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

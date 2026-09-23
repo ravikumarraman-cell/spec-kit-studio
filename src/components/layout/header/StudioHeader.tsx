@@ -23,6 +23,7 @@ export interface StudioHeaderProps {
   onSelectTab: (tab: ViewTab) => void;
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
+  onDeleteProject: (id: string) => boolean;
   onOpenImportStudio?: () => void;
   onOpenFeatureImport?: () => void;
   onOpenIntegrations?: () => void;
@@ -41,6 +42,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = memo(({
   onSelectTab,
   onSelectProject,
   onCreateProject,
+  onDeleteProject,
   onOpenImportStudio,
   onOpenFeatureImport,
   onOpenIntegrations,
@@ -216,6 +218,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = memo(({
         onSelectTab={onSelectTab}
         onSelectProject={onSelectProject}
         onCreateProject={onCreateProject}
+        onDeleteProject={onDeleteProject}
         onOpenImportStudio={onOpenImportStudio}
         onOpenFeatureImport={onOpenFeatureImport}
         onOpenIntegrations={onOpenIntegrations}

@@ -32,7 +32,7 @@ const NewProjectModal = lazy(() => import('./components/project/NewProjectModal'
 function AppContent() {
   const { isDark } = useTheme();
   const {
-    projects, activeProject, selectProject, createProject, resetProjects,
+    projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
     applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   } = useProjectWorkspace();
@@ -112,6 +112,7 @@ function AppContent() {
         onSelectTab={setActiveTab}
         onSelectProject={selectProject}
         onCreateProject={() => setIsNewProjectModalOpen(true)}
+        onDeleteProject={deleteProject}
         // Repository setup has one guided path. The dedicated import studio is
         // retained as an explicitly enabled advanced migration tool.
         onOpenImportStudio={() => setActiveTab('workspace')}

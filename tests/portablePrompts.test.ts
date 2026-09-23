@@ -40,3 +40,10 @@ test('parses official feature tasks and carries only mapped feature evidence int
   assert.doesNotMatch(prompt, /Unrelated shared feature/);
   assert.match(prompt, /specs\/001-aide\/plan\.md/);
 });
+
+test('parses numbered Spec-Kit task lists when an imported repository omits checklist markers', () => {
+  const tasks = parseFeatureDeliveryTasks('1. T001 [FR-001] Prepare the tenant detail view\n2. T002 [FR-002, NFR-001] Verify the new view');
+
+  assert.deepEqual(tasks.map((task) => task.id), ['T001', 'T002']);
+  assert.deepEqual(tasks[1].requirementIds, ['FR-002', 'NFR-001']);
+});

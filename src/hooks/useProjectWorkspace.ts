@@ -199,10 +199,16 @@ export function useProjectWorkspace() {
   }, [updateActiveProject]);
 
   const selectVersion = useCallback((version: string) => updateActiveProject((project) => ({ ...project, version })), [updateActiveProject]);
+  const restoreProjectSnapshot = useCallback((savedAt: string) => {
+    const active = storageService.getActiveProject();
+    const restored = storageService.restoreProjectBackup(active.id, savedAt);
+    if (restored) refresh();
+    return restored;
+  }, [refresh]);
 
   return {
     projects, activeProject, selectProject, createProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveLatestFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   };
 }

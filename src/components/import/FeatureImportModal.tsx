@@ -72,11 +72,26 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     if (!isOpen) return;
     const latest = readLocalAgentStatus();
     setAgentScan(latest);
-    if (!latest.scanned) return;
     const recommended = recommendedLocalAgent(latest.agents, getStudioSettings().preferredAgent);
     setGenerationPath(recommended ? 'engine' : 'gemini');
     if (recommended) setEngineAgent(recommended.id);
-  }, [isOpen]);
+    const repositoryPath = activeProject?.importedRepo?.repoUrl;
+    if (!repositoryPath) return;
+    let cancelled = false;
+    configuredConnectorClient(connectorToken).scan(repositoryPath).then((report) => {
+      if (cancelled) return;
+      const refreshed = { scanned: true, agents: report.agents };
+      window.localStorage.setItem('speckit_local_agents', JSON.stringify(refreshed.agents));
+      setAgentScan(refreshed);
+      const detected = recommendedLocalAgent(refreshed.agents, getStudioSettings().preferredAgent);
+      setGenerationPath(detected ? 'engine' : 'gemini');
+      if (detected) setEngineAgent(detected.id);
+    }).catch(() => {
+      // Keep the last known scan visible. Connection guidance remains available
+      // in Connected Workspace when a pairing token is required.
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, activeProject?.importedRepo?.repoUrl, connectorToken]);
 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

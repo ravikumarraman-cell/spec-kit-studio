@@ -15,11 +15,14 @@ export interface FeatureDeliveryTask {
 export function parseFeatureDeliveryTasks(content: string | undefined): FeatureDeliveryTask[] {
   if (!content) return [];
   return content.split('\n').flatMap((line) => {
-    const modern = line.match(/^[-*]\s+\[([ xX])\]\s+(T\d+)\s+(?:\[([^\]]+)\]\s+)?(.+)$/);
+    // Official Spec-Kit task files commonly use checklist lines, but imported
+    // repositories also contain numbered task lists without checkboxes. Both
+    // formats represent the same feature-scoped delivery evidence.
+    const modern = line.match(/^\s*(?:[-*]|\d+[.)])\s+(?:\[([ xX])\]\s+)?(T\d+)\s+(?:\[([^\]]+)\]\s+)?(.+)$/i);
     const legacy = line.match(/^[-*]\s+\[([ xX])\]\s+\*\*(TASK-[^*]+)\*\*\s*(?:\(([^)]+)\))?\s*:\s*(.+)$/);
     const match = modern || legacy;
     if (!match) return [];
-    const [, checked, id, requirements, title] = match;
+    const [, checked = ' ', id, requirements, title] = match;
     return [{
       id: id.trim(),
       requirementIds: (requirements?.match(/(?:FR|NFR)-\d+/gi) || []).map((item) => item.toUpperCase()),

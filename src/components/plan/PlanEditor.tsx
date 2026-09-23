@@ -18,6 +18,8 @@ import { AdrSection } from './AdrSection';
 import { PlanTanStackMatrix } from './PlanTanStackMatrix';
 import { FeatureArtifactViewer } from '../common/FeatureArtifactViewer';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
+import { configuredConnectorClient } from '../../lib/connector';
+import { getConnectorSessionToken } from '../../lib/connectorSession';
 
 interface PlanEditorProps {
   projectId: string;
@@ -26,6 +28,9 @@ interface PlanEditorProps {
   onTriggerAiGenerate: () => void;
   isDarkMode?: boolean;
   focusFeature?: FeatureInboxItem;
+  repositoryPath?: string;
+  stageApproved?: boolean;
+  onRecoverFeatureArchitecturePlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
 }
 
 type PlanViewMode = 'visual' | 'tanstack' | 'diagram' | 'markdown';
@@ -44,6 +49,9 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
   onTriggerAiGenerate,
   isDarkMode = true,
   focusFeature,
+  repositoryPath,
+  stageApproved = false,
+  onRecoverFeatureArchitecturePlan,
 }) => {
   const [activeView, setActiveView] = useState<PlanViewMode>('visual');
   const [currentPlan, setCurrentPlan] = useState<ImplementationPlan>(plan);
@@ -54,6 +62,29 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
     setHasUnsaved(false);
     setActiveView('visual');
   }, [projectId, plan]);
+
+  useEffect(() => {
+    if (!focusFeature || !onRecoverFeatureArchitecturePlan
+      || (focusFeature.architecturePlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.architecturePlan.content, focusFeature))) return;
+    let cancelled = false;
+    const recover = (path: string, content: string) => {
+      if (!cancelled) onRecoverFeatureArchitecturePlan({ path, content, acceptedAt: new Date().toISOString() });
+    };
+    if (repositoryPath) {
+      configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
+        .then(({ artifacts }) => {
+          const recovered = artifacts
+            .filter((artifact) => artifact.kind === 'plan' && isFeatureArtifactScoped(artifact.content, focusFeature))
+            .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+          if (recovered) recover(recovered.path, recovered.content);
+          else if (stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record. This is historical context; it was not regenerated and does not change repository files.\n\n## Feature summary\n\n${focusFeature.summary}\n\n## Shared architecture snapshot\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
+        })
+        .catch(() => { if (stageApproved) recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> The connected repository could not be read, so Studio retained the approved shared workspace architecture record as historical context.\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`); });
+    } else if (stageApproved) {
+      recover('studio://recovered-legacy-architecture-context', `# ${focusFeature.title} — recovered legacy architecture context\n\n> Recovered by Studio from the approved shared workspace architecture record.\n\n${plan.markdown?.trim() || plan.architectureSummary?.trim() || 'No separate workspace plan text was retained.'}`);
+    }
+    return () => { cancelled = true; };
+  }, [focusFeature, onRecoverFeatureArchitecturePlan, plan, repositoryPath, stageApproved]);
 
   const handleUpdateField = useCallback((field: keyof ImplementationPlan, value: any) => {
     setCurrentPlan((prev) => ({

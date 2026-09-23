@@ -15,6 +15,8 @@ import { TasksTanStackMatrix } from './TasksTanStackMatrix';
 import { MarkdownSourceView } from '../common/MarkdownSourceView';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
+import { configuredConnectorClient } from '../../lib/connector';
+import { getConnectorSessionToken } from '../../lib/connectorSession';
 
 interface TaskBoardProps {
   projectId: string;
@@ -24,6 +26,8 @@ interface TaskBoardProps {
   onTriggerAiGenerate: () => void;
   onSelectTaskForPrompt: (taskId: string, taskTitle: string) => void;
   focusFeature?: FeatureInboxItem;
+  repositoryPath?: string;
+  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
 }
 
 const PHASES = [
@@ -49,6 +53,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onTriggerAiGenerate,
   onSelectTaskForPrompt,
   focusFeature,
+  repositoryPath,
+  onRecoverFeatureDeliveryPlan,
 }) => {
   const [activeView, setActiveView] = useState<TaskViewMode>('kanban');
   const [activePhaseFilter, setActivePhaseFilter] = useState<string>('all');
@@ -59,6 +65,21 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setActivePhaseFilter('all');
     setActiveView('kanban');
   }, [projectId, taskBreakdown]);
+
+  useEffect(() => {
+    if (!focusFeature || !repositoryPath || !onRecoverFeatureDeliveryPlan
+      || (focusFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(focusFeature.deliveryPlan.content, focusFeature))) return;
+    let cancelled = false;
+    configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)
+      .then(({ artifacts }) => {
+        const recovered = artifacts
+          .filter((artifact) => artifact.kind === 'tasks' && isFeatureArtifactScoped(artifact.content, focusFeature))
+          .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+        if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [focusFeature, onRecoverFeatureDeliveryPlan, repositoryPath]);
 
   const handleUpdateStatus = useCallback(
     (taskId: string, newStatus: TaskStatus) => {

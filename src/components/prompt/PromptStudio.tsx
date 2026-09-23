@@ -38,6 +38,7 @@ interface PromptStudioProps {
   project: SpecKitProject;
   initialTaskId?: string;
   onRecordFeatureImplementation: (receipt: FeatureImplementationReceipt) => void;
+  onRecoverFeatureDeliveryPlan?: (plan: { path: string; content: string; acceptedAt: string }) => void;
 }
 
 const AGENT_FRAMEWORKS: { name: string; desc: string; localAgent?: LocalAgentId }[] = [
@@ -97,6 +98,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   project,
   initialTaskId,
   onRecordFeatureImplementation,
+  onRecoverFeatureDeliveryPlan,
 }) => {
   const activeFeature = project.featureInbox?.at(-1);
   const featureTasks = useMemo(
@@ -147,6 +149,25 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   }, [project.importedRepo?.repoUrl]);
 
   useEffect(() => {
+    const repositoryPaths = [...new Set([activeFeature?.worktreePath, project.importedRepo?.repoUrl].filter((path): path is string => Boolean(path)))];
+    if (!activeFeature || repositoryPaths.length === 0 || !onRecoverFeatureDeliveryPlan
+      || (activeFeature.deliveryPlan?.acceptedAt && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature))) return;
+    let cancelled = false;
+    Promise.allSettled(repositoryPaths.map((repositoryPath) => configuredConnectorClient(getConnectorSessionToken()).readSpecKitArtifacts(repositoryPath)))
+      .then((results) => {
+        const recovered = results
+          .flatMap((result) => result.status === 'fulfilled' ? result.value.artifacts : [])
+          .filter((artifact) => artifact.kind === 'tasks'
+            && isFeatureArtifactScoped(artifact.content, activeFeature)
+            && parseFeatureDeliveryTasks(artifact.content).length > 0)
+          .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+        if (!cancelled && recovered) onRecoverFeatureDeliveryPlan({ path: recovered.path, content: recovered.content, acceptedAt: new Date().toISOString() });
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [activeFeature, onRecoverFeatureDeliveryPlan, project.importedRepo?.repoUrl]);
+
+  useEffect(() => {
     if (!codexJob || codexJob.status !== 'running') return;
     let cancelled = false;
     const client = configuredConnectorClient();
@@ -193,7 +214,9 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     () => actionableFeatureDeliveryTasks(featureTasks, reviewedFeatureTaskIds),
     [featureTasks, reviewedFeatureTaskIds],
   );
-  const taskOptions = useSharedTasks || featureTasks.length === 0 ? project.tasks.tasks : actionableFeatureTasks;
+  // A feature implementation run must never quietly fall back to the shared
+  // workspace board. That board may contain unrelated historical tasks.
+  const taskOptions = useSharedTasks ? project.tasks.tasks : actionableFeatureTasks;
 
   // A task-board click is a one-time navigation hint, not a permanent lock on
   // the picker. Once a receipt is recorded, the regular next-actionable-task
@@ -437,6 +460,10 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
               </option>
             ))}
           </select>
+
+          {!useSharedTasks && featureTasks.length === 0 && (
+            <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">Studio cannot find a parseable feature-scoped <code>tasks.md</code> yet. It is checking the connected repository now; do not use the shared workspace task as a substitute. If this message remains after a refresh, return to Stage 5 and review the feature delivery plan.</p>
+          )}
 
           {!useSharedTasks && featureTasks.length > 0 && actionableFeatureTasks.length === 0 && (
             <p className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100">All feature tasks are already complete or have reviewed implementation receipts. There is nothing to rerun.</p>

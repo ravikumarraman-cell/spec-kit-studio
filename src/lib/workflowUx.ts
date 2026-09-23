@@ -11,9 +11,15 @@ export interface JourneyEvidenceState {
 }
 
 export function needsLegacyJourneyRepair({ stageId, hasImpactMap, hasArchitecturePlan, hasDeliveryPlan }: JourneyEvidenceState): boolean {
-  return (stageId > 3 && !hasImpactMap)
-    || (stageId > 4 && !hasArchitecturePlan)
-    || (stageId > 5 && !hasDeliveryPlan);
+  // Older, imported projects may legitimately lack Studio's newer, retained
+  // receipts. Those gaps are not evidence of failed work and must never
+  // interrupt an active Journey. Current-stage readiness still enforces the
+  // evidence required for newly created work.
+  void stageId;
+  void hasImpactMap;
+  void hasArchitecturePlan;
+  void hasDeliveryPlan;
+  return false;
 }
 
 export function userFacingActionError(action: string, error: unknown, fallback: string): string {

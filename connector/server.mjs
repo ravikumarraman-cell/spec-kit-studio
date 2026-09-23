@@ -6,6 +6,7 @@
  */
 import http from 'node:http';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -35,6 +36,13 @@ const runningProcesses = new Map();
 const activeJobByRepository = new Map();
 const MAX_JOB_OUTPUT = 1_000_000;
 const MAX_REQUEST_BYTES = 1_000_000;
+const executableSearchPaths = [...new Set([
+  ...(process.env.PATH || '').split(path.delimiter).filter(Boolean),
+  '/usr/local/bin',
+  '/opt/homebrew/bin',
+  path.join(os.homedir(), '.local', 'bin'),
+  path.join(os.homedir(), 'bin'),
+])];
 
 // Connector output is shown in the browser. Treat it as untrusted diagnostic
 // material: common credential shapes must never be echoed back to Studio.
@@ -72,9 +80,25 @@ async function safeRoot(candidate) {
   if (!allowedRoots.some((root) => real === root || real.startsWith(`${root}${path.sep}`))) throw new Error('Repository path is outside STUDIO_ALLOWED_ROOTS.');
   return real;
 }
+async function resolveExecutable(commandName) {
+  // Connector processes launched from a desktop app or service often inherit a
+  // smaller PATH than the user's terminal. Resolve only ordinary command names
+  // in trusted, conventional user/system binary locations; explicit paths stay
+  // untouched and missing commands retain their normal diagnostic.
+  if (path.isAbsolute(commandName) || commandName.includes(path.sep)) return commandName;
+  for (const directory of executableSearchPaths) {
+    const candidate = path.join(directory, commandName);
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch { /* Keep looking. */ }
+  }
+  return commandName;
+}
 async function command(command, args, cwd, timeout = 30_000) {
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, { cwd, timeout, maxBuffer: 1_000_000 });
+    const executable = await resolveExecutable(command);
+    const { stdout, stderr } = await execFileAsync(executable, args, { cwd, timeout, maxBuffer: 1_000_000 });
     return { ok: true, output: redactSensitiveOutput(`${stdout}${stderr}`.trim()) };
   } catch (error) {
     return { ok: false, output: redactSensitiveOutput(`${error.stdout || ''}${error.stderr || error.message || ''}`.trim()) };

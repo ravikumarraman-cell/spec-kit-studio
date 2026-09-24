@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, BookOpenCheck, Check, FileUp, Search, Sparkles } from 'lucide-react';
 import { StoryExtractionPackage } from '../../lib/api/imports';
 import { extractStoryWithLocalAgent } from '../../lib/connector';
@@ -39,9 +39,16 @@ export function StoryIntakePanel({ project, initialStoryId, isSaving = false, on
   const [sourceContent, setSourceContent] = useState('');
   const [extracted, setExtracted] = useState<StoryExtractionPackage | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionElapsedSeconds, setExtractionElapsedSeconds] = useState(0);
   const storyAgent = useMemo(() => {
     return selectedRuntimeAgent('story-extraction');
   }, []);
+  useEffect(() => {
+    if (!isExtracting) { setExtractionElapsedSeconds(0); return; }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setExtractionElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1_000);
+    return () => window.clearInterval(timer);
+  }, [isExtracting]);
 
   const stories = useMemo(() => project.spec.userStories.filter((story) => {
     const needle = query.trim().toLowerCase();
@@ -110,7 +117,8 @@ export function StoryIntakePanel({ project, initialStoryId, isSaving = false, on
           <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800"><FileUp className="h-3.5 w-3.5" />Upload text<input type="file" accept=".md,.txt,.json" className="sr-only" onChange={async (event) => { const file = event.target.files?.[0]; if (file) { setSourceContent(await file.text()); if (!title) setTitle(file.name.replace(/\.[^.]+$/, '')); } }} /></label>
         </div>
         <textarea value={sourceContent} onChange={(event) => setSourceContent(event.target.value)} rows={4} placeholder="Paste one Jira story, GitHub issue, or user-story draft..." className="mt-3 w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100 outline-none focus:border-cyan-500/60" />
-        <button type="button" disabled={isExtracting || !sourceContent.trim() || !storyAgent} onClick={extractStory} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2.5 text-xs font-black text-zinc-950 hover:bg-cyan-400 disabled:opacity-50 sm:w-auto"><Sparkles className={`h-3.5 w-3.5 ${isExtracting ? 'animate-pulse' : ''}`} />{isExtracting ? `${storyAgent ? localAgentLabel(storyAgent) : 'Agent'} is extracting one story...` : storyAgent ? `Extract with ${localAgentLabel(storyAgent)}` : 'Scan for a story-extraction agent'}</button>
+        <button type="button" disabled={isExtracting || !sourceContent.trim() || !storyAgent} onClick={extractStory} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2.5 text-xs font-black text-zinc-950 hover:bg-cyan-400 disabled:opacity-50 sm:w-auto"><Sparkles className={`h-3.5 w-3.5 ${isExtracting ? 'animate-pulse' : ''}`} />{isExtracting ? `${storyAgent ? localAgentLabel(storyAgent) : 'Agent'} is extracting… ${extractionElapsedSeconds}s` : storyAgent ? `Extract with ${localAgentLabel(storyAgent)}` : 'Scan for a story-extraction agent'}</button>
+        {isExtracting && <p role="status" className="mt-2 text-[11px] text-zinc-400">Studio is waiting for your local agent. Extraction stops after 90 seconds; if it takes longer, check the CLI’s sign-in or approval prompt in Terminal.</p>}
       </section>
 
       <section className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 sm:grid-cols-2">

@@ -23,6 +23,9 @@ const connectorConfiguration = loadConnectorConfiguration();
 const PORT = connectorConfiguration.port;
 const TOKEN = connectorConfiguration.token;
 const CONNECTOR_API_VERSION = '2';
+// Story extraction is an interactive UI action, not a background batch job.
+// Bound it so a stalled CLI never leaves a user waiting indefinitely.
+const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
 // ChatGPT-authenticated Codex no longer supports the retired gpt-5.4-mini
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
@@ -491,8 +494,13 @@ async function extractStoryWithAgent(root, payload) {
   const storyTitle = typeof payload.storyTitle === 'string' ? payload.storyTitle.trim().slice(0, 240) : '';
   const sourceType = typeof payload.sourceType === 'string' ? payload.sourceType.trim().slice(0, 80) : 'text';
   const selected = agentAdapter(String(payload.agent || ''), 'story-extraction');
-  const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, 600_000);
-  if (!result.ok) throw new Error(result.output || `${selected.label} could not extract this user story. Confirm it is installed and signed in, then retry.`);
+  const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, STORY_EXTRACTION_TIMEOUT_MS);
+  if (!result.ok) {
+    const timedOut = /timed out|etimedout|kill/i.test(result.output);
+    throw new Error(timedOut
+      ? `${selected.label} did not respond within 90 seconds. It may be waiting for sign-in, approval, or network access. Check the local CLI in a terminal, then retry.`
+      : result.output || `${selected.label} could not extract this user story. Confirm it is installed and signed in, then retry.`);
+  }
   return parseAgentStory(result.output, selected.label);
 }
 function startLocalAgentImplementation(root, agent, prompt, taskId, featureTitle) {

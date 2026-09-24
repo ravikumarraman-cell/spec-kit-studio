@@ -3,8 +3,8 @@ import { Bug, Clipboard, Lightbulb, Pencil, Play, ShieldCheck } from 'lucide-rea
 import { AssessmentVerdict, FeatureImplementationReceipt, SpecKitProject, StudioProcessCase, StudioProcessKind } from '../../types/speckit';
 import { approveProcessStep, changedFilesFromWorkflowArtifact, createProcessCase, hasSuccessfulProcessReceipt, isProcessCaseComplete, isRecoverableArtifactReceipt, isRecoverableWorkflowSuccess, isWorkflowBlockedOutput, processDefinitions, reopenProcessStep, retainProcessStepReceipt, reviseProcessCase } from '../../lib/processCases';
 import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
-import { LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
-import { getStudioSettings } from '../../lib/studioSettings';
+import { localAgentLabels } from '../../lib/agentAvailability';
+import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { AgentJobStatus } from '../common/AgentJobStatus';
 import { FeatureCodeChanges } from '../prompt/FeatureCodeChanges';
 import { downloadBlob, generateProcessCasePackageZip } from '../../lib/export';
@@ -16,7 +16,7 @@ export function ProcessStudio({ project, onSaveCases, onStartFeature, onOpenWork
   const [selectedId, setSelectedId] = useState<string>(); const [title, setTitle] = useState(''); const [input, setInput] = useState(''); const [editing, setEditing] = useState(false); const [editTitle, setEditTitle] = useState(''); const [editInput, setEditInput] = useState('');
   const [job, setJob] = useState<ConnectorJob | null>(null); const [error, setError] = useState(''); const [running, setRunning] = useState(false); const [artifacts, setArtifacts] = useState<SpecKitArtifact[]>([]);
   const cases = project.processCases || []; const sameKind = useMemo(() => cases.filter((candidate) => candidate.kind === kind), [cases, kind]); const item = useMemo(() => cases.find((candidate) => candidate.id === selectedId) || sameKind.at(-1), [cases, sameKind, selectedId]);
-  const agent = useMemo(() => { try { return recommendedLocalAgent(JSON.parse(localStorage.getItem('speckit_local_agents') || '[]') as LocalAgentStatus[], getStudioSettings().preferredAgent); } catch { return undefined; } }, []);
+  const agent = useMemo(() => selectedRuntimeAgent('planning'), []);
   const save = (next: StudioProcessCase) => onSaveCases(cases.map((candidate) => candidate.id === next.id ? next : candidate));
   useEffect(() => { const focus = project.workflowFocus || 'feature'; setMode(focus); setKind(focus === 'assessment' ? 'assessment' : 'bug'); setSelectedId(undefined); setEditing(false); setJob(null); setError(''); }, [project.id, project.workflowFocus]);
   useEffect(() => { const handle = (event: Event) => { const detail = (event as CustomEvent<{ caseId?: string; step?: number }>).detail; if (!detail?.caseId) return; const target = cases.find((candidate) => candidate.id === detail.caseId); if (!target) return; setKind(target.kind); setMode(target.kind); setSelectedId(target.id); window.setTimeout(() => document.getElementById('active-process-case')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); }; window.addEventListener('speckit-process-step-focus', handle); return () => window.removeEventListener('speckit-process-step-focus', handle); }, [cases]);

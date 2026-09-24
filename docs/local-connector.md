@@ -27,7 +27,7 @@ Use the narrowest allowed parent directory that contains the repositories you in
 - Previews and applies browser-provided files only after an `APPLY` confirmation. Path traversal is rejected.
 - Creates a linked Git worktree after a `CREATE_WORKTREE` confirmation and records the resulting path, branch, and baseline in Studio.
 - Runs discovered baseline commands and an allowed feature verification command; it captures bounded job output.
-- Runs Codex, Claude Code, or GitHub Copilot CLI only after an explicit execution confirmation and a feature preflight. Implementation requires a registered linked worktree.
+- Runs the runtime-selected local agent only after an explicit execution confirmation and a feature preflight. Implementation requires a registered linked worktree.
 - Can install `uv` into `connector/.tools/`, install `specify-cli`, and initialize a fresh Spec-Kit repository only through separate explicit confirmations.
 
 ## Boundaries and limitations
@@ -39,3 +39,16 @@ The token is a local pairing control. It is not an enterprise login, device iden
 It does not automatically commit, push, create a pull request, or deploy. It cannot establish that an AI-generated plan or implementation is correct. Review diffs and run repository-appropriate verification.
 
 Story-scoped implementation adds strict Spec-Kit conformance checks. It requires an initialized `.specify/` directory, Spec-Kit 1.0.11 or newer, a matching numbered branch, and complete conformant artifacts.
+
+## Add another local agent
+
+Studio has built-in adapters for Codex, Claude Code, and GitHub Copilot CLI. They are conveniences, not a closed list. The connector discovers its adapters at startup and sends their IDs, labels, availability, and supported capabilities to the browser. Settings and local workflows use that runtime list.
+
+To add a CLI without changing Studio source, set `STUDIO_AGENT_ADAPTERS_JSON` in the environment that starts the connector. This illustrative Aider adapter must be adjusted to its installed CLI's real non-interactive arguments:
+
+```bash
+export STUDIO_AGENT_ADAPTERS_JSON='[{"id":"aider","label":"Aider","command":"aider","versionArgs":["--version"],"operations":{"planning":["--message","$PROMPT"],"implementation":["--message","$PROMPT"],"story-extraction":["--message","$PROMPT"]}}]'
+npm run connector
+```
+
+An adapter ID permits lowercase letters, digits, and hyphens; its command must be a simple executable name resolved from the connector's local `PATH`. Each operation is an argument array containing exactly one `$PROMPT`. The browser sends only the selected adapter ID and approved work packet: it cannot supply a command, flags, or shell expression. Scan **Connected Workspace** after restarting the connector, then choose the discovered agent in **Settings**. An agent appears only for the operations it declares.

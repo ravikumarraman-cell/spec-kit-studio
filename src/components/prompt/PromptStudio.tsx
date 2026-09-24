@@ -26,7 +26,7 @@ import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, configuredConne
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
-import { LocalAgentId, localAgentLabels } from '../../lib/agentAvailability';
+import { LocalAgentId, LocalAgentStatus, localAgentLabel, localAgentLabels } from '../../lib/agentAvailability';
 import { TaskDecisionGate } from './TaskDecisionGate';
 import { FeatureCodeChanges } from './FeatureCodeChanges';
 import { FeatureImplementationHistory } from './FeatureImplementationHistory';
@@ -53,6 +53,17 @@ const AGENT_FRAMEWORKS: { name: string; desc: string; localAgent?: LocalAgentId 
   { name: 'Cursor', desc: 'Portable handoff: copy the focused task prompt to Cursor' },
   { name: 'Windsurf / Aider', desc: 'Portable handoff: copy the focused task prompt to your local agent' },
 ];
+
+function discoveredAgentFrameworks(): { name: string; desc: string; localAgent?: LocalAgentId }[] {
+  try {
+    const agents = JSON.parse(localStorage.getItem('speckit_local_agents') || '[]') as LocalAgentStatus[];
+    if (!Array.isArray(agents)) return AGENT_FRAMEWORKS;
+    const known = new Set(AGENT_FRAMEWORKS.flatMap((agent) => agent.localAgent ? [agent.localAgent] : []));
+    return [...AGENT_FRAMEWORKS, ...agents
+      .filter((agent) => agent?.installed && typeof agent.id === 'string' && typeof agent.label === 'string' && !known.has(agent.id))
+      .map((agent) => ({ name: localAgentLabel(agent), desc: 'Runs locally through Studio with the capabilities declared by its connector adapter', localAgent: agent.id }))];
+  } catch { return AGENT_FRAMEWORKS; }
+}
 
 function evidenceChangedFiles(job: ConnectorJob): string[] {
   const captured = job.evidence?.changedFiles || [];
@@ -115,6 +126,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     [activeFeature],
   );
   const [selectedAgent, setSelectedAgent] = useState<string>('Codex CLI');
+  const agentFrameworks = useMemo(() => discoveredAgentFrameworks(), []);
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [customNotes, setCustomNotes] = useState('');
   const [decisionAnswers, setDecisionAnswers] = useState<FeatureTaskDecisionAnswers>({});
@@ -282,7 +294,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
   }, [selectedTaskId, taskOptions]);
 
   const agentTarget: AgentTarget = selectedAgent.includes('Copilot') ? 'copilot' : selectedAgent.includes('Gemini') ? 'gemini' : selectedAgent.includes('Cursor') ? 'cursor' : selectedAgent.includes('Aider') || selectedAgent.includes('Codex') ? 'codex' : 'claude';
-  const selectedLocalAgent = AGENT_FRAMEWORKS.find((agent) => agent.name === selectedAgent)?.localAgent;
+  const selectedLocalAgent = agentFrameworks.find((agent) => agent.name === selectedAgent)?.localAgent;
   const selectedAgentLabel = selectedLocalAgent ? localAgentLabels[selectedLocalAgent] : selectedAgent;
   const completedChangedFiles = codexJob ? evidenceChangedFiles(codexJob) : [];
   const recoveredChangedFiles = recoveredEvidence?.changedFiles || [];
@@ -601,7 +613,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         {!isHumanApprovalTask && <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
           <label className="font-bold text-zinc-200 block">Target Agent Architecture</label>
           <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-            {AGENT_FRAMEWORKS.map((agent) => (
+            {agentFrameworks.map((agent) => (
               <div
                 key={agent.name}
                 onClick={() => { if (!isRunningCodex) setSelectedAgent(agent.name); }}

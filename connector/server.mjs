@@ -26,6 +26,51 @@ const TOKEN = connectorConfiguration.token;
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
+const AGENT_ID = /^[a-z][a-z0-9-]{0,63}$/;
+const SAFE_EXECUTABLE = /^[A-Za-z0-9._-]+$/;
+const PROMPT_TOKEN = '$PROMPT';
+
+// Adapters make the connector extensible without accepting an executable or
+// arguments from the browser. A machine owner may add a CLI with
+// STUDIO_AGENT_ADAPTERS_JSON; only its preconfigured command and argument
+// templates can run. Each command must include exactly one $PROMPT token.
+function adapter(id, label, commandName, versionArgs, operations) {
+  return { id, label, commandName, versionArgs, operations };
+}
+function validArgs(args) {
+  return Array.isArray(args) && args.length <= 24 && args.every((item) => typeof item === 'string' && item.length <= 2_000)
+    && args.filter((item) => item === PROMPT_TOKEN).length === 1;
+}
+function configuredAgentAdapters() {
+  const builtIns = [
+    adapter('claude', 'Claude Code', 'claude', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
+    adapter('codex', 'Codex', 'codex', ['exec', '--help'], { planning: ['exec', '--model', CODEX_MODEL, PROMPT_TOKEN], implementation: ['exec', '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN], 'story-extraction': ['exec', '--model', CODEX_MODEL, PROMPT_TOKEN] }),
+    adapter('copilot', 'GitHub Copilot CLI', 'copilot', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
+  ];
+  let external = [];
+  if (process.env.STUDIO_AGENT_ADAPTERS_JSON) {
+    try { external = JSON.parse(process.env.STUDIO_AGENT_ADAPTERS_JSON); } catch { throw new Error('STUDIO_AGENT_ADAPTERS_JSON must be valid JSON.'); }
+  }
+  if (!Array.isArray(external)) throw new Error('STUDIO_AGENT_ADAPTERS_JSON must be a JSON array.');
+  const configured = external.map((item) => {
+    if (!item || !AGENT_ID.test(item.id || '') || typeof item.label !== 'string' || !item.label.trim() || item.label.length > 80 || !SAFE_EXECUTABLE.test(item.command || '')) throw new Error('Each custom agent adapter needs a safe id, label, and executable name.');
+    const operations = item.operations;
+    if (!operations || typeof operations !== 'object' || !Object.values(operations).every(validArgs)) throw new Error(`Custom agent adapter ${item.id} must define operation argument arrays with exactly one $PROMPT token.`);
+    return adapter(item.id, item.label.trim(), item.command, Array.isArray(item.versionArgs) && item.versionArgs.every((arg) => typeof arg === 'string' && arg.length <= 200) ? item.versionArgs : ['--version'], operations);
+  });
+  const merged = new Map();
+  [...builtIns, ...configured].forEach((item) => merged.set(item.id, item));
+  return [...merged.values()];
+}
+const agentAdapters = configuredAgentAdapters();
+function agentAdapter(id, operation) {
+  const selected = agentAdapters.find((item) => item.id === id && item.operations[operation]);
+  if (!selected) throw new Error('The selected local agent does not support this Studio operation. Choose a compatible detected agent or copy the portable handoff.');
+  return selected;
+}
+function adapterArgs(selected, operation, prompt) {
+  return selected.operations[operation].map((arg) => arg === PROMPT_TOKEN ? prompt : arg);
+}
 const allowedRoots = connectorConfiguration.allowedRoots;
 const allowedOrigins = connectorConfiguration.allowedOrigins;
 const ignored = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage', '.venv', 'vendor']);
@@ -185,18 +230,13 @@ async function discoverBaselineCommands(root, files) {
   return commands;
 }
 async function discoverLocalAgents(root) {
-  const candidates = [
-    { id: 'claude', label: 'Claude Code', commandName: 'claude', args: ['--version'] },
-    // `codex exec --help` verifies that the executable can launch without starting an agent session.
-    { id: 'codex', label: 'Codex', commandName: 'codex', args: ['exec', '--help'] },
-    { id: 'copilot', label: 'GitHub Copilot CLI', commandName: 'copilot', args: ['--version'] },
-  ];
-  return Promise.all(candidates.map(async (candidate) => {
-    const result = await command(candidate.commandName, candidate.args, root, 5_000);
+  return Promise.all(agentAdapters.map(async (candidate) => {
+    const result = await command(candidate.commandName, candidate.versionArgs, root, 5_000);
     return {
       id: candidate.id,
       label: candidate.label,
       installed: result.ok,
+      capabilities: Object.keys(candidate.operations),
       // Version/help output is diagnostic only. Keep it short and never expose environment details.
       version: result.ok ? result.output.split('\n').find(Boolean)?.trim().slice(0, 160) || undefined : undefined,
     };
@@ -425,28 +465,44 @@ async function startFeatureVerification(root) {
 }
 function startSpecKitAgent(root, agent, prompt) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 50_000) throw new Error('A valid, reasonably sized Engine work packet is required.');
-  const commands = {
-    claude: { commandName: 'claude', args: ['-p', prompt], label: 'Claude Code · Spec-Kit planning' },
-    codex: { commandName: 'codex', args: ['exec', '--model', CODEX_MODEL, prompt], label: `Codex (${CODEX_MODEL}) · Spec-Kit planning` },
-    copilot: { commandName: 'copilot', args: ['-p', prompt], label: 'GitHub Copilot CLI · Spec-Kit planning' },
-  };
-  const selected = commands[agent];
-  if (!selected) throw new Error('Unsupported local coding agent.');
-  return startCommandJob({ ...selected, cwd: root, timeout: 600_000 });
+  const selected = agentAdapter(agent, 'planning');
+  return startCommandJob({ commandName: selected.commandName, args: adapterArgs(selected, 'planning', prompt), label: `${selected.label} · Spec-Kit planning`, cwd: root, timeout: 600_000 });
+}
+function storyExtractionPrompt(storyContent, storyTitle, sourceType) {
+  return `Prepare exactly one independently deliverable user story. This is read-only: do not create, edit, commit, or delete files.\n\nSource type: ${sourceType}\n${storyTitle ? `Suggested title: ${storyTitle}\n` : ''}Source:\n---\n${storyContent}\n---\n\nReturn ONLY valid JSON, no markdown or commentary: {"story":{"id":"US-101","title":"...","priority":"High|Medium|Low","asA":"...","iWantTo":"...","soThat":"...","acceptanceCriteria":["..."],"requirementIds":["FR-101"]},"functionalRequirements":[{"id":"FR-101","title":"...","description":"...","category":"Core|UI/UX|API|Database|Security|Performance|Integration","priority":"High|Medium|Low"}],"nonFunctionalRequirements":[],"compatibilityConstraints":[],"sourceSummary":"..."}. Choose the smallest coherent use case. Return at least one testable acceptance criterion and one functional requirement; every requirementIds item must reference a returned requirement.`;
+}
+function parseAgentStory(output, agentLabel) {
+  const start = output.indexOf('{'); const end = output.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error(`${agentLabel} did not return a JSON story package. Retry with a shorter, focused source ticket.`);
+  let value; try { value = JSON.parse(output.slice(start, end + 1)); } catch { throw new Error(`${agentLabel} returned invalid JSON. Retry with a shorter, focused source ticket.`); }
+  const story = value?.story; const requirements = value?.functionalRequirements;
+  const priorities = new Set(['High', 'Medium', 'Low']); const categories = new Set(['Core', 'UI/UX', 'API', 'Database', 'Security', 'Performance', 'Integration']);
+  if (!story || !['title', 'asA', 'iWantTo', 'soThat'].every((field) => typeof story[field] === 'string' && story[field].trim()) || !priorities.has(story.priority) || !Array.isArray(story.acceptanceCriteria) || !story.acceptanceCriteria.length || !story.acceptanceCriteria.every((item) => typeof item === 'string' && item.trim())) throw new Error(`${agentLabel} returned an incomplete story. Retry with a more focused source ticket.`);
+  if (!Array.isArray(requirements) || !requirements.length || !requirements.every((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.description === 'string' && categories.has(item.category) && priorities.has(item.priority))) throw new Error(`${agentLabel} returned incomplete functional requirements. Retry with a more focused source ticket.`);
+  const requirementIds = new Set(requirements.map((item) => item.id));
+  if (!Array.isArray(story.requirementIds) || !story.requirementIds.length || !story.requirementIds.every((id) => requirementIds.has(id))) throw new Error(`${agentLabel} returned a story with unlinked requirements. Retry with a more focused source ticket.`);
+  return value;
+}
+async function extractStoryWithAgent(root, payload) {
+  const storyContent = typeof payload.storyContent === 'string' ? payload.storyContent.trim() : '';
+  if (!storyContent) throw new Error('Add a user story or source ticket before extracting it.');
+  if (storyContent.length > 100_000) throw new Error('User story input must be 100,000 characters or fewer.');
+  const storyTitle = typeof payload.storyTitle === 'string' ? payload.storyTitle.trim().slice(0, 240) : '';
+  const sourceType = typeof payload.sourceType === 'string' ? payload.sourceType.trim().slice(0, 80) : 'text';
+  const selected = agentAdapter(String(payload.agent || ''), 'story-extraction');
+  const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, 600_000);
+  if (!result.ok) throw new Error(result.output || `${selected.label} could not extract this user story. Confirm it is installed and signed in, then retry.`);
+  return parseAgentStory(result.output, selected.label);
 }
 function startLocalAgentImplementation(root, agent, prompt, taskId, featureTitle) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 80_000) throw new Error('A valid, reasonably sized feature task prompt is required.');
   if (!/^(T\d+|TASK-\d+)$/.test(String(taskId || '').trim())) throw new Error('Choose one approved feature task before running the selected agent. Select a task with an official ID such as T001 or TASK-101.');
   const guardrails = '\\n\\n## Studio execution boundary\\nYou are executing exactly ' + taskId + ' for feature "' + String(featureTitle || '').slice(0, 240) + '". Work only within this task’s approved scope. Do not commit, push, create branches, change unrelated tasks, or start a second agent. Before editing, inspect relevant files and state the file-level plan. Then implement, run focused verification, and finish with changed files, commands, results, and unresolved assumptions. Only after implementation and relevant verification pass, update exactly this task’s official tasks.md checklist entry from [ ] to [x]. Never check off another task or alter task scope.';
-  const commands = {
-    codex: { commandName: 'codex', args: ['exec', '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, prompt + guardrails], label: 'Codex · ' + taskId + ' implementation' },
-    claude: { commandName: 'claude', args: ['-p', prompt + guardrails], label: 'Claude Code · ' + taskId + ' implementation' },
-    copilot: { commandName: 'copilot', args: ['-p', prompt + guardrails], label: 'GitHub Copilot CLI · ' + taskId + ' implementation' },
-  };
-  const selected = commands[agent];
-  if (!selected) throw new Error('That agent cannot be run by the local connector. Copy the portable handoff instead.');
+  const selected = agentAdapter(agent, 'implementation');
   return startCommandJob({
-    ...selected,
+    commandName: selected.commandName,
+    args: adapterArgs(selected, 'implementation', prompt + guardrails),
+    label: `${selected.label} · ${taskId} implementation`,
     cwd: root,
     timeout: 900_000,
     captureEvidence: true,
@@ -599,6 +655,7 @@ const server = http.createServer(async (req, res) => {
     }
     const payload = await body(req);
     if (req.method === 'POST' && req.url === '/v1/repository/scan') return send(req, res, 200, await scan(await safeRoot(payload.repositoryPath)));
+    if (req.method === 'POST' && req.url === '/v1/story/extract') return send(req, res, 200, { success: true, data: await extractStoryWithAgent(await safeRoot(payload.repositoryPath), payload) });
     if (req.method === 'POST' && req.url === '/v1/feature/preflight') return send(req, res, 200, await featurePreflight(await safeRoot(payload.repositoryPath), payload.project, payload.featureId));
     if (req.method === 'POST' && req.url === '/v1/worktree/create') { if (payload.confirmation !== 'CREATE_WORKTREE') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, await createWorktree(await safeRoot(payload.repositoryPath), payload.targetPath, payload.branch)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/artifacts/read') return send(req, res, 200, await readSpecKitArtifacts(await safeRoot(payload.repositoryPath)));
@@ -613,7 +670,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/baseline/run') return send(req, res, 202, await startBaselineCommand(await safeRoot(payload.repositoryPath), payload.commandId));
     if (req.method === 'POST' && req.url === '/v1/dependencies/install') { if (payload.confirmation !== 'INSTALL_DEPENDENCIES') return send(req, res, 400, { error: 'Explicit dependency-install confirmation is required.' }); return send(req, res, 202, await startWorkspaceDependencyInstall(await safeRoot(payload.repositoryPath), payload.workingDirectory)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); const root = await safeRoot(payload.repositoryPath); if (payload.project) { const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' ')); } return send(req, res, 202, startSpecKitAgent(root, payload.agent, payload.prompt)); }
-    if (req.method === 'POST' && req.url === '/v1/codex/task/run') { if (payload.confirmation !== 'RUN_CODEX_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let Codex edit a local repository.' }); return send(req, res, 202, startLocalAgentImplementation(await safeRoot(payload.repositoryPath), 'codex', payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); const root = await safeRoot(payload.repositoryPath); const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed || !preflight.evidence.isLinkedWorktree) throw new Error([...preflight.errors.map((item) => item.message), ...(!preflight.evidence.isLinkedWorktree ? ['Implementation requires a linked Git worktree.'] : [])].join(' ')); return send(req, res, 202, startLocalAgentImplementation(root, payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/jobs/active') return send(req, res, 200, { job: activeJob(await safeRoot(payload.repositoryPath)) });

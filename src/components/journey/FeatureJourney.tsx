@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleAlert, Play, ShieldCheck } from 'lucide-react';
 import { FeatureJourney as JourneyState, SpecKitProject, ViewTab } from '../../types/speckit';
 import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
-import { LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
+import { LocalAgentStatus, localAgentLabel, localAgentLabels } from '../../lib/agentAvailability';
 import { getStudioSettings } from '../../lib/studioSettings';
+import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
 import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, DeliveryPlanMode, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, featureIdForEnginePreflight, getJourneyStage, nextFeatureJourneyStage, reopenJourneyStage, repositoryPathForEngineStage, stageRequiresFeatureWorktree } from '../../lib/featureJourney';
 import { FeatureInbox } from './FeatureInbox';
@@ -21,24 +22,7 @@ import { deliveryScope } from '../../lib/deliveryItems';
 import { DeliveryScopeBanner } from './DeliveryScopeBanner';
 import { officialFeatureDirectoryFromSpecPath, validateSpecKitArtifacts } from '../../lib/specKitCompliance';
 
-function detectedAgent(): LocalAgentStatus | undefined {
-  try {
-    const value = JSON.parse(window.localStorage.getItem('speckit_local_agents') || '[]');
-    return Array.isArray(value) ? recommendedLocalAgent(value as LocalAgentStatus[], getStudioSettings().preferredAgent) : undefined;
-  } catch { return undefined; }
-}
-
-function selectedAgent(): LocalAgentStatus | undefined {
-  const preference = getStudioSettings().preferredAgent;
-  if (preference === 'auto') return detectedAgent();
-  // Settings is a real agent selection, never a cosmetic label. A fresh scan is
-  // required before Studio will start an explicitly selected local CLI.
-  try {
-    const value = JSON.parse(window.localStorage.getItem('speckit_local_agents') || '[]');
-    const agent = Array.isArray(value) ? value.find((item): item is LocalAgentStatus => item?.id === preference && item.installed === true) : undefined;
-    return agent || undefined;
-  } catch { return undefined; }
-}
+function selectedAgent(): LocalAgentStatus | undefined { return selectedRuntimeAgent('planning'); }
 
 function officialArtifactFromAgentOutput(output: string) {
   const match = output.match(/--- Official ([^\n]+) ---\n([\s\S]+)$/);
@@ -120,7 +104,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     const compactReplacement = stageId === 5 && deliveryPlanMode === 'compact';
     const confirmation = compactReplacement
       ? `Generate a compact three-task demo plan for ${focusedFeature?.title}? This replaces only this feature's current tasks.md after you review and accept the result. It does not change application code.`
-      : `Run ${localAgentLabels[agent.id]} for Stage ${stageId}: ${stage.title}? You will review the result before the journey advances.`;
+      : `Run ${localAgentLabel(agent)} for Stage ${stageId}: ${stage.title}? You will review the result before the journey advances.`;
     if (!window.confirm(confirmation)) return;
     setIsReplacingDeliveryPlan(compactReplacement && Boolean(focusedFeature?.deliveryPlan?.acceptedAt));
     setIsRunningEngine(true); setAgentJob(null); setEngineError('');
@@ -142,7 +126,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
           .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
         if (existingArtifact && !compactReplacement) {
           setDiscoveredArtifact(existingArtifact);
-          setAcceptedNotice(`Studio found the existing feature-scoped ${kind}.md. Codex was not started; review and accept it when ready.`);
+          setAcceptedNotice(`Studio found the existing feature-scoped ${kind}.md. No agent was started; review and accept it when ready.`);
           return;
         }
       }
@@ -388,7 +372,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   }
 
   return <div className="feature-journey mx-auto max-w-5xl space-y-6 pb-12">
-    {agentRunIsActive && <AgentRunLockNotice agentLabel={selectedAgent() ? localAgentLabels[selectedAgent()!.id] : 'Local agent'} />}
+    {agentRunIsActive && <AgentRunLockNotice agentLabel={selectedAgent() ? localAgentLabel(selectedAgent()!) : 'Local agent'} />}
     <div className={agentRunIsActive ? 'agent-run-locked' : undefined} aria-busy={agentRunIsActive} inert={agentRunIsActive || undefined}>
     <section className="rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-zinc-900 to-zinc-900 p-5 md:p-7"><div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div><div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Spec-Kit Engine guided workflow</div><h1 className="mt-1 text-2xl font-bold text-zinc-100">Deliver one outcome without losing the thread</h1><p className="mt-2 max-w-2xl text-sm text-zinc-400">One stage at a time. Studio keeps scope, repository evidence, human approvals, and Engine work in the right order.</p></div><div className="min-w-36 rounded-xl border border-cyan-500/25 bg-zinc-950/60 p-3 text-center"><div className="text-2xl font-black text-cyan-300">{progress}%</div><div className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{completedCount} of 8 approved</div></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div></section>
 
@@ -408,7 +392,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
 
     {current.id > 5 && activeFeature && !activeFeature.deliveryPlan?.acceptedAt && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Required repair</p><h2 className="mt-1 font-bold text-zinc-100">Create the delivery tasks for {activeFeature.title}</h2><p className="mt-1 text-zinc-300">Stage 5 was previously marked complete without retaining feature-scoped tasks. Studio will first look for an official <code>tasks.md</code>; only run Codex if none is found. Review and accept the result before continuing.</p><button type="button" onClick={() => reopenStage(5)} className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-bold text-amber-100 hover:bg-amber-300/20">Review delivery tasks</button></section>}</div></details>}
 
-    {agentJob && <AgentJobStatus job={agentJob} preparingLabel={`Running ${selectedAgent() ? localAgentLabels[selectedAgent()!.id] : 'local agent'} for Stage ${agentStageId || current.id}…`} />}
+    {agentJob && <AgentJobStatus job={agentJob} preparingLabel={`Running ${selectedAgent() ? localAgentLabel(selectedAgent()!) : 'local agent'} for Stage ${agentStageId || current.id}…`} />}
 
     {agentJob?.ok && (agentStageId === 3 || agentStageId === 4 || agentStageId === 5) && <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Review before accepting</p><h2 className="mt-1 font-bold text-zinc-100">{agentStageId === 3 ? 'Read-only impact map' : agentStageId === 4 ? 'Feature-scoped architecture plan' : 'Feature-scoped delivery tasks'} for {activeFeature?.title || 'the current feature'}</h2><p className="mt-1 text-zinc-300">Read the Engine result below. Accepting retains it with this imported feature and unlocks the next human approval; it does not approve the stage automatically.</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-300">{agentJob.output}</pre><button type="button" onClick={acceptEngineReview} className="mt-3 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Accept {agentStageId === 3 ? 'impact map' : agentStageId === 4 ? 'feature plan' : 'delivery tasks'}</button></section>}
 

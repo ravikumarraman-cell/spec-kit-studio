@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, BookOpenCheck, Check, FileUp, Search, Sparkles } from 'lucide-react';
-import { importApi, StoryExtractionPackage } from '../../lib/api/imports';
+import { StoryExtractionPackage } from '../../lib/api/imports';
+import { extractStoryWithLocalAgent } from '../../lib/connector';
+import { localAgentLabel } from '../../lib/agentAvailability';
+import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { deliveryScope } from '../../lib/deliveryItems';
 import { FeatureImportSource, FunctionalRequirement, Priority, SpecKitProject, UserStory } from '../../types/speckit';
 
@@ -36,6 +39,9 @@ export function StoryIntakePanel({ project, initialStoryId, isSaving = false, on
   const [sourceContent, setSourceContent] = useState('');
   const [extracted, setExtracted] = useState<StoryExtractionPackage | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const storyAgent = useMemo(() => {
+    return selectedRuntimeAgent('story-extraction');
+  }, []);
 
   const stories = useMemo(() => project.spec.userStories.filter((story) => {
     const needle = query.trim().toLowerCase();
@@ -57,8 +63,10 @@ export function StoryIntakePanel({ project, initialStoryId, isSaving = false, on
     if (!sourceContent.trim()) { onError('Paste a ticket, story draft, or source text first.'); return; }
     setIsExtracting(true); onError(null);
     try {
-      const response = await importApi.extractStory({ storyContent: sourceContent, storyTitle: title, sourceType: 'text' });
-      const value = response.data;
+      const repositoryPath = project.importedRepo?.repoUrl;
+      if (!repositoryPath) throw new Error('Connect and scan a local repository in Connected Workspace before using local-agent extraction.');
+      if (!storyAgent) throw new Error('Scan Connected Workspace and select a local agent that supports story extraction in Settings.');
+      const value = await extractStoryWithLocalAgent(repositoryPath, storyAgent.id, sourceContent, title) as StoryExtractionPackage;
       if (!value?.story?.title || !value.story.acceptanceCriteria?.length || !value.functionalRequirements?.length) throw new Error('The extractor did not return one complete, testable story.');
       setExtracted(value);
       setTitle(value.story.title); setAsA(value.story.asA); setIWantTo(value.story.iWantTo); setSoThat(value.story.soThat);
@@ -98,11 +106,11 @@ export function StoryIntakePanel({ project, initialStoryId, isSaving = false, on
     {mode === 'compose' ? <div className="space-y-4">
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p className="text-xs font-bold text-zinc-100">Have a ticket or rough draft?</p><p className="mt-1 text-[11px] text-zinc-400">Paste it here and Studio will shape one focused story. You can review every field before saving.</p></div>
+          <div><p className="text-xs font-bold text-zinc-100">Have a ticket or rough draft?</p><p className="mt-1 text-[11px] text-zinc-400">Paste it here and {storyAgent ? localAgentLabel(storyAgent) : 'your selected local agent'} will shape one focused story. You can review every field before saving.</p></div>
           <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800"><FileUp className="h-3.5 w-3.5" />Upload text<input type="file" accept=".md,.txt,.json" className="sr-only" onChange={async (event) => { const file = event.target.files?.[0]; if (file) { setSourceContent(await file.text()); if (!title) setTitle(file.name.replace(/\.[^.]+$/, '')); } }} /></label>
         </div>
         <textarea value={sourceContent} onChange={(event) => setSourceContent(event.target.value)} rows={4} placeholder="Paste one Jira story, GitHub issue, or user-story draft..." className="mt-3 w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100 outline-none focus:border-cyan-500/60" />
-        <button type="button" disabled={isExtracting || !sourceContent.trim()} onClick={extractStory} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2.5 text-xs font-black text-zinc-950 hover:bg-cyan-400 disabled:opacity-50 sm:w-auto"><Sparkles className={`h-3.5 w-3.5 ${isExtracting ? 'animate-pulse' : ''}`} />{isExtracting ? 'Extracting one story...' : 'Extract one story'}</button>
+        <button type="button" disabled={isExtracting || !sourceContent.trim() || !storyAgent} onClick={extractStory} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2.5 text-xs font-black text-zinc-950 hover:bg-cyan-400 disabled:opacity-50 sm:w-auto"><Sparkles className={`h-3.5 w-3.5 ${isExtracting ? 'animate-pulse' : ''}`} />{isExtracting ? `${storyAgent ? localAgentLabel(storyAgent) : 'Agent'} is extracting one story...` : storyAgent ? `Extract with ${localAgentLabel(storyAgent)}` : 'Scan for a story-extraction agent'}</button>
       </section>
 
       <section className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 sm:grid-cols-2">

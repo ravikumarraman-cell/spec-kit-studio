@@ -25,6 +25,10 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const requestClose = () => {
+    if (isGenerating) { setErrorMsg('Generation is still running. Keep this dialog open until it finishes.'); return; }
+    onClose();
+  };
 
   const toggleFocusArea = (area: string) => {
     if (focusAreas.includes(area)) {
@@ -86,7 +90,7 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="AI Spec Generator" className="items-center justify-center p-4">
+    <Modal isOpen={isOpen} onClose={requestClose} ariaLabel="AI Spec Generator" className="items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-6 space-y-5 text-xs">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
@@ -98,7 +102,7 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
               <p className="text-[11px] text-zinc-400">Powered by Gemini 3.8 Flash Server Proxy</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-500 hover:text-zinc-200">
+          <button type="button" onClick={requestClose} disabled={isGenerating} className="p-1 text-zinc-500 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -149,8 +153,9 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
           <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-zinc-200 font-medium"
+              onClick={requestClose}
+              disabled={isGenerating}
+              className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-zinc-200 font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               Cancel
             </button>

@@ -53,7 +53,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
           <input
             type="text"
             autoFocus
-            placeholder="Search specs, requirements, tasks, or AI commands (Esc to close)..."
+            placeholder="Search specs, requirements, tasks, or AI commands..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-transparent text-zinc-100 placeholder-zinc-500 focus:outline-none text-xs"

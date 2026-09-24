@@ -4,9 +4,10 @@ import { DeliveryScope, FeatureImportSource as DeliveryImportSource, FunctionalR
 import { ImportNotice } from './ImportNotice';
 import { FeatureExtractionPackage, importApi } from '../../lib/api/imports';
 import { createProjectFromFeatureExtraction } from '../../lib/importProjectFactory';
-import { LocalAgentId, LocalAgentStatus, localAgentLabels, recommendedLocalAgent } from '../../lib/agentAvailability';
+import { LocalAgentId, localAgentLabel, recommendedLocalAgent } from '../../lib/agentAvailability';
 import { configuredConnectorClient, ConnectorJob } from '../../lib/connector';
 import { getStudioSettings } from '../../lib/studioSettings';
+import { readRuntimeAgentScan, saveRuntimeAgentScan } from '../../lib/runtimeAgents';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
@@ -33,24 +34,6 @@ interface FeatureImportModalProps {
   onOpenWorkspace?: () => void;
 }
 
-function readLocalAgentStatus(): { scanned: boolean; agents: LocalAgentStatus[] } {
-  if (typeof window === 'undefined') return { scanned: false, agents: [] };
-  const stored = window.localStorage.getItem('speckit_local_agents');
-  if (!stored) return { scanned: false, agents: [] };
-  try {
-    const value = JSON.parse(stored);
-    if (!Array.isArray(value)) return { scanned: false, agents: [] };
-    return {
-      scanned: true,
-      agents: value.filter((item): item is LocalAgentStatus =>
-        item && typeof item.id === 'string' && item.id in localAgentLabels && typeof item.label === 'string' && typeof item.installed === 'boolean',
-      ),
-    };
-  } catch {
-    return { scanned: false, agents: [] };
-  }
-}
-
 export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   isOpen,
   onClose,
@@ -71,9 +54,9 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   const [extractedResult, setExtractedResult] = useState<FeatureExtractionPackage | null>(null);
   const [previewTab, setPreviewTab] = useState<FeaturePreviewTab>('stories');
   const [fileError, setFileError] = useState<string | null>(null);
-  const [agentScan, setAgentScan] = useState(() => readLocalAgentStatus());
-  const [generationPath, setGenerationPath] = useState<'engine' | 'gemini'>(() => recommendedLocalAgent(agentScan.agents, getStudioSettings().preferredAgent) ? 'engine' : 'gemini');
-  const [engineAgent, setEngineAgent] = useState<'claude' | 'codex' | 'copilot'>('claude');
+  const [agentScan, setAgentScan] = useState(() => readRuntimeAgentScan());
+  const [generationPath, setGenerationPath] = useState<'engine' | 'gemini'>('engine');
+  const [engineAgent, setEngineAgent] = useState<LocalAgentId>('');
   const [enginePrompt, setEnginePrompt] = useState('');
   const [connectorToken, setConnectorToken] = useState(() => getConnectorSessionToken());
   const [agentJob, setAgentJob] = useState<ConnectorJob | null>(null);
@@ -84,10 +67,10 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setDeliveryScope(initialScope);
-    const latest = readLocalAgentStatus();
+    const latest = readRuntimeAgentScan();
     setAgentScan(latest);
     const recommended = recommendedLocalAgent(latest.agents, getStudioSettings().preferredAgent);
-    setGenerationPath(recommended ? 'engine' : 'gemini');
+    setGenerationPath('engine');
     if (recommended) setEngineAgent(recommended.id);
     const repositoryPath = activeProject?.importedRepo?.repoUrl;
     if (!repositoryPath) return;
@@ -95,10 +78,10 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     configuredConnectorClient(connectorToken).scan(repositoryPath).then((report) => {
       if (cancelled) return;
       const refreshed = { scanned: true, agents: report.agents };
-      window.localStorage.setItem('speckit_local_agents', JSON.stringify(refreshed.agents));
+      saveRuntimeAgentScan(refreshed.agents);
       setAgentScan(refreshed);
       const detected = recommendedLocalAgent(refreshed.agents, getStudioSettings().preferredAgent);
-      setGenerationPath(detected ? 'engine' : 'gemini');
+      setGenerationPath('engine');
       if (detected) setEngineAgent(detected.id);
     }).catch(() => {
       // Keep the last known scan visible. Connection guidance remains available
@@ -161,10 +144,10 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     const content = contentToPrepare || featureContent;
     const title = titleToPrepare || featureTitle || 'New feature';
     if (!content.trim()) { setFileError('Add a feature description before preparing the Engine work packet.'); return; }
-    if (!agentScan.scanned) { setGenerationPath('gemini'); setFileError('Studio switched to Gemini so you can continue now. Scan the connected workspace later to enable a detected local coding agent.'); return; }
+    if (!agentScan.scanned) { setFileError('Scan the connected workspace to enable a local agent. Gemini remains an optional manual choice.'); return; }
     const selectedAgent = agentScan.agents.find((agent) => agent.id === engineAgent);
-    if (!selectedAgent?.installed) { setGenerationPath('gemini'); setFileError('That coding agent is not available to the local connector. Gemini is selected so you can continue now, or scan again after installing an agent.'); return; }
-    const agentName = localAgentLabels[engineAgent];
+    if (!selectedAgent?.installed) { setFileError('That local coding agent is not available. Install or sign in to it, then scan again. Gemini remains an optional manual choice.'); return; }
+    const agentName = localAgentLabel(selectedAgent);
     const prompt = `Use Spec-Kit Engine with ${agentName} for Feature Journey stage 2 only: describe the feature. Do not implement application code.\n\nRead the existing repository, .specify instructions, and coding standards first. Run the integration-appropriate Spec-Kit “specify” workflow to create or update only the feature-scoped specification. Focus on user-facing behavior, success measures, and compatibility boundaries that must not break. Do not invoke planning, tasks, analysis, or implementation. Stop after the specification and requirements-quality findings are ready; summarize repository evidence, assumptions, and questions that need human review.\n\nFeature title: ${title}\n\nFeature input:\n${content}`;
     setEnginePrompt(prompt);
     try { await navigator.clipboard.writeText(prompt); } catch { /* The visible work packet remains available for manual copy. */ }
@@ -177,7 +160,9 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     const repositoryPath = activeProject?.importedRepo?.repoUrl;
     if (!repositoryPath) { setFileError('Connect and scan a repository in Connected Workspace before running an agent from Studio.'); return; }
     if (!enginePrompt) { setFileError('Prepare the Engine work packet first.'); return; }
-    if (!window.confirm(`Run ${localAgentLabels[engineAgent]} in ${repositoryPath}? It may create or update only feature-scoped Spec-Kit artifacts. Studio will show its output here.`)) return;
+    const selectedAgent = agentScan.agents.find((agent) => agent.id === engineAgent);
+    if (!selectedAgent) { setFileError('Choose a detected local agent before running the work packet.'); return; }
+    if (!window.confirm(`Run ${localAgentLabel(selectedAgent)} in ${repositoryPath}? It may create or update only feature-scoped Spec-Kit artifacts. Studio will show its output here.`)) return;
     setFileError(null); setIsRunningAgent(true);
     try {
       setConnectorSessionToken(connectorToken);
@@ -250,8 +235,17 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
     }
   };
 
+  const deliveryWorkIsActive = isExtracting || isRunningAgent || isSavingFeature || agentJob?.status === 'running';
+  const requestClose = () => {
+    if (deliveryWorkIsActive) {
+      setFileError('Delivery work is still running. Keep this dialog open until the local agent or save operation finishes.');
+      return;
+    }
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Import feature and generate Spec-Kit" className="items-center justify-center overflow-y-auto p-3 sm:p-4 md:p-6">
+    <Modal isOpen={isOpen} onClose={requestClose} closeOnBackdrop={false} closeOnEscape={false} ariaLabel="Import feature and generate Spec-Kit" className="items-center justify-center overflow-y-auto p-3 sm:p-4 md:p-6">
       <div className="my-auto flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
         {/* Modal Header */}
         <div className="p-5 border-b border-zinc-800 flex items-center justify-between gap-4 bg-zinc-950/60">
@@ -275,8 +269,12 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+            type="button"
+            onClick={requestClose}
+            disabled={deliveryWorkIsActive}
+            aria-label="Close delivery import"
+            title={deliveryWorkIsActive ? 'Close is unavailable while delivery work is running' : 'Close'}
+            className="p-2 rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
@@ -320,7 +318,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
           {deliveryScope === 'feature' && enginePrompt && !extractedResult && (
             <EngineWorkPacketPanel
               prompt={enginePrompt}
-              agentLabel={localAgentLabels[engineAgent]}
+              agentLabel={localAgentLabel(agentScan.agents.find((agent) => agent.id === engineAgent) || engineAgent)}
               connectorToken={connectorToken}
               repositoryConnected={Boolean(activeProject?.importedRepo?.repoUrl)}
               isRunning={isRunningAgent}
@@ -332,7 +330,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
               onReviewStories={loadEngineStories}
             />
           )}
-          {deliveryScope === 'feature' && agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabels[engineAgent]} for this feature…`} />}
+          {deliveryScope === 'feature' && agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabel(agentScan.agents.find((agent) => agent.id === engineAgent) || engineAgent)} for this feature…`} />}
 
           {/* Step 1: Input source. Business logic stays in this modal; this component is view-only. */}
           {deliveryScope === 'feature' && !extractedResult && (

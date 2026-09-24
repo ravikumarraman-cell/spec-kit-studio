@@ -170,8 +170,14 @@ export function IntegrationsModal({
     },
   });
 
+  const syncIsActive = commitMutation.isPending || jiraSyncMutation.isPending;
+  const requestClose = () => {
+    if (syncIsActive) return;
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Integrations and direct sync" className="integration-modal-overlay items-center justify-center p-4 animate-fade-in">
+    <Modal isOpen={isOpen} onClose={requestClose} ariaLabel="Integrations and direct sync" className="integration-modal-overlay items-center justify-center p-4 animate-fade-in">
       <div className="integration-modal relative w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="integration-modal-header flex items-center justify-between p-4 px-6 border-b">
@@ -190,8 +196,9 @@ export function IntegrationsModal({
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            onClick={requestClose}
+            disabled={syncIsActive}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
@@ -492,8 +499,9 @@ export function IntegrationsModal({
         <div className="integration-modal-footer p-4 px-6 border-t flex items-center justify-between text-xs">
           <span>Repository settings persist on this device; access tokens clear when this browser session ends.</span>
           <button
-            onClick={onClose}
-            className="integration-modal-done px-4 py-2 font-semibold rounded-xl transition-all"
+            onClick={requestClose}
+            disabled={syncIsActive}
+            className="integration-modal-done px-4 py-2 font-semibold rounded-xl transition-all disabled:cursor-not-allowed disabled:opacity-40"
           >
             Done
           </button>

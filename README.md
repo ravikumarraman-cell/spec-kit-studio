@@ -136,6 +136,7 @@ For a hosted deployment using the current loopback connector, set `STUDIO_CONNEC
 - [Story-first delivery status](docs/user-story-first-workflow-implementation-plan.md) distinguishes the implemented contract from future ideas.
 - [Feature isolation guide](docs/feature-isolation-user-guide.md) covers concurrent work and worktrees.
 - [Local connector](docs/local-connector.md) describes local access, confirmations, and boundaries.
+- [Vercel-hosted Studio with local agents](docs/vercel-local-connector-guide.md) is the step-by-step deployment and pairing guide.
 - [Production deployment and user-owned agents](docs/production-deployment-and-user-owned-agents.md) explains billing, identity, Companion, and control-plane requirements.
 - [Architecture](docs/architecture.md) and [modular architecture](docs/modular-architecture.md) describe code boundaries.
 

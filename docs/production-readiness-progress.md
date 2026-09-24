@@ -25,6 +25,8 @@ This ledger records concrete evidence, not aspirational completion. It accompani
 | 2026-09-24 | Added the production architecture, billing model, security requirements, and rollout plan. | Complete | Documentation reviewed against the current connector code; no unimplemented capability is represented as available. |
 | 2026-09-24 | Added connector production configuration parsing and fail-closed validation. | Complete | Focused automated tests added; full verification later completed in this ledger. |
 | 2026-09-24 | Ran full verification after the connector and documentation changes. | Complete with environment note | `npm run verify` passed: 149/149 tests, lint, and build. The existing test suite intentionally emits expected error logs for negative-path tests. Vite warned that the local Node 20.15.1 is below the package's declared Node 22.12+ runtime. |
+| 2026-09-24 | Added the layperson Vercel-to-local-connector deployment and pairing guide. | Complete | [Vercel-hosted Studio with local agents](vercel-local-connector-guide.md) documents deployment, local configuration, Studio pairing, billing boundaries, browser limitations, troubleshooting, and revocation. |
+| 2026-09-24 | Removed private registry resolution URLs from the npm lockfile and added public-source deployment guardrails. | Complete | `.npmrc` pins the public npm registry; `npm run check:public-deps` rejects private registry, Git/SSH, filesystem, and workspace dependency sources; `npm run verify` passed under Node 22.19.0 with 149 tests and a production build. |
 
 ## Next milestone: Phase 1 — Studio Companion
 

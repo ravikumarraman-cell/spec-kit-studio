@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Palette, Check, Moon, Sun, Feather, Laptop, Sparkles } from 'lucide-react';
+import { Palette, Check, Moon, Sun, Feather, Laptop, HeartPulse } from 'lucide-react';
 import { useTheme, THEME_PRESETS, ThemeId } from '../../context/ThemeContext';
 
 export const ThemeSwitcher: React.FC = () => {
@@ -27,6 +27,8 @@ export const ThemeSwitcher: React.FC = () => {
         return <Sun className="w-3.5 h-3.5 text-sky-600" />;
       case 'warm-paper':
         return <Feather className="w-3.5 h-3.5 text-amber-600" />;
+      case 'optum':
+        return <HeartPulse className="w-3.5 h-3.5 text-orange-600" />;
     }
   };
 

@@ -312,7 +312,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
             />
           )}
           {deliveryScope === 'feature' && !extractedResult && activeProject?.importedRepo?.repoUrl && !enginePrompt && (
-            <section className="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-950/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <section className="feature-import-recovery flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-xs font-bold text-zinc-100">Already ran a local agent?</p><p className="mt-0.5 text-[11px] text-zinc-400">Load the newest official <code>specs/.../spec.md</code> into Studio for review. Nothing is written to your repository.</p></div>
               <button type="button" onClick={loadEngineStories} className="shrink-0 rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/10">Load generated stories</button>
             </section>

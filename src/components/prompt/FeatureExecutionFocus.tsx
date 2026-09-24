@@ -18,7 +18,7 @@ export function FeatureExecutionFocus({
   reviewedReceiptCount,
 }: FeatureExecutionFocusProps) {
   return (
-    <section className="rounded-2xl border border-cyan-400/25 bg-gradient-to-r from-cyan-500/10 via-zinc-950 to-violet-500/10 p-5">
+    <section className="feature-execution-focus rounded-2xl border p-5">
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-cyan-400/10 p-2.5"><Focus className="h-5 w-5 text-cyan-300" /></div>
         <div>

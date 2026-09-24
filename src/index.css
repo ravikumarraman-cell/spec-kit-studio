@@ -82,23 +82,24 @@
     color-scheme: light;
   }
 
-  /* Optum-inspired: an original Studio palette based on a warm neutral canvas,
-     deep navy information hierarchy, clear blue actions, and orange emphasis. */
+  /* Optum-inspired: a bright, humane product surface with a deep-blue
+     information hierarchy, blue actions, and restrained orange emphasis. */
   :root[data-theme="optum"] {
-    --bg-canvas: #f7f7f5;
+    --bg-canvas: #f5f8fa;
     --bg-surface: #ffffff;
-    --bg-surface-hover: #eef4f8;
+    --bg-surface-hover: #edf5f8;
     --bg-card: #ffffff;
     --bg-input: #ffffff;
-    --border-subtle: #d5dce5;
-    --border-strong: #8fa4b8;
+    --border-subtle: #cbdbe5;
+    --border-strong: #7892a8;
     --text-main: #002677;
-    --text-muted: #3c5268;
-    --text-faint: #60758a;
+    --text-muted: #334e68;
+    --text-faint: #526d82;
     --accent-primary: #0067b9;
     --accent-indigo: #002677;
     --accent-purple: #5d3f95;
     --accent-emerald: #147a56;
+    --accent-warm: #f58220;
     color-scheme: light;
   }
 
@@ -124,9 +125,112 @@
 }
 
 :root[data-theme="optum"]:not(.dark) {
-  background-color: #f7f7f5 !important;
+  background-color: #f5f8fa !important;
   color: #002677 !important;
 }
+
+/* Optum's public experience is light, open, and legible. The Studio uses
+   utility classes from its original dark console, so map every shared surface
+   token here instead of letting isolated Zinc or Slate utilities leak through.
+   These rules intentionally apply only to the Optum preset. */
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/75,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/90,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/30,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/40,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/50,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/90,
+:root[data-theme="optum"]:not(.dark) .bg-slate-50,
+:root[data-theme="optum"]:not(.dark) .bg-white {
+  background-color: #ffffff !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/50,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/80,
+:root[data-theme="optum"]:not(.dark) .bg-slate-100,
+:root[data-theme="optum"]:not(.dark) .bg-slate-100\/90 {
+  background-color: #edf5f8 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .bg-slate-200,
+:root[data-theme="optum"]:not(.dark) .bg-slate-200\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-100 {
+  background-color: #dcecf2 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) aside.bg-slate-50 {
+  background-color: #edf5f8 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .border-zinc-950,
+:root[data-theme="optum"]:not(.dark) .border-zinc-900,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800\/80,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800\/60,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700\/60,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700\/80,
+:root[data-theme="optum"]:not(.dark) .border-slate-300,
+:root[data-theme="optum"]:not(.dark) .border-slate-200 {
+  border-color: #c4d6e0 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .text-zinc-50,
+:root[data-theme="optum"]:not(.dark) .text-zinc-100,
+:root[data-theme="optum"]:not(.dark) .text-zinc-200,
+:root[data-theme="optum"]:not(.dark) .text-zinc-300,
+:root[data-theme="optum"]:not(.dark) .text-zinc-800,
+:root[data-theme="optum"]:not(.dark) .text-zinc-900,
+:root[data-theme="optum"]:not(.dark) .text-slate-950,
+:root[data-theme="optum"]:not(.dark) .text-slate-900,
+:root[data-theme="optum"]:not(.dark) .text-slate-800 {
+  color: #002677 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .text-zinc-400,
+:root[data-theme="optum"]:not(.dark) .text-zinc-500,
+:root[data-theme="optum"]:not(.dark) .text-zinc-600,
+:root[data-theme="optum"]:not(.dark) .text-zinc-700,
+:root[data-theme="optum"]:not(.dark) .text-slate-700,
+:root[data-theme="optum"]:not(.dark) .text-slate-600,
+:root[data-theme="optum"]:not(.dark) .text-slate-500,
+:root[data-theme="optum"]:not(.dark) .text-slate-400 {
+  color: #36546a !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-900\/80:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-slate-200:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-slate-200\/70:hover {
+  background-color: #d5e9f1 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) input,
+:root[data-theme="optum"]:not(.dark) textarea,
+:root[data-theme="optum"]:not(.dark) select {
+  background-color: #ffffff !important;
+  color: #002677 !important;
+  border-color: #9bb5c5 !important;
+}
+
+/* Replace the former charcoal hero gradients with an airy blue information
+   gradient. The deep navy remains reserved for text, focus, and key actions. */
+:root[data-theme="optum"]:not(.dark) .from-zinc-900 { --tw-gradient-from: #e2f3f5 var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(226 243 245 / 0) var(--tw-gradient-to-position) !important; }
+:root[data-theme="optum"]:not(.dark) .via-zinc-900 { --tw-gradient-via: #f5fafb var(--tw-gradient-via-position) !important; }
+:root[data-theme="optum"]:not(.dark) .to-zinc-900 { --tw-gradient-to: #ffffff var(--tw-gradient-to-position) !important; }
+
+:root[data-theme="optum"]:not(.dark) .selection\:bg-cyan-500\/30::selection { background-color: #b7e3ee !important; color: #002677 !important; }
 
 /* Universal High Contrast Card, Border & Background Rules for Light Mode */
 :root:not(.dark) .border-zinc-800,
@@ -353,6 +457,239 @@
   color: var(--text-muted);
 }
 
+/* The persistent header must never choose a dark utility independently of the
+   active palette. Keeping it on the same surface token as menus and cards
+   preserves blue/navy contrast in Optum and still gives dark mode a coherent
+   navy header. */
+.studio-header {
+  background-color: color-mix(in srgb, var(--theme-surface, var(--bg-surface)) 96%, transparent) !important;
+  border-color: var(--theme-border, var(--border-subtle)) !important;
+  color: var(--theme-text, var(--text-main));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--theme-text, #002677) 10%, transparent);
+}
+
+/* Header controls intentionally do not use `dark:` utilities. A theme can be
+   changed while the application is open, and these controls must always take
+   their foreground and surface from the currently published palette. */
+.studio-header-control {
+  background-color: var(--theme-inset, var(--bg-input)) !important;
+  border-color: var(--theme-border, var(--border-subtle)) !important;
+  color: var(--theme-text, var(--text-main)) !important;
+}
+
+.studio-header-control:hover,
+.studio-header-control-active {
+  background-color: var(--theme-raised, var(--bg-surface-hover)) !important;
+  color: var(--theme-primary, var(--accent)) !important;
+}
+
+.studio-header-brand-mark {
+  background-color: var(--theme-inset, var(--bg-input)) !important;
+}
+
+.studio-header-title {
+  color: var(--theme-text, var(--text-main)) !important;
+}
+
+.studio-header-divider {
+  background-color: var(--theme-border, var(--border-subtle)) !important;
+}
+
+/* The Connected Workspace hand-off is a light information surface in light
+   themes and a legible navy surface in dark themes. It deliberately avoids
+   the former fixed Zinc gradient, which could leave navy copy on charcoal. */
+.workspace-next-step {
+  background: linear-gradient(
+    135deg,
+    var(--theme-info-tint, var(--bg-surface)) 0%,
+    var(--theme-surface, var(--bg-surface)) 62%,
+    var(--theme-inset, var(--bg-input)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--theme-primary, var(--accent)) 32%, var(--theme-border, var(--border-subtle))) !important;
+}
+
+.workspace-next-step .text-zinc-100 { color: var(--theme-text, var(--text-main)) !important; }
+.workspace-next-step .text-zinc-400 { color: var(--theme-muted, var(--text-muted)) !important; }
+
+/* Warm is intentionally rare: it identifies one high-value creative action
+   instead of competing with the blue primary actions used for navigation and
+   workflow progression. In Optum-inspired mode this makes the orange token
+   visible without presenting the product as an official Optum experience. */
+.studio-warm-action {
+  background-color: var(--theme-warm) !important;
+  border-color: color-mix(in srgb, var(--theme-warm) 78%, var(--theme-text)) !important;
+  color: var(--theme-warm-foreground) !important;
+}
+
+.studio-warm-action:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--theme-warm) 86%, var(--theme-text)) !important;
+}
+
+/* Accepted feature artifacts appear on the Design Safely screen. Their old
+   dark Zinc gradient was independent of theme state, making palette-navy text
+   unreadable in every light scheme. */
+.feature-artifact-summary {
+  background: linear-gradient(
+    135deg,
+    var(--theme-info-tint) 0%,
+    var(--theme-surface) 58%,
+    var(--theme-raised) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 30%, var(--theme-border)) !important;
+}
+
+.feature-artifact-summary-copy {
+  color: var(--theme-text) !important;
+}
+
+.feature-artifact-summary-stat {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-artifact-summary-stat strong { color: var(--theme-text) !important; }
+.feature-artifact-summary-stat span { color: var(--theme-muted) !important; }
+
+.feature-artifact-summary-meta {
+  background-color: color-mix(in srgb, var(--theme-inset) 80%, transparent) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-muted) !important;
+}
+
+/* Feature delivery is a semantic board, not a dark-only Kanban. Every board
+   layer is resolved here from the active palette so components never need to
+   decide which Zinc shade works with a particular theme. */
+.feature-delivery-board {
+  background-color: var(--theme-surface) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 28%, var(--theme-border)) !important;
+}
+
+.feature-delivery-board-header {
+  background: linear-gradient(90deg, var(--theme-info-tint), var(--theme-surface) 58%, color-mix(in srgb, var(--theme-secondary) 8%, var(--theme-surface))) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-header .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-delivery-board-header .text-zinc-400 { color: var(--theme-muted) !important; }
+
+.feature-delivery-board-tabs {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-column {
+  background-color: var(--theme-raised) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-count {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-muted) !important;
+}
+
+.feature-delivery-board-card {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-card .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-delivery-board-card .text-zinc-400,
+.feature-delivery-board-card .text-zinc-500 { color: var(--theme-muted) !important; }
+.feature-delivery-board-card .border-zinc-800 { border-color: var(--theme-border) !important; }
+
+.feature-delivery-board-empty {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border-strong, var(--theme-border)) !important;
+  color: var(--theme-muted) !important;
+}
+
+/* Implementation handoffs share the same palette roles as the rest of the
+   workflow. Their earlier black gradients made the locally-run safety copy
+   unreadable in light themes. */
+.feature-execution-focus {
+  background: linear-gradient(90deg, var(--theme-info-tint), var(--theme-surface) 56%, color-mix(in srgb, var(--theme-secondary) 9%, var(--theme-surface))) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 30%, var(--theme-border)) !important;
+}
+
+.feature-execution-focus .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-execution-focus .text-zinc-400,
+.feature-execution-focus .text-zinc-300 { color: var(--theme-muted) !important; }
+
+.implementation-handoff {
+  background-color: var(--theme-surface) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+}
+
+.implementation-handoff-header {
+  background: linear-gradient(105deg, var(--theme-info-tint), var(--theme-surface) 60%, color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-surface))) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.implementation-handoff-header .text-zinc-100 { color: var(--theme-text) !important; }
+.implementation-handoff-header .text-zinc-400 { color: var(--theme-muted) !important; }
+
+.implementation-handoff-safety,
+.implementation-handoff-context {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary) !important;
+}
+
+.implementation-handoff-safety span { color: var(--theme-muted) !important; }
+.implementation-handoff-context .text-zinc-200 { color: var(--theme-text) !important; }
+.implementation-handoff-context .text-zinc-400 { color: var(--theme-muted) !important; }
+
+/* Credentials remain local-only, but their integration dialog is a regular
+   application surface and must follow the selected palette just like every
+   other workflow screen. Scope these normalizations to the modal so they do
+   not change third-party content or generic dialogs. */
+.integration-modal-overlay {
+  background-color: color-mix(in srgb, var(--theme-text) 46%, transparent) !important;
+}
+
+.integration-modal {
+  background-color: var(--theme-surface) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+.integration-modal-header,
+.integration-modal-tabs,
+.integration-modal-footer {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.integration-modal-footer { color: var(--theme-muted) !important; }
+.integration-modal-done { background-color: var(--theme-raised) !important; color: var(--theme-text) !important; }
+.integration-modal-done:hover { background-color: var(--theme-border) !important; }
+
+.integration-modal .bg-slate-950,
+.integration-modal .bg-slate-950\/30,
+.integration-modal .bg-slate-950\/50,
+.integration-modal .bg-slate-950\/70 { background-color: var(--theme-inset) !important; }
+.integration-modal .bg-slate-900 { background-color: var(--theme-surface) !important; }
+.integration-modal .bg-slate-800 { background-color: var(--theme-raised) !important; }
+.integration-modal .border-slate-800,
+.integration-modal .border-slate-700,
+.integration-modal .border-slate-600 { border-color: var(--theme-border) !important; }
+
+.integration-modal .text-slate-100,
+.integration-modal .text-slate-200,
+.integration-modal .text-slate-300 { color: var(--theme-text) !important; }
+.integration-modal .text-slate-400,
+.integration-modal .text-slate-500 { color: var(--theme-muted) !important; }
+
+/* The recovery path in Start Delivery is intentionally quiet but must never
+   become a dark bar under a light modal. */
+.feature-import-recovery {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-import-recovery .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-import-recovery .text-zinc-400 { color: var(--theme-muted) !important; }
+
 /* Local-agent runs own a workflow until their result is available. This shared
    policy is deliberately selector-free: workflows opt in with one class and
    the native `inert` attribute blocks pointer, keyboard, and assistive-tech
@@ -376,4 +713,258 @@
   color: var(--text-main);
   padding: 0.75rem 0.875rem;
   font-size: 0.75rem;
+}
+
+/*
+ * Shared component bridge
+ * -----------------------
+ * Most Studio screens were built with Tailwind's Zinc and Slate utilities.
+ * Keep those implementation details out of individual screens: these
+ * selectors translate them to the active palette's semantic tokens in one
+ * place. This covers ordinary pages, lazy-loaded screens, dialogs, tables,
+ * cards, inputs, and the persistent navigation shell alike.
+ */
+:root[data-theme]:not(.dark) .bg-zinc-950,
+:root[data-theme]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme]:not(.dark) .bg-zinc-950\/70,
+:root[data-theme]:not(.dark) .bg-zinc-950\/75,
+:root[data-theme]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme]:not(.dark) .bg-zinc-950\/90,
+:root[data-theme]:not(.dark) .bg-zinc-900,
+:root[data-theme]:not(.dark) .bg-zinc-900\/30,
+:root[data-theme]:not(.dark) .bg-zinc-900\/40,
+:root[data-theme]:not(.dark) .bg-zinc-900\/50,
+:root[data-theme]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme]:not(.dark) .bg-zinc-900\/70,
+:root[data-theme]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme]:not(.dark) .bg-zinc-900\/90,
+:root[data-theme]:not(.dark) .bg-white {
+  background-color: var(--theme-surface) !important;
+}
+
+:root[data-theme]:not(.dark) .bg-zinc-800,
+:root[data-theme]:not(.dark) .bg-zinc-800\/50,
+:root[data-theme]:not(.dark) .bg-zinc-800\/60,
+:root[data-theme]:not(.dark) .bg-zinc-800\/80,
+:root[data-theme]:not(.dark) .bg-slate-50,
+:root[data-theme]:not(.dark) .bg-slate-100,
+:root[data-theme]:not(.dark) .bg-slate-100\/90 {
+  background-color: var(--theme-raised) !important;
+}
+
+:root[data-theme]:not(.dark) .bg-slate-200,
+:root[data-theme]:not(.dark) .bg-slate-200\/70,
+:root[data-theme]:not(.dark) .bg-zinc-100,
+:root[data-theme]:not(.dark) .bg-zinc-200 {
+  background-color: var(--theme-inset) !important;
+}
+
+:root[data-theme]:not(.dark) .border-zinc-950,
+:root[data-theme]:not(.dark) .border-zinc-900,
+:root[data-theme]:not(.dark) .border-zinc-800,
+:root[data-theme]:not(.dark) .border-zinc-800\/80,
+:root[data-theme]:not(.dark) .border-zinc-800\/60,
+:root[data-theme]:not(.dark) .border-zinc-700,
+:root[data-theme]:not(.dark) .border-zinc-700\/60,
+:root[data-theme]:not(.dark) .border-zinc-700\/80,
+:root[data-theme]:not(.dark) .border-zinc-300,
+:root[data-theme]:not(.dark) .border-slate-300,
+:root[data-theme]:not(.dark) .border-slate-200 {
+  border-color: var(--theme-border) !important;
+}
+
+:root[data-theme]:not(.dark) .text-zinc-50,
+:root[data-theme]:not(.dark) .text-zinc-100,
+:root[data-theme]:not(.dark) .text-zinc-200,
+:root[data-theme]:not(.dark) .text-zinc-300,
+:root[data-theme]:not(.dark) .text-zinc-800,
+:root[data-theme]:not(.dark) .text-zinc-900,
+:root[data-theme]:not(.dark) .text-slate-950,
+:root[data-theme]:not(.dark) .text-slate-900,
+:root[data-theme]:not(.dark) .text-slate-800 {
+  color: var(--theme-text) !important;
+}
+
+:root[data-theme]:not(.dark) .text-zinc-400,
+:root[data-theme]:not(.dark) .text-zinc-500,
+:root[data-theme]:not(.dark) .text-zinc-600,
+:root[data-theme]:not(.dark) .text-zinc-700,
+:root[data-theme]:not(.dark) .text-slate-700,
+:root[data-theme]:not(.dark) .text-slate-600,
+:root[data-theme]:not(.dark) .text-slate-500,
+:root[data-theme]:not(.dark) .text-slate-400 {
+  color: var(--theme-muted) !important;
+}
+
+:root[data-theme]:not(.dark) .text-cyan-300,
+:root[data-theme]:not(.dark) .text-cyan-400,
+:root[data-theme]:not(.dark) .text-sky-600,
+:root[data-theme]:not(.dark) .text-sky-700 {
+  color: var(--theme-primary) !important;
+}
+
+/* A 100–200 Tailwind foreground is intentionally pale. That is useful on a
+   saturated dark surface but fails WCAG on a light document surface, so text
+   hues always resolve to the palette's tested foreground role. */
+:root[data-theme]:not(.dark) [class*="text-cyan-"],
+:root[data-theme]:not(.dark) [class*="text-sky-"],
+:root[data-theme]:not(.dark) [class*="text-blue-"] { color: var(--theme-primary) !important; }
+:root[data-theme]:not(.dark) [class*="text-indigo-"],
+:root[data-theme]:not(.dark) [class*="text-purple-"],
+:root[data-theme]:not(.dark) [class*="text-violet-"] { color: var(--theme-secondary) !important; }
+:root[data-theme]:not(.dark) [class*="text-emerald-"],
+:root[data-theme]:not(.dark) [class*="text-teal-"] { color: var(--theme-success) !important; }
+:root[data-theme]:not(.dark) [class*="text-amber-"],
+:root[data-theme]:not(.dark) [class*="text-orange-"] { color: var(--theme-warning) !important; }
+:root[data-theme]:not(.dark) [class*="text-red-"],
+:root[data-theme]:not(.dark) [class*="text-rose-"] { color: var(--theme-danger) !important; }
+
+:root[data-theme]:not(.dark) .text-indigo-300,
+:root[data-theme]:not(.dark) .text-indigo-400,
+:root[data-theme]:not(.dark) .text-purple-300,
+:root[data-theme]:not(.dark) .text-purple-400 {
+  color: var(--theme-secondary) !important;
+}
+
+:root[data-theme]:not(.dark) .text-emerald-300,
+:root[data-theme]:not(.dark) .text-emerald-400 { color: var(--theme-success) !important; }
+:root[data-theme]:not(.dark) .text-amber-300,
+:root[data-theme]:not(.dark) .text-amber-400 { color: var(--theme-warning) !important; }
+:root[data-theme]:not(.dark) .text-red-300,
+:root[data-theme]:not(.dark) .text-red-400,
+:root[data-theme]:not(.dark) .text-rose-300,
+:root[data-theme]:not(.dark) .text-rose-400 { color: var(--theme-danger) !important; }
+
+:root[data-theme]:not(.dark) .bg-cyan-500\/10,
+:root[data-theme]:not(.dark) .bg-cyan-500\/20,
+:root[data-theme]:not(.dark) .bg-cyan-600\/20,
+:root[data-theme]:not(.dark) .bg-cyan-400\/20,
+:root[data-theme]:not(.dark) .bg-sky-50 { background-color: var(--theme-info-tint) !important; }
+:root[data-theme]:not(.dark) .bg-emerald-500\/10,
+:root[data-theme]:not(.dark) .bg-emerald-500\/20 { background-color: var(--theme-success-tint) !important; }
+:root[data-theme]:not(.dark) .bg-amber-500\/10,
+:root[data-theme]:not(.dark) .bg-amber-500\/20 { background-color: var(--theme-warning-tint) !important; }
+:root[data-theme]:not(.dark) .bg-red-500\/10,
+:root[data-theme]:not(.dark) .bg-red-500\/20,
+:root[data-theme]:not(.dark) .bg-rose-500\/10 { background-color: var(--theme-danger-tint) !important; }
+
+:root[data-theme]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-900\/80:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme]:not(.dark) .hover\:bg-slate-200:hover,
+:root[data-theme]:not(.dark) .hover\:bg-slate-200\/70:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-100:hover {
+  background-color: var(--theme-inset) !important;
+}
+
+:root[data-theme]:not(.dark) input,
+:root[data-theme]:not(.dark) textarea,
+:root[data-theme]:not(.dark) select {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+}
+
+:root[data-theme]:not(.dark) .from-zinc-900 { --tw-gradient-from: var(--theme-gradient-start) var(--tw-gradient-from-position) !important; --tw-gradient-to: color-mix(in srgb, var(--theme-gradient-start) 0%, transparent) var(--tw-gradient-to-position) !important; }
+:root[data-theme]:not(.dark) .via-zinc-900 { --tw-gradient-via: var(--theme-gradient-middle) var(--tw-gradient-via-position) !important; }
+:root[data-theme]:not(.dark) .to-zinc-900 { --tw-gradient-to: var(--theme-gradient-end) var(--tw-gradient-to-position) !important; }
+
+:root[data-theme="optum"]:not(.dark) aside.bg-slate-50 {
+  background-color: var(--theme-raised) !important;
+}
+
+/* Dark-mode counterpart to the shared bridge above. Tailwind emits `dark:`
+   classes as literal class names, so attribute selectors keep those variants
+   on the same semantic palette instead of falling back to fixed Zinc shades. */
+:root[data-theme].dark .bg-zinc-950,
+:root[data-theme].dark .bg-zinc-950\/60,
+:root[data-theme].dark .bg-zinc-950\/70,
+:root[data-theme].dark .bg-zinc-950\/75,
+:root[data-theme].dark .bg-zinc-950\/80,
+:root[data-theme].dark .bg-zinc-950\/90 { background-color: var(--theme-inset) !important; }
+:root[data-theme].dark .bg-zinc-900,
+:root[data-theme].dark .bg-zinc-900\/30,
+:root[data-theme].dark .bg-zinc-900\/40,
+:root[data-theme].dark .bg-zinc-900\/50,
+:root[data-theme].dark .bg-zinc-900\/60,
+:root[data-theme].dark .bg-zinc-900\/70,
+:root[data-theme].dark .bg-zinc-900\/80,
+:root[data-theme].dark .bg-zinc-900\/90 { background-color: var(--theme-surface) !important; }
+:root[data-theme].dark .bg-zinc-800,
+:root[data-theme].dark .bg-zinc-800\/50,
+:root[data-theme].dark .bg-zinc-800\/60,
+:root[data-theme].dark .bg-zinc-800\/80 { background-color: var(--theme-raised) !important; }
+:root[data-theme].dark .border-zinc-800,
+:root[data-theme].dark .border-zinc-800\/80,
+:root[data-theme].dark .border-zinc-700,
+:root[data-theme].dark .border-zinc-700\/60 { border-color: var(--theme-border) !important; }
+:root[data-theme].dark .text-zinc-50,
+:root[data-theme].dark .text-zinc-100,
+:root[data-theme].dark .text-zinc-200,
+:root[data-theme].dark .text-zinc-300 { color: var(--theme-text) !important; }
+:root[data-theme].dark .text-zinc-400,
+:root[data-theme].dark .text-zinc-500,
+:root[data-theme].dark .text-zinc-600 { color: var(--theme-muted) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-950"] { background-color: var(--theme-inset) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-900"] { background-color: var(--theme-surface) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-800"] { background-color: var(--theme-raised) !important; }
+:root[data-theme].dark [class*="dark:bg-slate-"] { background-color: var(--theme-raised) !important; }
+
+:root[data-theme].dark [class*="dark:border-zinc-"],
+:root[data-theme].dark [class*="dark:border-slate-"] { border-color: var(--theme-border) !important; }
+
+:root[data-theme].dark [class*="dark:text-zinc-100"],
+:root[data-theme].dark [class*="dark:text-zinc-200"],
+:root[data-theme].dark [class*="dark:text-zinc-300"],
+:root[data-theme].dark [class*="dark:text-zinc-50"],
+:root[data-theme].dark [class*="dark:text-white"] { color: var(--theme-text) !important; }
+
+:root[data-theme].dark [class*="dark:text-zinc-400"],
+:root[data-theme].dark [class*="dark:text-zinc-500"],
+:root[data-theme].dark [class*="dark:text-zinc-600"] { color: var(--theme-muted) !important; }
+
+:root[data-theme].dark [class*="dark:text-cyan-"],
+:root[data-theme].dark [class*="dark:text-sky-"] { color: var(--theme-primary) !important; }
+:root[data-theme].dark [class*="dark:text-indigo-"],
+:root[data-theme].dark [class*="dark:text-purple-"] { color: var(--theme-secondary) !important; }
+:root[data-theme].dark [class*="dark:text-emerald-"] { color: var(--theme-success) !important; }
+:root[data-theme].dark [class*="dark:text-amber-"] { color: var(--theme-warning) !important; }
+:root[data-theme].dark [class*="dark:text-rose-"],
+:root[data-theme].dark [class*="dark:text-red-"] { color: var(--theme-danger) !important; }
+
+:root[data-theme].dark [class*="text-cyan-"],
+:root[data-theme].dark [class*="text-sky-"],
+:root[data-theme].dark [class*="text-blue-"] { color: var(--theme-primary) !important; }
+:root[data-theme].dark [class*="text-indigo-"],
+:root[data-theme].dark [class*="text-purple-"],
+:root[data-theme].dark [class*="text-violet-"] { color: var(--theme-secondary) !important; }
+:root[data-theme].dark [class*="text-emerald-"],
+:root[data-theme].dark [class*="text-teal-"] { color: var(--theme-success) !important; }
+:root[data-theme].dark [class*="text-amber-"],
+:root[data-theme].dark [class*="text-orange-"] { color: var(--theme-warning) !important; }
+:root[data-theme].dark [class*="text-red-"],
+:root[data-theme].dark [class*="text-rose-"] { color: var(--theme-danger) !important; }
+
+/* Orange is a restrained emphasis colour: never the primary action or a
+   warning substitute. It marks high-value calls to action and small visual
+   moments such as the active palette indicator. */
+:root[data-theme]:not(.dark) [class*="text-orange-"] { color: var(--theme-warm-text) !important; }
+:root[data-theme].dark [class*="text-orange-"] { color: var(--theme-warm-text) !important; }
+:root[data-theme] .bg-amber-300,
+:root[data-theme] .bg-amber-400,
+:root[data-theme] .bg-orange-500,
+:root[data-theme] .bg-orange-600 { background-color: var(--theme-warm) !important; color: var(--theme-warm-foreground) !important; }
+:root[data-theme] :is(.bg-amber-300, .bg-amber-400, .bg-orange-500, .bg-orange-600) [class*="text-"] { color: var(--theme-warm-foreground) !important; }
+
+:root[data-theme].dark [class*="dark:hover:bg-zinc-900"]:hover,
+:root[data-theme].dark [class*="dark:hover:bg-zinc-800"]:hover,
+:root[data-theme].dark [class*="dark:hover:bg-zinc-700"]:hover { background-color: var(--theme-raised) !important; }
+
+:root[data-theme].dark input,
+:root[data-theme].dark textarea,
+:root[data-theme].dark select {
+  background-color: var(--theme-inset) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
 }

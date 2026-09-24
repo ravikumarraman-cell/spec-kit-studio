@@ -20,6 +20,7 @@ import {
   Radio,
   Palette,
   Check,
+  HeartPulse,
   Moon,
   Sun,
   Feather,
@@ -107,7 +108,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
   );
 
   return (
-    <div className="h-14 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md px-3 sm:px-4 md:px-5 flex items-center justify-between gap-2 select-none w-full max-w-full overflow-visible relative z-50">
+    <div className="studio-header h-14 border-b backdrop-blur-md px-3 sm:px-4 md:px-5 flex items-center justify-between gap-2 select-none w-full max-w-full overflow-visible relative z-50">
       {/* 1. LEFT ZONE: Brand & Workspace Switcher */}
       <div className="flex items-center gap-2 shrink min-w-0">
         {/* Brand Icon & Title */}
@@ -116,10 +117,8 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
             <button
               type="button"
               onClick={onToggleSidebar}
-              className={`flex items-center justify-center w-7 h-7 rounded-lg text-xs transition-colors border ${
-                isSidebarOpen
-                  ? 'bg-zinc-800 text-cyan-300 border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border-zinc-800/80'
+            className={`studio-header-control flex items-center justify-center w-7 h-7 rounded-lg text-xs transition-colors border ${
+                isSidebarOpen ? 'studio-header-control-active' : ''
               }`}
               title={isSidebarOpen ? 'Collapse left menu' : 'Expand left menu'}
               aria-label="Toggle sidebar"
@@ -132,24 +131,24 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
             </button>
           )}
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-cyan-500 to-emerald-500 p-0.5 shadow-md shadow-indigo-500/10 flex items-center justify-center shrink-0">
-            <div className="w-full h-full bg-zinc-950 rounded-[9px] flex items-center justify-center">
+            <div className="studio-header-brand-mark w-full h-full rounded-[9px] flex items-center justify-center">
               <FolderKanban className="w-4 h-4 text-cyan-400" />
             </div>
           </div>
-          <span className="font-extrabold text-xs sm:text-sm tracking-tight text-zinc-100 hidden sm:inline truncate">
+          <span className="studio-header-title font-extrabold text-xs sm:text-sm tracking-tight hidden sm:inline truncate">
             Spec-Kit Studio
           </span>
         </div>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-zinc-800 mx-0.5 hidden sm:block shrink-0" />
+        <div className="studio-header-divider h-4 w-px mx-0.5 hidden sm:block shrink-0" />
 
         {/* Workspace Switcher Popover */}
         <div className="relative hidden sm:block shrink min-w-0 z-[100]" ref={workspaceDropdownRef}>
           <button
             type="button"
             onClick={() => setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-100/90 dark:bg-zinc-900/90 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700/60 text-xs font-semibold text-zinc-800 dark:text-zinc-200 transition-all max-w-[130px] sm:max-w-[170px] md:max-w-[210px] truncate shadow-xs"
+            className="studio-header-control flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all max-w-[130px] sm:max-w-[170px] md:max-w-[210px] truncate shadow-xs"
             title="Switch Active Workspace"
           >
             <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
@@ -314,7 +313,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
           <button
             type="button"
             onClick={onOpenAiSpecModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-purple-600/90 dark:hover:bg-purple-600 text-white border border-purple-700/50 text-xs font-bold transition-all shadow-xs shrink-0"
+          className="studio-warm-action flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs shrink-0"
             title="Generate spec requirements & user stories with AI"
           >
             <Sparkles className="w-3.5 h-3.5 text-purple-200 shrink-0" />
@@ -340,10 +339,9 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
         <button
           type="button"
           onClick={() => {
-            if (theme === 'system') setTheme('github-light');
-            else if (theme === 'github-light') setTheme('github-dark');
-            else if (theme === 'github-dark') setTheme('warm-paper');
-            else setTheme('system');
+            const order: ThemeId[] = ['optum', 'github-light', 'warm-paper', 'github-dark', 'system'];
+            const currentIndex = order.indexOf(theme);
+            setTheme(order[(currentIndex + 1) % order.length]);
           }}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 border border-slate-300 dark:border-zinc-700 text-xs font-semibold transition-all shadow-xs shrink-0"
           title={`Current Theme: ${currentThemeMeta.name} (${theme === 'system' ? 'OS Mode' : currentThemeMeta.mode}). Click to cycle.`}
@@ -354,11 +352,13 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
             <Moon className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           ) : theme === 'github-light' ? (
             <Sun className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+          ) : theme === 'optum' ? (
+            <HeartPulse className="w-3.5 h-3.5 text-orange-600 shrink-0" />
           ) : (
             <Feather className="w-3.5 h-3.5 text-amber-600 shrink-0" />
           )}
           <span className="hidden lg:inline text-[11px] font-bold">
-            {theme === 'system' ? 'System' : theme === 'github-dark' ? 'Dark' : theme === 'github-light' ? 'Light' : 'Warm'}
+            {theme === 'system' ? 'System' : theme === 'github-dark' ? 'Dark' : theme === 'github-light' ? 'Light' : theme === 'warm-paper' ? 'Warm' : 'Optum'}
           </span>
         </button>
 

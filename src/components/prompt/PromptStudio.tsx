@@ -647,8 +647,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
       </div>}
 
       {activeFeature && featureTasks.length > 0 && (
-        <section className="overflow-hidden rounded-2xl border border-cyan-400/35 bg-zinc-950 shadow-[0_0_50px_rgba(34,211,238,0.06)]">
-          <div className="border-b border-cyan-400/15 bg-gradient-to-r from-cyan-500/15 via-indigo-500/10 to-zinc-950 p-5">
+        <section className="implementation-handoff overflow-hidden rounded-2xl border shadow-[0_0_50px_rgba(34,211,238,0.06)]">
+          <div className="implementation-handoff-header border-b p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-3">
                 <div className="rounded-xl bg-cyan-400/15 p-2.5">{isHumanApprovalTask ? <FileCheck2 className="h-5 w-5 text-cyan-200" /> : <Terminal className="h-5 w-5 text-cyan-200" />}</div>
@@ -658,12 +658,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
                   <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">{isHumanApprovalTask ? 'This official task is a product and traceability decision gate. Review the feature specification and plan, then record your approval. No agent run, code change, or Git recovery is needed.' : selectedLocalAgent ? `${selectedAgentLabel} runs through your loopback connector inside the connected repository. Studio streams its work, captures Git evidence, and never commits, pushes, or marks work complete on its own.` : `Studio prepares a portable, feature-scoped handoff for ${selectedAgentLabel}. Copy it into that agent; Studio does not pretend it can control an unconnected CLI.`}</p>
                 </div>
               </div>
-              <div className="rounded-lg border border-cyan-400/20 bg-zinc-950/70 px-3 py-2 text-[11px] text-cyan-100">{isHumanApprovalTask ? 'Human-review only' : selectedLocalAgent ? 'Workspace-write only' : 'Portable prompt only'}<br /><span className="text-zinc-500">No commit · No push</span></div>
+              <div className="implementation-handoff-safety rounded-lg border px-3 py-2 text-[11px]">{isHumanApprovalTask ? 'Human-review only' : selectedLocalAgent ? 'Workspace-write only' : 'Portable prompt only'}<br /><span>No commit · No push</span></div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-3 text-[11px]">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Feature</span><p className="mt-1 text-zinc-400">{activeFeature.title}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Task</span><p className="mt-1 font-mono text-cyan-200">{selectedTask?.id || 'Choose a task'}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">{isHumanApprovalTask ? 'Required evidence' : 'Implementation worktree'}</span><p className="mt-1 truncate text-zinc-400">{isHumanApprovalTask ? 'Reviewed feature spec and plan' : implementationWorkspace || 'Create isolated worktree first'}</p></div>
+              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">Feature</span><p className="mt-1 text-zinc-400">{activeFeature.title}</p></div>
+              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">Task</span><p className="mt-1 font-mono text-cyan-200">{selectedTask?.id || 'Choose a task'}</p></div>
+              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">{isHumanApprovalTask ? 'Required evidence' : 'Implementation worktree'}</span><p className="mt-1 truncate text-zinc-400">{isHumanApprovalTask ? 'Reviewed feature spec and plan' : implementationWorkspace || 'Create isolated worktree first'}</p></div>
             </div>
           </div>
           {!isHumanApprovalTask && !implementationWorkspace && <div className="mx-5 mt-5 rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"><p className="font-bold">Implementation is safely blocked until this feature has its own worktree.</p><p className="mt-1 text-amber-200">The shared repository checkout is read-only for this feature. No Codex run has been started from this screen.</p>{onOpenJourney && <button type="button" onClick={onOpenJourney} className="mt-3 rounded-lg bg-amber-300 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-200">Set up isolated worktree</button>}</div>}

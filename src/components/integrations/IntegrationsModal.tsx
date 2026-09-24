@@ -169,10 +169,10 @@ export function IntegrationsModal({
   });
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Integrations and direct sync" className="items-center justify-center bg-slate-950/80 p-4 animate-fade-in">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Integrations and direct sync" className="integration-modal-overlay items-center justify-center p-4 animate-fade-in">
+      <div className="integration-modal relative w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/50">
+        <div className="integration-modal-header flex items-center justify-between p-4 px-6 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
               <Github className="w-5 h-5" />
@@ -196,7 +196,7 @@ export function IntegrationsModal({
         </div>
 
         {/* Integration Tabs */}
-        <div className="flex border-b border-slate-800 bg-slate-950/30 px-6">
+        <div className="integration-modal-tabs flex border-b px-6">
           <button
             onClick={() => setActiveTab("github")}
             className={`px-4 py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
@@ -485,11 +485,11 @@ export function IntegrationsModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between text-xs text-slate-400">
+        <div className="integration-modal-footer p-4 px-6 border-t flex items-center justify-between text-xs">
           <span>Config stored safely in browser local context.</span>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition-all"
+            className="integration-modal-done px-4 py-2 font-semibold rounded-xl transition-all"
           >
             Done
           </button>

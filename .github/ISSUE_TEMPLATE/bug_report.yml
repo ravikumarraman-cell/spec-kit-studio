@@ -1,0 +1,36 @@
+name: Bug report
+description: Report reproducible behavior that differs from the documented product.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include credentials, access tokens, private repository paths, or confidential source code. For security issues, use the private reporting channel once configured."
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Studio version or commit
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, browser, and whether the local connector was enabled.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe evidence
+      description: Redacted logs or screenshots, if helpful.

@@ -138,4 +138,8 @@ Set `STUDIO_ALLOWED_ROOTS` to the narrowest parent directory that contains the r
 
 ## Contributing
 
-Keep changes narrow, preserve explicit confirmation around consequential local actions, and add a focused regression test for workflow rules. Run `npm run verify` before submitting a change.
+Contributions are welcome. Start with the [contribution guide](CONTRIBUTING.md), read the [code of conduct](CODE_OF_CONDUCT.md), and report security concerns according to [SECURITY.md](SECURITY.md). Keep changes narrow, preserve explicit confirmation around consequential local actions, and add a focused regression test for workflow rules. Run `npm run verify` before submitting a change.
+
+## Open-source readiness
+
+This repository has contributor, security, and community documentation, but it does **not** yet contain a license file. Until the maintainers select and add a license, the code is not licensed for public reuse, modification, or redistribution. See [the publishing checklist](docs/open-source-readiness.md) for the remaining maintainer decisions and the concrete release sequence.

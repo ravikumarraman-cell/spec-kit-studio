@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a user outcome, with constraints and evidence.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Who has the problem and what outcome is missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Describe a minimal solution and any alternatives considered.
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and compatibility considerations
+      description: Note effects on local repositories, approvals, privacy, persistence, integrations, or existing workflows.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or examples

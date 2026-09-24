@@ -54,7 +54,7 @@ Use a stable Vercel production URL or custom domain for normal work. Vercel prev
 4. Keep the project root at the directory containing `package.json` and `vercel.json`.
 5. Click **Deploy**.
 
-This repository already contains `vercel.json`. It tells Vercel to build with `npm run build`, publish `dist`, route `/api/*` to the API entrypoint, and send other paths to the single-page application. No connector is deployed to Vercel.
+This repository already contains `vercel.json`. It tells Vercel to build with `npm run build`, publish `dist`, include the dedicated bundled API request handler with the Vercel function, route `/api/*` to that handler, and send other paths to the single-page application. No connector is deployed to Vercel.
 
 Vercel supports Vite projects directly. Its Vite guide also explains the SPA rewrite needed for direct links to application routes. [Vercel’s Vite deployment guide](https://vercel.com/docs/frameworks/frontend/vite)
 

@@ -1,9 +1,9 @@
-import { createApplication, finalizeApplication } from '../server/app';
+import { createRequire } from 'node:module';
 
-// Vercel invokes this module as a serverless function. Keep it independent of
-// the standalone server bootstrap and its port/lifecycle configuration. A
-// serverless handler never binds a port, and a malformed standalone-only env
-// value must not make the health endpoint unavailable during module loading.
-const app = createApplication();
+// Vercel transpiles this entrypoint but does not trace sibling TypeScript
+// modules reliably for an ESM function. The build produces one explicit CJS
+// request bundle and vercel.json includes it with this function.
+const require = createRequire(import.meta.url);
+const { default: app } = require('../dist/vercel.cjs') as { default: import('express').Express };
 
-export default finalizeApplication(app);
+export default app;

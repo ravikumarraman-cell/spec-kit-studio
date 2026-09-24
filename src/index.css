@@ -690,6 +690,98 @@
 .feature-import-recovery .text-zinc-100 { color: var(--theme-text) !important; }
 .feature-import-recovery .text-zinc-400 { color: var(--theme-muted) !important; }
 
+/* Extraction preview is shown inside a modal, but it is an ordinary product
+   surface—not a dark hero. Resolve every foreground and action from the
+   palette so a light theme never puts navy copy on a dark gradient. */
+.feature-extraction-summary {
+  background: linear-gradient(110deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border)) !important;
+}
+.feature-extraction-summary-icon { color: var(--theme-success) !important; }
+.feature-extraction-summary-title { color: var(--theme-text) !important; }
+.feature-extraction-summary-copy { color: var(--theme-muted) !important; }
+.feature-extraction-reextract {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary) !important;
+}
+.feature-extraction-reextract:hover {
+  background-color: var(--theme-raised) !important;
+  color: var(--theme-primary-strong) !important;
+}
+.feature-extraction-primary-action {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--theme-primary) 26%, transparent) !important;
+}
+.feature-extraction-primary-action:hover:not(:disabled) { background-color: var(--theme-primary-strong) !important; }
+:root[data-theme].dark .feature-extraction-primary-action { color: var(--theme-inset) !important; }
+
+/* Dialogs and the persistent local-agent status use the same semantic layers
+   as every page. They must not inherit a dark-only Zinc surface just because
+   they are rendered through a portal or fixed above the page. */
+.studio-modal-overlay {
+  background-color: rgb(0 0 0 / 48%) !important;
+}
+
+.agent-job-status {
+  background: linear-gradient(135deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--theme-text) 14%, transparent);
+}
+
+.agent-job-status--success {
+  background: linear-gradient(135deg, var(--theme-success-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status--cancelled {
+  background: linear-gradient(135deg, var(--theme-warning-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status--failed {
+  background: linear-gradient(135deg, var(--theme-danger-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-danger) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status-title { color: var(--theme-text) !important; }
+.agent-job-status-muted { color: var(--theme-muted) !important; }
+.agent-job-status-help { color: var(--theme-primary) !important; }
+
+.agent-job-status-icon {
+  background-color: var(--theme-info-tint);
+  color: var(--theme-primary);
+}
+.agent-job-status-icon--success { background-color: var(--theme-success-tint); color: var(--theme-success); }
+.agent-job-status-icon--cancelled { background-color: var(--theme-warning-tint); color: var(--theme-warning); }
+.agent-job-status-icon--failed { background-color: var(--theme-danger-tint); color: var(--theme-danger); }
+.agent-job-status-pulse { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
+
+.agent-job-status-live,
+.agent-job-status-stage--active { background-color: var(--theme-info-tint); color: var(--theme-primary); }
+.agent-job-status-stage--complete { background-color: var(--theme-success-tint); color: var(--theme-success); }
+.agent-job-status-stage--pending { background-color: var(--theme-inset); color: var(--theme-muted); }
+.agent-job-status-progress { background-color: var(--theme-inset); }
+.agent-job-status-progress-value { background: linear-gradient(90deg, var(--theme-primary), var(--theme-secondary), var(--theme-primary)); }
+
+.agent-job-status-result,
+.agent-job-status-inset,
+.agent-job-status-code {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+.agent-job-status-result-icon,
+.agent-job-status-details { color: var(--theme-primary) !important; }
+.agent-job-status--success .agent-job-status-result-icon { color: var(--theme-success) !important; }
+.agent-job-status--failed .agent-job-status-result-icon { color: var(--theme-danger) !important; }
+.agent-job-status-code { color: var(--theme-text) !important; }
+
+/* The status belongs to the operation that started it. One contextual surface
+   is clearer than a second floating copy of the same live announcement. */
+.agent-job-status-anchor { scroll-margin-top: 6rem; }
+
 /* Local-agent runs own a workflow until their result is available. This shared
    policy is deliberately selector-free: workflows opt in with one class and
    the native `inert` attribute blocks pointer, keyboard, and assistive-tech

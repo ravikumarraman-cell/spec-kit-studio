@@ -38,9 +38,9 @@ export function FeatureExtractionPreview({
 
   return (
     <div className="space-y-6">
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-zinc-900 to-cyan-950/80 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-        <div className="space-y-1"><div className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400" /><h3 className="text-base font-bold text-zinc-100">{result.title}</h3></div><p className="text-zinc-300 max-w-2xl">{result.summary}</p></div>
-        <button type="button" onClick={onReExtract} className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium shrink-0 self-start sm:self-auto">Edit Input / Re-Extract</button>
+      <div className="feature-extraction-summary p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+        <div className="space-y-1"><div className="flex items-center gap-2"><CheckCircle2 className="feature-extraction-summary-icon w-5 h-5" /><h3 className="feature-extraction-summary-title text-base font-bold">{result.title}</h3></div><p className="feature-extraction-summary-copy max-w-2xl">{result.summary}</p></div>
+        <button type="button" onClick={onReExtract} className="feature-extraction-reextract px-3 py-1.5 rounded-lg border font-medium shrink-0 self-start sm:self-auto">Edit Input / Re-Extract</button>
       </div>
 
       <div className="p-1 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-wrap items-center text-xs">
@@ -65,8 +65,8 @@ export function FeatureExtractionPreview({
           ? <div className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 p-4 text-xs text-emerald-100"><p className="font-bold">Feature saved in {activeProjectName}</p><p className="mt-1 text-emerald-200"><strong>{savedFeatureTitle}</strong> has a durable receipt in this workspace. It was not moved to another workspace.</p><button type="button" onClick={onOpenSavedFeature} className="mt-3 rounded-lg bg-emerald-500 px-3 py-2 font-bold text-emerald-950 hover:bg-emerald-400">Open Feature Journey</button></div>
           : <div className="flex flex-col sm:flex-row items-center gap-3">
           {canMerge && activeProjectName
-            ? <button type="button" disabled={isSavingFeature} onClick={onMerge} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:cursor-wait disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Plus className="w-4 h-4" /><span>{isSavingFeature ? 'Saving feature to this workspace…' : 'Add feature to this workspace'}</span></button>
-            : <button type="button" onClick={onCreateProject} className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-cyan-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><PlusCircle className="w-4 h-4" /><span>Create Spec-Kit Project ({result.title})</span></button>}
+            ? <button type="button" disabled={isSavingFeature} onClick={onMerge} className="feature-extraction-primary-action w-full py-3 rounded-xl disabled:cursor-wait disabled:opacity-60 font-bold text-xs flex items-center justify-center gap-2 shadow-lg"><Plus className="w-4 h-4" /><span>{isSavingFeature ? 'Saving feature to this workspace…' : 'Add feature to this workspace'}</span></button>
+            : <button type="button" onClick={onCreateProject} className="feature-extraction-primary-action w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg"><PlusCircle className="w-4 h-4" /><span>Create Spec-Kit Project ({result.title})</span></button>}
           </div>}
       </div>
     </div>

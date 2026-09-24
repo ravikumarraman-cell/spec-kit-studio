@@ -59,7 +59,7 @@ export function Modal({ isOpen, onClose, children, className = '', ariaLabel, ar
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className={`fixed inset-0 z-50 flex bg-zinc-950/80 backdrop-blur-sm ${className}`} onMouseDown={(event) => { if (closeOnBackdrop && event.target === event.currentTarget) onClose(); }}>
+    <div className={`studio-modal-overlay fixed inset-0 z-50 flex backdrop-blur-sm ${className}`} onMouseDown={(event) => { if (closeOnBackdrop && event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={ariaLabel} aria-labelledby={ariaLabel ? undefined : ariaLabelledBy || fallbackLabelId} tabIndex={-1}>
         {children}
       </div>

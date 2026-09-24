@@ -17,6 +17,8 @@ STUDIO_ALLOWED_ORIGINS=https://your-studio.example.com \
 npm run connector
 ```
 
+For a strict hosted-deployment bridge, add `STUDIO_CONNECTOR_MODE=production`. In that mode the connector refuses to start unless roots and origins are explicit, all origins are exact `https://` origins, and the token is at least 32 bytes. Development mode intentionally retains local defaults for contributors.
+
 Use the narrowest allowed parent directory that contains the repositories you intend to connect. Enter the connector URL, repository path, and token (when configured) in **Connected Workspace**.
 
 ## What it actually does
@@ -31,6 +33,8 @@ Use the narrowest allowed parent directory that contains the repositories you in
 ## Boundaries and limitations
 
 The connector limits repository paths to `STUDIO_ALLOWED_ROOTS`, restricts browser origins, and optionally requires `x-studio-token`. It exposes a small set of predefined operations, but it is still a local process with authority to write inside an allowed repository when the user confirms an action.
+
+The token is a local pairing control. It is not an enterprise login, device identity, short-lived execution grant, or provider credential. For the production architecture and the remaining implementation work, see [Production deployment and user-owned agents](production-deployment-and-user-owned-agents.md).
 
 It does not automatically commit, push, create a pull request, or deploy. It cannot establish that an AI-generated plan or implementation is correct. Review diffs and run repository-appropriate verification.
 

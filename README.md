@@ -119,6 +119,8 @@ npm run connector
 
 Set `STUDIO_ALLOWED_ROOTS` to the narrowest parent directory that contains the repositories you intend to connect. In **Connected Workspace**, scan a repository before starting delivery work. See [the connector guide](docs/local-connector.md) for its exact capabilities and constraints.
 
+For a hosted deployment using the current loopback connector, set `STUDIO_CONNECTOR_MODE=production`. It then requires explicit absolute allowed roots, exact HTTPS origins, and a token with at least 32 bytes; it will not fall back to development defaults. This is a hardened bridge, not a multi-tenant companion service. See [production deployment and user-owned agents](docs/production-deployment-and-user-owned-agents.md) and [the production-readiness ledger](docs/production-readiness-progress.md) for the implemented boundary, target architecture, and remaining gates.
+
 ## A grounded first run
 
 1. Connect and scan the repository; inspect the detected Git and technology evidence.
@@ -134,6 +136,7 @@ Set `STUDIO_ALLOWED_ROOTS` to the narrowest parent directory that contains the r
 - [Story-first delivery status](docs/user-story-first-workflow-implementation-plan.md) distinguishes the implemented contract from future ideas.
 - [Feature isolation guide](docs/feature-isolation-user-guide.md) covers concurrent work and worktrees.
 - [Local connector](docs/local-connector.md) describes local access, confirmations, and boundaries.
+- [Production deployment and user-owned agents](docs/production-deployment-and-user-owned-agents.md) explains billing, identity, Companion, and control-plane requirements.
 - [Architecture](docs/architecture.md) and [modular architecture](docs/modular-architecture.md) describe code boundaries.
 
 ## Contributing

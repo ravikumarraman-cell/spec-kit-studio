@@ -6,6 +6,7 @@
  */
 import http from 'node:http';
 import { SPEC_KIT_CONFORMANCE_VERSION, validateStorySpecKitConformance } from './specKitConformance.mjs';
+import { loadConnectorConfiguration } from './productionConfig.mjs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,16 +19,15 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const execFileAsync = promisify(execFile);
-const PORT = Number(process.env.STUDIO_CONNECTOR_PORT || 4318);
-const TOKEN = process.env.STUDIO_CONNECTOR_TOKEN || '';
+const connectorConfiguration = loadConnectorConfiguration();
+const PORT = connectorConfiguration.port;
+const TOKEN = connectorConfiguration.token;
 // ChatGPT-authenticated Codex no longer supports the retired gpt-5.4-mini
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
-const allowedRoots = (process.env.STUDIO_ALLOWED_ROOTS || process.cwd())
-  .split(',').map((root) => path.resolve(root.trim())).filter(Boolean);
-const allowedOrigins = (process.env.STUDIO_ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173')
-  .split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedRoots = connectorConfiguration.allowedRoots;
+const allowedOrigins = connectorConfiguration.allowedOrigins;
 const ignored = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage', '.venv', 'vendor']);
 const managedToolsDir = path.join(process.cwd(), 'connector', '.tools');
 const managedUv = path.join(managedToolsDir, 'bin', 'uv');
@@ -577,7 +577,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(req, res, 204, {});
   // Health is intentionally unauthenticated: it reveals only whether pairing is needed,
   // enabling a friendly client-side setup flow without exposing repository access.
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: '0.1.0', tokenRequired: Boolean(TOKEN) });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: '0.1.0', mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
   if (TOKEN && req.headers['x-studio-token'] !== TOKEN) return send(req, res, 401, { error: 'Connector token is required.' });
   try {
     if (req.method === 'GET' && req.url?.startsWith('/v1/jobs/')) {

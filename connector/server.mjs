@@ -10,15 +10,13 @@ import { loadConnectorConfiguration } from './productionConfig.mjs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import dotenv from 'dotenv';
 
 // The connector is a separate Node process, so load local connector settings itself.
 // Existing shell environment variables take precedence over .env.local values.
 dotenv.config({ path: '.env.local' });
 
-const execFileAsync = promisify(execFile);
 const connectorConfiguration = loadConnectorConfiguration();
 const PORT = connectorConfiguration.port;
 const TOKEN = connectorConfiguration.token;
@@ -156,13 +154,45 @@ async function resolveExecutable(commandName) {
   return commandName;
 }
 async function command(command, args, cwd, timeout = 30_000) {
-  try {
-    const executable = await resolveExecutable(command);
-    const { stdout, stderr } = await execFileAsync(executable, args, { cwd, timeout, maxBuffer: 1_000_000 });
-    return { ok: true, output: redactSensitiveOutput(`${stdout}${stderr}`.trim()) };
-  } catch (error) {
-    return { ok: false, output: redactSensitiveOutput(`${error.stdout || ''}${error.stderr || error.message || ''}`.trim()) };
-  }
+  const executable = await resolveExecutable(command);
+  // Always close stdin. A number of agent CLIs treat any open pipe as a second
+  // prompt stream; leaving it open makes a command with a perfectly valid
+  // prompt argument wait forever for "additional input from stdin".
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (ok, output) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ok, output: redactSensitiveOutput(output.trim()) });
+    };
+    let child;
+    try {
+      child = spawn(executable, args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      finish(false, error instanceof Error ? error.message : String(error));
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish(false, `Command timed out after ${Math.round(timeout / 1000)} seconds.`);
+    }, timeout);
+    const append = (target, chunk) => {
+      const next = target + chunk.toString();
+      return next.length > 1_000_000 ? next.slice(-1_000_000) : next;
+    };
+    child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk); });
+    child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk); });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      finish(false, `${stdout}${stderr}${error.message}`);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      finish(code === 0, `${stdout}${stderr}`);
+    });
+  });
 }
 async function uvCommand(args, cwd, timeout = 30_000) {
   const systemUv = await command('uv', ['--version'], cwd);
@@ -475,10 +505,39 @@ function startSpecKitAgent(root, agent, prompt) {
 function storyExtractionPrompt(storyContent, storyTitle, sourceType) {
   return `Prepare exactly one independently deliverable user story. This is read-only: do not create, edit, commit, or delete files.\n\nSource type: ${sourceType}\n${storyTitle ? `Suggested title: ${storyTitle}\n` : ''}Source:\n---\n${storyContent}\n---\n\nReturn ONLY valid JSON, no markdown or commentary: {"story":{"id":"US-101","title":"...","priority":"High|Medium|Low","asA":"...","iWantTo":"...","soThat":"...","acceptanceCriteria":["..."],"requirementIds":["FR-101"]},"functionalRequirements":[{"id":"FR-101","title":"...","description":"...","category":"Core|UI/UX|API|Database|Security|Performance|Integration","priority":"High|Medium|Low"}],"nonFunctionalRequirements":[],"compatibilityConstraints":[],"sourceSummary":"..."}. Choose the smallest coherent use case. Return at least one testable acceptance criterion and one functional requirement; every requirementIds item must reference a returned requirement.`;
 }
-function parseAgentStory(output, agentLabel) {
-  const start = output.indexOf('{'); const end = output.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error(`${agentLabel} did not return a JSON story package. Retry with a shorter, focused source ticket.`);
-  let value; try { value = JSON.parse(output.slice(start, end + 1)); } catch { throw new Error(`${agentLabel} returned invalid JSON. Retry with a shorter, focused source ticket.`); }
+function jsonObjectCandidates(output) {
+  const values = [];
+  // An agent may prepend a status line, wrap its final result in a Markdown
+  // fence, or emit diagnostic JSON before its answer. Extract complete JSON
+  // objects with string-aware brace matching rather than assuming the first
+  // "{" and final "}" delimit one response.
+  for (let start = 0; start < output.length; start += 1) {
+    if (output[start] !== '{') continue;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let end = start; end < output.length; end += 1) {
+      const character = output[end];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === '\\') escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') { quoted = true; continue; }
+      if (character === '{') depth += 1;
+      if (character === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          try { values.push(JSON.parse(output.slice(start, end + 1))); } catch { /* Try the next object. */ }
+          break;
+        }
+      }
+    }
+  }
+  return values;
+}
+function validateAgentStory(value, agentLabel) {
   const story = value?.story; const requirements = value?.functionalRequirements;
   const priorities = new Set(['High', 'Medium', 'Low']); const categories = new Set(['Core', 'UI/UX', 'API', 'Database', 'Security', 'Performance', 'Integration']);
   if (!story || !['title', 'asA', 'iWantTo', 'soThat'].every((field) => typeof story[field] === 'string' && story[field].trim()) || !priorities.has(story.priority) || !Array.isArray(story.acceptanceCriteria) || !story.acceptanceCriteria.length || !story.acceptanceCriteria.every((item) => typeof item === 'string' && item.trim())) throw new Error(`${agentLabel} returned an incomplete story. Retry with a more focused source ticket.`);
@@ -486,6 +545,28 @@ function parseAgentStory(output, agentLabel) {
   const requirementIds = new Set(requirements.map((item) => item.id));
   if (!Array.isArray(story.requirementIds) || !story.requirementIds.length || !story.requirementIds.every((id) => requirementIds.has(id))) throw new Error(`${agentLabel} returned a story with unlinked requirements. Retry with a more focused source ticket.`);
   return value;
+}
+function parseAgentStory(output, agentLabel) {
+  const candidates = jsonObjectCandidates(output);
+  if (!candidates.length) throw new Error(`${agentLabel} did not return a valid JSON story package. Retry with a shorter, focused source ticket.`);
+  let validationError;
+  for (const candidate of candidates) {
+    try { return validateAgentStory(candidate, agentLabel); } catch (error) { validationError = error; }
+  }
+  throw validationError || new Error(`${agentLabel} returned a JSON response that was not a valid story package.`);
+}
+function localAgentAuthorizationMessage(agentLabel, output) {
+  const diagnostic = String(output || '');
+  // Keep the underlying session problem clear without exposing raw CLI output
+  // (which may include account or environment details). This pattern is
+  // intentionally provider-neutral: any adapter can surface it.
+  if (/access token could not be refreshed|logged out or signed in to another account/i.test(diagnostic)) {
+    return 'Your access token could not be refreshed because you have since logged out or signed in to another account. Please sign in again.';
+  }
+  if (/not logged in|not authenticated|authentication required|authorization required|please sign in|sign in first|login required|invalid.*token|expired.*token|unauthorized/i.test(diagnostic)) {
+    return `${agentLabel} needs local authorization. Sign in to ${agentLabel} on this computer, then retry.`;
+  }
+  return null;
 }
 async function extractStoryWithAgent(root, payload) {
   const storyContent = typeof payload.storyContent === 'string' ? payload.storyContent.trim() : '';
@@ -496,6 +577,8 @@ async function extractStoryWithAgent(root, payload) {
   const selected = agentAdapter(String(payload.agent || ''), 'story-extraction');
   const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, STORY_EXTRACTION_TIMEOUT_MS);
   if (!result.ok) {
+    const authorizationMessage = localAgentAuthorizationMessage(selected.label, result.output);
+    if (authorizationMessage) throw new Error(authorizationMessage);
     const timedOut = /timed out|etimedout|kill/i.test(result.output);
     throw new Error(timedOut
       ? `${selected.label} did not respond within 90 seconds. It may be waiting for sign-in, approval, or network access. Check the local CLI in a terminal, then retry.`

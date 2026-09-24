@@ -717,6 +717,31 @@
 .feature-extraction-primary-action:hover:not(:disabled) { background-color: var(--theme-primary-strong) !important; }
 :root[data-theme].dark .feature-extraction-primary-action { color: var(--theme-inset) !important; }
 
+/* Supporting Journey information is deliberately quiet until requested. The
+   summary stays readable in every palette while the active action, errors,
+   and live work retain visual priority above it. */
+.journey-supporting-details {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.journey-supporting-details > summary { color: var(--theme-muted) !important; }
+
+/* The next decision is the Journey's visual anchor. Secondary facts remain
+   available, but do not compete with the action or a real blocker. */
+.journey-next-step {
+  background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--theme-text) 7%, transparent);
+  scroll-margin-top: 5rem;
+}
+.journey-next-step-title { color: var(--theme-text) !important; }
+.journey-next-step-copy { color: var(--theme-muted) !important; }
+.journey-next-step-details {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.journey-next-step-details > summary { color: var(--theme-muted) !important; }
+
 /* Dialogs and the persistent local-agent status use the same semantic layers
    as every page. They must not inherit a dark-only Zinc surface just because
    they are rendered through a portal or fixed above the page. */

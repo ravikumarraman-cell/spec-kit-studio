@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleAlert, Play, ShieldCheck } from 'lucide-react';
 import { FeatureJourney as JourneyState, SpecKitProject, ViewTab } from '../../types/speckit';
 import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
-import { LocalAgentStatus, localAgentLabel, localAgentLabels } from '../../lib/agentAvailability';
-import { getStudioSettings } from '../../lib/studioSettings';
+import { LocalAgentStatus, localAgentLabel } from '../../lib/agentAvailability';
 import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
 import { activeFeatureForProject, approveJourneyStage, createFeatureJourney, DeliveryPlanMode, engineInstructionForStage, FeatureJourneyStage, featureJourneyStages, featureIdForEnginePreflight, getJourneyStage, nextFeatureJourneyStage, reopenJourneyStage, repositoryPathForEngineStage, stageRequiresFeatureWorktree } from '../../lib/featureJourney';
@@ -21,6 +20,7 @@ import { readLocalAgentJobReference } from '../../lib/localAgentJobSession';
 import { deliveryScope } from '../../lib/deliveryItems';
 import { DeliveryScopeBanner } from './DeliveryScopeBanner';
 import { officialFeatureDirectoryFromSpecPath, validateSpecKitArtifacts } from '../../lib/specKitCompliance';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 
 function selectedAgent(): LocalAgentStatus | undefined { return selectedRuntimeAgent('planning'); }
 
@@ -51,6 +51,69 @@ interface Props {
   onSaveJourney: (journey: JourneyState) => void;
   onSaveFeatureReview: (review: { specification?: { path?: string; content: string; acceptedAt?: string }; impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => void;
   onUpdateFeatureIdentity: (featureId: string, identity: { featureKey?: string; slug?: string; branch?: string; worktreePath?: string; baselineCommit?: string }) => void;
+}
+
+interface JourneyNextStepProps {
+  stage: FeatureJourneyStage;
+  title: string;
+  outcome: string;
+  action: string;
+  canApprove: boolean;
+  readinessHint: string;
+  engineAction?: string;
+  evidence: string;
+  connectorToken: string;
+  engineError: string;
+  safetyMessages: string[];
+  hasSelectedAgent: boolean;
+  isRunning: boolean;
+  hasRepository: boolean;
+  onStart: () => void;
+  onApprove: () => void;
+  onConnectorTokenChange: (value: string) => void;
+  onOpenWorkspace: () => void;
+}
+
+function JourneyNextStep({
+  stage, title, outcome, action, canApprove, readinessHint, engineAction, evidence,
+  connectorToken, engineError, safetyMessages, hasSelectedAgent, isRunning, hasRepository,
+  onStart, onApprove, onConnectorTokenChange, onOpenWorkspace,
+}: JourneyNextStepProps) {
+  return <section className="journey-next-step rounded-2xl border p-5" aria-label="Your one next step">
+    <div className="flex items-start gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-400/40 bg-cyan-500/10 text-sm font-black text-cyan-300">{stage.id}</div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Your one next step</p>
+        <h2 className="journey-next-step-title mt-1 text-lg font-bold">{title}</h2>
+        <p className="journey-next-step-copy mt-1 text-sm">{outcome}</p>
+
+        {engineError && <div role="alert" className="mt-4 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-100">
+          <p className="font-bold">Action needed before the agent can continue</p>
+          <p className="mt-1">{engineError}</p>
+          <button type="button" onClick={onOpenWorkspace} className="mt-2 font-bold underline">Open Connected Workspace</button>
+        </div>}
+
+        {safetyMessages.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100"><p className="font-bold">Safety setup needs attention</p><p className="mt-1">{safetyMessages[0]}</p>{safetyMessages.length > 1 && <p className="mt-1 text-amber-200">{safetyMessages.length - 1} additional item{ safetyMessages.length === 2 ? '' : 's' } available in Feature details.</p>}</div>}
+
+        {!hasSelectedAgent && engineAction && <p className="mt-3 flex items-center gap-2 text-xs text-amber-200"><CircleAlert className="h-4 w-4 shrink-0" />Scan Connected Workspace to detect a compatible local agent before running this stage.</p>}
+        {!canApprove && <p className="mt-3 flex items-center gap-2 text-xs text-amber-200"><CircleAlert className="h-4 w-4 shrink-0" />{readinessHint}</p>}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={onStart} disabled={isRunning} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Play className="h-3.5 w-3.5" />{isRunning ? 'Working…' : action}</button>
+          {canApprove && <button type="button" onClick={onApprove} className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-4 py-2.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20"><CheckCircle2 className="h-3.5 w-3.5" />Approve this stage and continue</button>}
+        </div>
+
+        {engineAction && <div className="mt-4 space-y-2">
+          <ProgressiveDisclosure className="journey-next-step-details rounded-xl border p-1" tone="context" label="Stage context" summary="engine action and retained evidence">
+            <div className="grid gap-2 p-3 text-xs sm:grid-cols-2"><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Engine action</span><p className="mt-1 font-mono text-[11px] text-cyan-200">{engineAction}</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Evidence Studio will retain</span><p className="mt-1 text-[11px] text-zinc-400">{evidence}</p></div></div>
+          </ProgressiveDisclosure>
+          <ProgressiveDisclosure className="journey-next-step-details rounded-xl border p-1" label="Local connector settings" summary="only if your connector requires a pairing token">
+            <div className="p-3"><label className="block text-[11px] text-zinc-400">Pairing token<input value={connectorToken} onChange={(event) => onConnectorTokenChange(event.target.value)} type="password" placeholder="Enter it once in Connected Workspace, or paste it here" className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-100" /></label>{!hasRepository && <p className="mt-2 text-[11px] text-amber-200">Connect a repository before running a local agent.</p>}</div>
+          </ProgressiveDisclosure>
+        </div>}
+      </div>
+    </div>
+  </section>;
 }
 
 export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSaveJourney, onSaveFeatureReview, onUpdateFeatureIdentity }: Props) {
@@ -378,12 +441,32 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
 
     <DeliveryScopeBanner project={project} item={activeFeature} />
 
-    {canStartFeatureIntake(current.id) && <FeatureInbox project={project} onImport={onOpenFeatureImport} onNavigate={onNavigate} activeFeatureId={activeFeature?.id} onSelectFeature={(featureId) => { const selected = project.featureInbox?.find((item) => item.id === featureId); const now = new Date().toISOString(); onSaveJourney(selected?.journey ? { ...selected.journey, featureId, updatedAt: now } : { featureId, activeStage: 2, completedStages: journey.completedStages.includes(1) ? [1] : [], startedAt: now, updatedAt: now }); }} />}
-    <FeatureRegistry project={project} />
+    <JourneyNextStep
+      stage={current}
+      title={currentTitle}
+      outcome={currentOutcome}
+      action={currentAction}
+      canApprove={current.ready(project) && !journey.completedStages.includes(current.id)}
+      readinessHint={current.readyHint}
+      engineAction={engineInstructionForStage(current.id, project, deliveryPlanMode) ?? undefined}
+      evidence={current.evidence}
+      connectorToken={connectorToken}
+      engineError={engineError}
+      safetyMessages={safetyIssues.map((issue) => issue.message)}
+      hasSelectedAgent={Boolean(selectedAgent())}
+      isRunning={agentRunIsActive}
+      hasRepository={Boolean(project.importedRepo?.repoUrl)}
+      onStart={() => startStage(current)}
+      onApprove={() => complete(current)}
+      onConnectorTokenChange={(value) => { setConnectorToken(value); setConnectorSessionToken(value); }}
+      onOpenWorkspace={() => onNavigate('workspace')}
+    />
+    {agentJob && <AgentJobStatus job={agentJob} preparingLabel={`Running ${selectedAgent() ? localAgentLabel(selectedAgent()!) : 'local agent'} for Stage ${agentStageId || current.id}…`} />}
 
+    {canStartFeatureIntake(current.id) && <FeatureInbox project={project} onImport={onOpenFeatureImport} onNavigate={onNavigate} activeFeatureId={activeFeature?.id} onSelectFeature={(featureId) => { const selected = project.featureInbox?.find((item) => item.id === featureId); const now = new Date().toISOString(); onSaveJourney(selected?.journey ? { ...selected.journey, featureId, updatedAt: now } : { featureId, activeStage: 2, completedStages: journey.completedStages.includes(1) ? [1] : [], startedAt: now, updatedAt: now }); }} />}
     {acceptedNotice && <div role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-100"><strong>Saved.</strong> {acceptedNotice}</div>}
 
-    {activeFeature && <section className="rounded-2xl border border-violet-400/25 bg-violet-500/5 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Active feature identity</p><h2 className="mt-1 font-bold text-zinc-100">{activeFeature.title}</h2><div className="mt-3 grid gap-2 sm:grid-cols-3"><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">{activeFeature.featureKey || 'Needs feature key'}</p><p className="mt-1 text-[11px] text-zinc-400">Feature key</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-emerald-200">{featureArtifactRoot(activeFeature)}</p><p className="mt-1 text-[11px] text-zinc-400">Owned artifact folder</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-zinc-200">{activeFeature.branch || 'Set branch before implementation'}</p><p className="mt-1 text-[11px] text-zinc-400">Expected branch</p></div></div>{safetyIssues.length > 0 && <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-amber-100"><p className="font-bold">Safety setup needed before agent execution</p><ul className="mt-1 list-disc space-y-1 pl-4 text-amber-200">{safetyIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul>{(!activeFeature.featureKey || !activeFeature.slug) && <button type="button" onClick={migrateLegacyFeature} className="mt-3 rounded-lg bg-amber-400 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-300">Migrate this existing feature safely</button>}</div>}{(activeFeature.impactMap?.acceptedAt || activeFeature.architecturePlan?.acceptedAt) && <div className="mt-3 grid gap-2 sm:grid-cols-2">{activeFeature.impactMap?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">✓ Impact map accepted</p><p className="mt-1 text-[11px] text-zinc-400">Read-only architecture evidence retained for this feature.</p></div>}{activeFeature.architecturePlan?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-emerald-200">✓ Feature plan accepted</p><p className="mt-1 text-[11px] text-zinc-400">This plan is scoped to this feature, not the shared workspace plan.</p></div>}</div>}</section>}
+    {activeFeature && <ProgressiveDisclosure key={`${activeFeature.id}-${safetyIssues.length}`} className="journey-supporting-details rounded-2xl border p-1" tone="context" label="Feature details" summary={`${activeFeature.featureKey || 'Feature'} · evidence and delivery identity`} defaultOpen={safetyIssues.length > 0}><section className="p-3 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Active feature identity</p><h2 className="mt-1 font-bold text-zinc-100">{activeFeature.title}</h2><div className="mt-3 grid gap-2 sm:grid-cols-3"><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">{activeFeature.featureKey || 'Needs feature key'}</p><p className="mt-1 text-[11px] text-zinc-400">Feature key</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-emerald-200">{featureArtifactRoot(activeFeature)}</p><p className="mt-1 text-[11px] text-zinc-400">Owned artifact folder</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="break-all font-mono text-[11px] text-zinc-200">{activeFeature.branch || 'Set branch before implementation'}</p><p className="mt-1 text-[11px] text-zinc-400">Expected branch</p></div></div>{safetyIssues.length > 0 && <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-amber-100"><p className="font-bold">Safety setup needed before agent execution</p><ul className="mt-1 list-disc space-y-1 pl-4 text-amber-200">{safetyIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul>{(!activeFeature.featureKey || !activeFeature.slug) && <button type="button" onClick={migrateLegacyFeature} className="mt-3 rounded-lg bg-amber-400 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-300">Migrate this existing feature safely</button>}</div>}{(activeFeature.impactMap?.acceptedAt || activeFeature.architecturePlan?.acceptedAt) && <div className="mt-3 grid gap-2 sm:grid-cols-2">{activeFeature.impactMap?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-cyan-200">✓ Impact map accepted</p><p className="mt-1 text-[11px] text-zinc-400">Read-only architecture evidence retained for this feature.</p></div>}{activeFeature.architecturePlan?.acceptedAt && <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-emerald-200">✓ Feature plan accepted</p><p className="mt-1 text-[11px] text-zinc-400">This plan is scoped to this feature, not the shared workspace plan.</p></div>}</div>}</section></ProgressiveDisclosure>}
     {activeFeature && !activeFeature.worktreePath && current.id === 7 && <section className="rounded-2xl border border-amber-400/25 bg-amber-500/5 p-4 text-xs"><p className="font-bold text-amber-100">Create this feature’s isolated worktree</p><p className="mt-1 text-amber-200">Implementation is protected from the shared checkout. Studio has suggested a new sibling folder within the connector’s allowed roots; it must remain empty until Git creates the linked worktree.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={worktreePath} onChange={(event) => setWorktreePath(event.target.value)} placeholder="/absolute/allowed/path/to/feature-worktree" className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100" /><button type="button" onClick={createFeatureWorktree} disabled={isCreatingWorktree || !worktreePath.trim()} className="rounded-lg bg-amber-400 px-3 py-2 font-bold text-zinc-950 disabled:opacity-50">{isCreatingWorktree ? 'Creating…' : 'Create isolated worktree'}</button></div></section>}
 
     {activeFeature && needsLegacyJourneyRepair({ stageId: current.id, hasImpactMap: Boolean(activeFeature.impactMap?.acceptedAt), hasArchitecturePlan: Boolean(activeFeature.architecturePlan?.path), hasDeliveryPlan: Boolean(activeFeature.deliveryPlan?.acceptedAt) }) && <details className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><summary className="cursor-pointer font-bold text-amber-100">Some earlier Journey evidence needs attention</summary><p className="mt-1 text-amber-200">Your approved work is safe. Open only if you need to repair evidence created with an earlier Studio version.</p><div className="mt-4 space-y-3">{current.id > 3 && activeFeature && !activeFeature.impactMap?.acceptedAt && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Required repair</p><h2 className="mt-1 font-bold text-zinc-100">Ground the impact map for {activeFeature.title}</h2><p className="mt-1 text-zinc-300">This feature entered the Journey before Studio retained feature-scoped impact maps. Run the read-only review once, accept it, then continue without resetting approved work.</p><button type="button" onClick={() => runEngineStage(3)} disabled={isRunningEngine} className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-bold text-amber-100 hover:bg-amber-300/20 disabled:opacity-50">Run read-only impact map</button></section>}
@@ -391,8 +474,6 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     {current.id > 4 && activeFeature && !activeFeature.architecturePlan?.path && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Required repair</p><h2 className="mt-1 font-bold text-zinc-100">Create an official architecture plan for {activeFeature.title}</h2><p className="mt-1 text-zinc-300">Earlier Studio versions retained agent transcript output without an official <code>plan.md</code>. That output is not a feature plan. Return to Design safely; Studio will look for an existing <code>plan.md</code> before it ever offers Codex.</p><button type="button" onClick={() => reopenStage(4)} className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-bold text-amber-100 hover:bg-amber-300/20">Review architecture plan</button></section>}
 
     {current.id > 5 && activeFeature && !activeFeature.deliveryPlan?.acceptedAt && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Required repair</p><h2 className="mt-1 font-bold text-zinc-100">Create the delivery tasks for {activeFeature.title}</h2><p className="mt-1 text-zinc-300">Stage 5 was previously marked complete without retaining feature-scoped tasks. Studio will first look for an official <code>tasks.md</code>; only run Codex if none is found. Review and accept the result before continuing.</p><button type="button" onClick={() => reopenStage(5)} className="mt-3 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-bold text-amber-100 hover:bg-amber-300/20">Review delivery tasks</button></section>}</div></details>}
-
-    {agentJob && <AgentJobStatus job={agentJob} preparingLabel={`Running ${selectedAgent() ? localAgentLabel(selectedAgent()!) : 'local agent'} for Stage ${agentStageId || current.id}…`} />}
 
     {agentJob?.ok && (agentStageId === 3 || agentStageId === 4 || agentStageId === 5) && <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Review before accepting</p><h2 className="mt-1 font-bold text-zinc-100">{agentStageId === 3 ? 'Read-only impact map' : agentStageId === 4 ? 'Feature-scoped architecture plan' : 'Feature-scoped delivery tasks'} for {activeFeature?.title || 'the current feature'}</h2><p className="mt-1 text-zinc-300">Read the Engine result below. Accepting retains it with this imported feature and unlocks the next human approval; it does not approve the stage automatically.</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-300">{agentJob.output}</pre><button type="button" onClick={acceptEngineReview} className="mt-3 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Accept {agentStageId === 3 ? 'impact map' : agentStageId === 4 ? 'feature plan' : 'delivery tasks'}</button></section>}
 
@@ -402,11 +483,17 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
 
     {current.id === 5 && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Delivery plan size</p><h2 className="mt-1 font-bold text-zinc-100">Choose the right level of detail</h2><p className="mt-1 text-zinc-300">Both choices retain a feature-scoped plan and require review. Compact keeps verification inside three focused tasks instead of turning every testing concern into another Codex run.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><label className={`cursor-pointer rounded-lg border p-3 ${deliveryPlanMode === 'compact' ? 'border-cyan-400/60 bg-cyan-500/10' : 'border-zinc-800 bg-zinc-950/60'}`}><input className="sr-only" type="radio" name="delivery-plan-mode" checked={deliveryPlanMode === 'compact'} onChange={() => setDeliveryPlanMode('compact')} /><span className="font-bold text-cyan-100">Compact demo plan</span><span className="mt-1 block text-[11px] text-zinc-400">Exactly 3 tasks: scope, implementation with focused tests, verification.</span></label><label className={`cursor-pointer rounded-lg border p-3 ${deliveryPlanMode === 'detailed' ? 'border-cyan-400/60 bg-cyan-500/10' : 'border-zinc-800 bg-zinc-950/60'}`}><input className="sr-only" type="radio" name="delivery-plan-mode" checked={deliveryPlanMode === 'detailed'} onChange={() => setDeliveryPlanMode('detailed')} /><span className="font-bold text-zinc-100">Detailed delivery plan</span><span className="mt-1 block text-[11px] text-zinc-400">Separate tasks for fixtures, implementation slices, and validation.</span></label></div>{deliveryPlanMode === 'compact' && activeFeature?.deliveryPlan?.acceptedAt && <p className="mt-3 text-amber-200">Generating the compact plan replaces only this feature’s accepted <code>tasks.md</code> after your review; Stage 5 and later approvals will be reopened.</p>}</section>}
 
-    <section className="rounded-2xl border border-cyan-500/30 bg-zinc-900/70 p-5"><div className="flex items-start gap-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-400/40 bg-cyan-500/10 text-sm font-black text-cyan-300">{current.id}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Your one next step</p><h2 className="mt-1 text-lg font-bold text-zinc-100">{currentTitle}</h2><p className="mt-1 text-sm text-zinc-400">{currentOutcome}</p>{current.id === 4 && <div className="mt-4 rounded-xl border border-violet-400/25 bg-violet-500/5 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.15em] text-violet-300">Feature in focus</p><h3 className="mt-1 font-bold text-zinc-100">{activeFeature?.title || 'No imported feature selected'}</h3><p className="mt-1 text-zinc-400">{activeFeature?.summary || 'Choose a feature from the Inbox before planning.'}</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-zinc-200">Feature inputs</p><p className="mt-1 text-[11px] text-zinc-400">{activeFeature?.userStoryIds.length || 0} stories · {activeFeature?.requirementIds.length || 0} requirements. These define what the plan must address.</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"><p className="font-bold text-zinc-200">Shared workspace context</p><p className="mt-1 text-[11px] text-zinc-400">{project.plan.components.length} components · {project.plan.apiContracts.length} API contracts · {project.plan.adrs.length} ADRs. These are existing context, not this feature’s plan.</p></div></div><p className="mt-3 font-semibold text-amber-200">{activeFeature?.architecturePlan?.acceptedAt ? 'This feature plan has been accepted.' : 'No feature-scoped plan exists yet. Run the selected agent below, review its result, then accept it.'}</p></div>}<div className="mt-3 grid gap-2 text-xs sm:grid-cols-2"><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Engine action</span><p className="mt-1 font-mono text-[11px] text-cyan-200">{current.engineStep}</p></div><div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"><span className="font-bold text-zinc-200">Evidence Studio will retain</span><p className="mt-1 text-[11px] text-zinc-400">{current.evidence}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => startStage(current)} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-cyan-400"><Play className="h-3.5 w-3.5" />{currentAction}</button>{current.ready(project) && !journey.completedStages.includes(current.id) && <button type="button" onClick={() => complete(current)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-4 py-2.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20"><CheckCircle2 className="h-3.5 w-3.5" />Approve this stage and continue</button>}</div>{engineInstructionForStage(current.id, project) && <div className="mt-4 rounded-xl border border-indigo-400/20 bg-indigo-500/5 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-end"><label className="flex-1 text-[11px] text-zinc-400">Pairing token <span className="text-zinc-600">(only when required)</span><input value={connectorToken} onChange={(event) => { setConnectorToken(event.target.value); setConnectorSessionToken(event.target.value); }} type="password" placeholder="Enter it once in Connected Workspace, or paste it here" className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-100" /></label><button type="button" onClick={runEngineStage} disabled={isRunningEngine || !selectedAgent() || !project.importedRepo?.repoUrl} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">{isRunningEngine ? 'Running Engine…' : `Run ${selectedAgent() ? localAgentLabels[selectedAgent()!.id] : 'detected agent'}`}</button></div>{getStudioSettings().preferredAgent !== 'auto' && <p className="mt-2 text-[11px] text-indigo-200">Using your explicit Settings choice; Studio will not switch agents automatically.</p>}{engineError && <div className="mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-100"><p className="font-bold">Engine needs local pairing</p><p className="mt-1">{engineError}</p><button type="button" onClick={() => onNavigate('workspace')} className="mt-2 font-bold underline">Open Connected Workspace</button></div>}{!selectedAgent() && <p className="mt-2 text-[11px] text-amber-200">Scan Connected Workspace to detect a local agent, or use the Gemini fallback for Stage 2.</p>}{agentJob && <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-950 p-3 text-[10px] text-zinc-300">{agentJob.output || 'Agent started; waiting for output…'}</pre>}</div>}{!current.ready(project) && <p className="mt-3 flex items-center gap-2 text-xs text-amber-200"><CircleAlert className="h-4 w-4 shrink-0" />{current.readyHint}</p>}</div></div></section>
 
-    <JourneyProgress stages={featureJourneyStages} journey={journey} currentStageId={current.id} readiness={readinessByStage} />
+    <ProgressiveDisclosure className="journey-supporting-details rounded-xl border p-1" label="Journey progress" summary={`Stage ${current.id} of ${featureJourneyStages.length} · show all stages`}>
+      <JourneyProgress stages={featureJourneyStages} journey={journey} currentStageId={current.id} readiness={readinessByStage} />
+    </ProgressiveDisclosure>
 
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-xs text-zinc-400"><div className="flex gap-2"><ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" /><p><span className="font-bold text-zinc-200">Human gate:</span> Engine may prepare evidence and artifacts, but it never advances this journey on its own. You approve each completed stage after reviewing its output.</p></div></section>
+    <ProgressiveDisclosure className="journey-supporting-details rounded-xl border p-1" tone="complete" label="Human approval safeguard" summary="how Studio keeps you in control">
+      <div className="flex gap-2 p-3 text-xs"><ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" /><p><span className="font-bold text-zinc-200">Human gate:</span> Engine may prepare evidence and artifacts, but it never advances this journey on its own. You approve each completed stage after reviewing its output.</p></div>
+    </ProgressiveDisclosure>
+    <ProgressiveDisclosure className="journey-supporting-details rounded-xl border p-1" tone="context" label="Feature registry" summary="concurrent work and delivery receipts">
+      <FeatureRegistry project={project} />
+    </ProgressiveDisclosure>
     </div>
   </div>;
 }

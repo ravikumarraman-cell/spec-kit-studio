@@ -14,6 +14,7 @@ import { AuditRecommendations } from './AuditRecommendations';
 import { auditBlockers, auditPassesQualityGate } from '../../lib/auditGate';
 import { activeFeatureForProject } from '../../lib/featureJourney';
 import { deliveryItemLabel, deliveryScope } from '../../lib/deliveryItems';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
@@ -137,11 +138,12 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
         </div>
       </div>
 
-      {/* Quantitative Dimensions Grid */}
-      <AuditScoreOverview audit={audit} />
-
-      {/* Gaps, Ambiguities, and Recommendations */}
-      <AuditRecommendations audit={audit} />
+      <ProgressiveDisclosure className="journey-supporting-details rounded-2xl border p-1" tone={blockers.length ? 'context' : 'complete'} label="Audit evidence and recommendations" summary={blockers.length ? `${blockers.length} finding${blockers.length === 1 ? '' : 's'} to inspect` : 'show score dimensions and advisory guidance'}>
+        <div className="space-y-6 p-3">
+          <AuditScoreOverview audit={audit} />
+          <AuditRecommendations audit={audit} />
+        </div>
+      </ProgressiveDisclosure>
       <section className={`rounded-2xl border p-5 text-xs ${passesGate ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-amber-400/30 bg-amber-500/10'}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className={`font-bold ${passesGate ? 'text-emerald-200' : 'text-amber-100'}`}>{passesGate ? 'Quality gate ready to approve' : `${blockers.length} blocking finding${blockers.length === 1 ? '' : 's'} remain`}</p><p className="mt-1 text-zinc-300">{passesGate ? 'The remaining suggestions are advisory. They do not block this feature from moving forward.' : 'Resolve or explicitly document the blocking items before advancing.'}</p></div><button type="button" onClick={passesGate ? onApproveQualityGate : onOpenJourney} className={`rounded-lg px-3 py-2 font-bold ${passesGate ? 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300' : 'border border-amber-300/40 text-amber-100 hover:bg-amber-300/10'}`}>{passesGate ? 'Approve quality gate and continue' : 'Return to Feature Journey'}</button></div></section>
     </div>
   );

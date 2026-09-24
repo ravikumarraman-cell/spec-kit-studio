@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
-import { SpecKitProject, UserStory } from '../../types/speckit';
+import { DeliveryScope, FeatureImportSource as DeliveryImportSource, FunctionalRequirement, SpecKitProject, UserStory } from '../../types/speckit';
 import { ImportNotice } from './ImportNotice';
 import { FeatureExtractionPackage, importApi } from '../../lib/api/imports';
 import { createProjectFromFeatureExtraction } from '../../lib/importProjectFactory';
@@ -17,6 +17,9 @@ import { EngineWorkPacketPanel } from './EngineWorkPacketPanel';
 import { FeatureExtractionPreview, FeaturePreviewTab } from './FeatureExtractionPreview';
 import { Modal } from '../common/Modal';
 import { featureImportDestination } from '../../lib/featureImportRouting';
+import { DeliveryScopeSelector } from './DeliveryScopeSelector';
+import { StoryIntakePanel } from './StoryIntakePanel';
+import { SPECKIT_RELEASE_TAG } from '../../lib/specKitCompliance';
 
 interface FeatureImportModalProps {
   isOpen: boolean;
@@ -24,6 +27,9 @@ interface FeatureImportModalProps {
   onImportComplete: (project: SpecKitProject) => void;
   activeProject?: SpecKitProject | null;
   onMergeIntoActiveProject?: (importedStories: UserStory[], importedData: any) => boolean;
+  initialScope?: DeliveryScope;
+  initialStoryId?: string;
+  onStartStoryDelivery?: (story: UserStory, requirements: FunctionalRequirement[], source: DeliveryImportSource, parentFeatureId?: string) => boolean;
   onOpenWorkspace?: () => void;
 }
 
@@ -51,8 +57,12 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
   onImportComplete,
   activeProject,
   onMergeIntoActiveProject,
+  initialScope = 'feature',
+  initialStoryId,
+  onStartStoryDelivery,
   onOpenWorkspace,
 }) => {
+  const [deliveryScope, setDeliveryScope] = useState<DeliveryScope>(initialScope);
   const [importTab, setImportTab] = useState<FeatureImportSource>('text');
   const [featureTitle, setFeatureTitle] = useState('');
   const [featureContent, setFeatureContent] = useState('');
@@ -73,6 +83,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    setDeliveryScope(initialScope);
     const latest = readLocalAgentStatus();
     setAgentScan(latest);
     const recommended = recommendedLocalAgent(latest.agents, getStudioSettings().preferredAgent);
@@ -94,7 +105,7 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
       // in Connected Workspace when a pairing token is required.
     });
     return () => { cancelled = true; };
-  }, [isOpen, activeProject?.importedRepo?.repoUrl, connectorToken]);
+  }, [isOpen, initialScope, activeProject?.importedRepo?.repoUrl, connectorToken]);
 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,15 +263,13 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-zinc-100">
-                  Import Feature & Auto-Generate Spec-Kit
-                </h2>
+                <h2 className="text-base sm:text-lg font-bold text-zinc-100">Start delivery work</h2>
                 <span className="text-[10px] uppercase font-mono font-extrabold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                  Spec-Kit v1.0.7 AI Extractor
+                  Spec-Kit {SPECKIT_RELEASE_TAG} AI Extractor
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Import PRDs, Jira tickets, GitHub issues, or text to extract structured User Stories and complete 4-pillar Spec-Kit documents.
+                Start with a complete feature or one focused user story. Existing feature workflows remain unchanged.
               </p>
             </div>
           </div>
@@ -276,7 +285,24 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
         {/* Main Content Area */}
         <div className="p-5 md:p-6 overflow-y-auto space-y-6 flex-1">
           <ImportNotice message={fileError} />
-          {!extractedResult && (
+          {!extractedResult && <DeliveryScopeSelector value={deliveryScope} onChange={(scope) => { setDeliveryScope(scope); setFileError(null); }} />}
+          {deliveryScope === 'user-story' && activeProject && !extractedResult && (
+            <StoryIntakePanel
+              project={activeProject}
+              initialStoryId={initialStoryId}
+              isSaving={isSavingFeature}
+              onError={setFileError}
+              onSubmit={(story, requirements, source, parentFeatureId) => {
+                if (!onStartStoryDelivery) { setFileError('The active workspace cannot start a story journey. Close this dialog and try again.'); return; }
+                setIsSavingFeature(true);
+                try {
+                  if (!onStartStoryDelivery(story, requirements, source, parentFeatureId)) { setFileError('Studio could not retain this story journey. Your workspace was not changed.'); return; }
+                  onClose();
+                } finally { setIsSavingFeature(false); }
+              }}
+            />
+          )}
+          {deliveryScope === 'feature' && !extractedResult && (
             <GenerationPathSelector
               scan={agentScan}
               path={generationPath}
@@ -285,13 +311,13 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
               onAgentChange={setEngineAgent}
             />
           )}
-          {!extractedResult && activeProject?.importedRepo?.repoUrl && !enginePrompt && (
+          {deliveryScope === 'feature' && !extractedResult && activeProject?.importedRepo?.repoUrl && !enginePrompt && (
             <section className="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-950/50 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-xs font-bold text-zinc-100">Already ran a local agent?</p><p className="mt-0.5 text-[11px] text-zinc-400">Load the newest official <code>specs/.../spec.md</code> into Studio for review. Nothing is written to your repository.</p></div>
               <button type="button" onClick={loadEngineStories} className="shrink-0 rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/10">Load generated stories</button>
             </section>
           )}
-          {enginePrompt && !extractedResult && (
+          {deliveryScope === 'feature' && enginePrompt && !extractedResult && (
             <EngineWorkPacketPanel
               prompt={enginePrompt}
               agentLabel={localAgentLabels[engineAgent]}
@@ -306,10 +332,10 @@ export const FeatureImportModal: React.FC<FeatureImportModalProps> = ({
               onReviewStories={loadEngineStories}
             />
           )}
-          {agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabels[engineAgent]} for this feature…`} />}
+          {deliveryScope === 'feature' && agentJob && !extractedResult && <AgentJobStatus job={agentJob} preparingLabel={`Running ${localAgentLabels[engineAgent]} for this feature…`} />}
 
           {/* Step 1: Input source. Business logic stays in this modal; this component is view-only. */}
-          {!extractedResult && (
+          {deliveryScope === 'feature' && !extractedResult && (
             <FeatureSourceInput
               source={importTab}
               title={featureTitle}

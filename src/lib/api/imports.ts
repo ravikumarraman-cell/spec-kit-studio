@@ -29,6 +29,15 @@ export interface FeatureExtractionPackage {
 }
 
 export interface FeatureExtractionResponse { success: true; data: FeatureExtractionPackage; }
+export interface StoryExtractionRequest { storyContent: string; storyTitle?: string; sourceType: string; }
+export interface StoryExtractionPackage {
+  story: UserStory;
+  functionalRequirements: FunctionalRequirement[];
+  nonFunctionalRequirements?: NonFunctionalRequirement[];
+  compatibilityConstraints?: string[];
+  sourceSummary?: string;
+}
+export interface StoryExtractionResponse { success: true; data: StoryExtractionPackage; }
 export interface ImportedFeatureGenerationRequest {
   importedRepo: ImportedRepository;
   selectedTechStack: DetectedTech[];
@@ -75,6 +84,7 @@ function parseDataEnvelope<T>(envelope: Record<string, unknown>): { success: tru
 export const importApi = {
   analyzeRepository: (request: RepositoryAnalysisRequest) => postApi<RepositoryAnalysisResponse, RepositoryAnalysisRequest>('/api/repo/analyze', request, parseDataEnvelope<Partial<ImportedRepository>>),
   extractFeature: (request: FeatureExtractionRequest) => postApi<FeatureExtractionResponse, FeatureExtractionRequest>('/api/feature/import', request, parseDataEnvelope<FeatureExtractionPackage>),
+  extractStory: (request: StoryExtractionRequest) => postApi<StoryExtractionResponse, StoryExtractionRequest>('/api/story/import', request, parseDataEnvelope<StoryExtractionPackage>),
   generateFeatureForImportedRepository: (request: ImportedFeatureGenerationRequest) =>
     postApi<ImportedFeatureGenerationResponse, ImportedFeatureGenerationRequest>('/api/repo/generate-feature-for-imported', request, parseDataEnvelope<ImportedFeaturePackage>),
 };

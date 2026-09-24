@@ -1,4 +1,5 @@
 import { FeatureInboxItem } from '../types/speckit';
+import { deliveryScope } from './deliveryItems';
 
 /**
  * Stops a repository-wide plan/tasks file being presented as feature evidence.
@@ -12,6 +13,11 @@ export function isFeatureArtifactScoped(content: string | undefined, feature: Fe
   // lines use only requirement IDs. Evaluate both the durable path and text.
   const normalizedPath = artifactPath?.replace(/\\/g, '/').toLowerCase() || '';
   const haystack = `${normalizedPath}\n${content}`.toLowerCase();
+  if (deliveryScope(feature) === 'user-story' && feature.primaryStoryId) {
+    const expectedRoot = feature.slug?.toLowerCase();
+    if (expectedRoot && featureDirectoryFromPath(normalizedPath) === expectedRoot) return true;
+    if (!haystack.includes(feature.primaryStoryId.toLowerCase())) return false;
+  }
 
   // Imported repositories frequently retain an official directory such as
   // specs/001-enhance-tenant-details-ui/ while Studio's display title has
@@ -28,5 +34,10 @@ export function isFeatureArtifactScoped(content: string | undefined, feature: Fe
   }
 
   const terms = feature.title.toLowerCase().match(/[a-z0-9]{4,}/g) || [];
+  if (!terms.length) return false;
   return terms.filter((term) => haystack.includes(term)).length >= Math.min(2, terms.length);
+}
+
+function featureDirectoryFromPath(normalizedPath: string) {
+  return normalizedPath.match(/(?:^|\/)specs\/([^/]+)\//)?.[1] || '';
 }

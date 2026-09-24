@@ -1,4 +1,5 @@
 import { SpecKitProject } from '../types/speckit';
+import { SPECKIT_VERSION } from './specKitCompliance';
 import { createUniqueId } from './ids';
 
 /** Creates a complete, valid project aggregate without depending on browser storage. */
@@ -10,7 +11,7 @@ export function createProjectWorkspace(name: string, description: string, now = 
     description,
     createdAt: now,
     updatedAt: now,
-    version: '1.0.7',
+    version: SPECKIT_VERSION,
     spec: {
       id: createUniqueId('spec'),
       title: name,

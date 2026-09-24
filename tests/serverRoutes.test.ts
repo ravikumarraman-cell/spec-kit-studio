@@ -17,7 +17,7 @@ test('generation router retains all Spec-Kit generation endpoints', () => {
 });
 
 test('repository router retains analysis and import endpoints', () => {
-  assert.deepEqual(paths(createRepositoryRouter()), ['/api/repo/analyze', '/api/repo/generate-feature-for-imported', '/api/feature/import']);
+  assert.deepEqual(paths(createRepositoryRouter()), ['/api/repo/analyze', '/api/repo/generate-feature-for-imported', '/api/story/import', '/api/feature/import']);
 });
 
 test('integration router retains connected-service endpoints', () => {
@@ -26,6 +26,26 @@ test('integration router retains connected-service endpoints', () => {
   assert.ok(routePaths.includes('/api/github/commit-spec'));
   assert.ok(routePaths.includes('/api/jira/projects'));
   assert.ok(routePaths.includes('/api/jira/create-issue'));
+});
+
+test('Spec-Kit metadata reports the pinned official v1.0.11 workflow', async () => {
+  await withApplication(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/speckit/info`);
+    const payload = await response.json() as {
+      specKitVersion: string;
+      officialWorkflowStages: string[];
+      workflowStages: string[];
+      compatibility: { strictProfile: boolean; featureRoot: string; minimumVersion: string };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.specKitVersion, '1.0.11');
+    assert.deepEqual(payload.officialWorkflowStages, ['constitution', 'specify', 'clarify', 'plan', 'checklist', 'tasks', 'analyze', 'implement']);
+    assert.equal(payload.workflowStages.at(-1), 'converge');
+    assert.equal(payload.compatibility.strictProfile, true);
+    assert.equal(payload.compatibility.featureRoot, 'specs/NNN-feature-name');
+    assert.equal(payload.compatibility.minimumVersion, '1.0.11');
+  });
 });
 
 async function withApplication(run: (baseUrl: string) => Promise<void>) {
@@ -95,6 +115,17 @@ test('application rejects malformed JSON with a safe client error', async () => 
     assert.equal(body.code, 'INVALID_JSON');
     assert.equal(body.error, 'The request body contains invalid JSON.');
     assert.equal(typeof body.requestId, 'string');
+  });
+});
+
+test('story import rejects empty input before contacting an AI provider', async () => {
+  await withApplication(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/story/import`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storyContent: '   ' }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.code, 'STORY_CONTENT_REQUIRED');
   });
 });
 

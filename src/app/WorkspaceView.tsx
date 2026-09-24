@@ -27,6 +27,7 @@ interface WorkspaceViewProps {
   onNavigate: (tab: ViewTab) => void;
   onOpenAiSpec: () => void;
   onOpenFeatureImport: () => void;
+  onStartStoryDelivery: (storyId: string) => void;
   onStartFeatureFromWorkspace: () => void;
   onSelectPromptTask: (taskId: string) => void;
   onPromptTaskHandled: () => void;
@@ -41,6 +42,7 @@ export function WorkspaceView({
   onNavigate,
   onOpenAiSpec,
   onOpenFeatureImport,
+  onStartStoryDelivery,
   onStartFeatureFromWorkspace,
   onSelectPromptTask,
   onPromptTaskHandled,
@@ -55,7 +57,7 @@ export function WorkspaceView({
         {activeTab === 'import' && <RepoImportStudio onImportComplete={(importedProject) => { workspace.replaceFromImport(importedProject); onNavigate('overview'); }} isDarkMode={isDarkMode} />}
         {activeTab === 'workspace' && <WorkspaceControlCenter project={project} onTruthAttached={workspace.attachTruth} onOpenJourney={() => onNavigate('overview')} onOpenFeatureImport={onStartFeatureFromWorkspace} onOpenWorkflow={() => onNavigate('workflows')} />}
         {activeTab === 'settings' && <StudioSettings project={project} onSelectVersion={workspace.selectVersion} onSaveStackProfile={workspace.saveStackProfile} onOpenWorkspace={() => onNavigate('workspace')} onRestoreSnapshot={workspace.restoreProjectSnapshot} />}
-        {activeTab === 'spec' && <SpecEditor projectId={project.id} spec={project.spec} onSaveSpec={workspace.saveSpec} onTriggerAiGenerate={onOpenAiSpec} onOpenFeatureImport={onOpenFeatureImport} featureInbox={project.featureInbox} />}
+        {activeTab === 'spec' && <SpecEditor projectId={project.id} spec={project.spec} onSaveSpec={workspace.saveSpec} onTriggerAiGenerate={onOpenAiSpec} onOpenFeatureImport={onOpenFeatureImport} onStartStoryDelivery={onStartStoryDelivery} featureInbox={project.featureInbox} />}
         {activeTab === 'plan' && <PlanEditor projectId={project.id} plan={project.plan} focusFeature={focusFeature} onSavePlan={workspace.savePlan} onTriggerAiGenerate={onOpenAiSpec} isDarkMode={isDarkMode} repositoryPath={project.importedRepo?.repoUrl} stageApproved={Boolean(project.journey?.completedStages.includes(4))} onRecoverFeatureArchitecturePlan={(architecturePlan) => workspace.saveLatestFeatureReview({ architecturePlan })} />}
         {activeTab === 'tasks' && <TaskBoard projectId={project.id} taskBreakdown={project.tasks} spec={project.spec} focusFeature={focusFeature} onSaveTasks={workspace.saveTasks} onTriggerAiGenerate={onOpenAiSpec} onSelectTaskForPrompt={onSelectPromptTask} repositoryPath={project.importedRepo?.repoUrl} onRecoverFeatureDeliveryPlan={(deliveryPlan) => workspace.saveLatestFeatureReview({ deliveryPlan })} />}
         {activeTab === 'constitution' && <ConstitutionEditor projectId={project.id} constitution={project.constitution} onSaveConstitution={workspace.saveConstitution} />}

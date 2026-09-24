@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
+import { DeliveryScope, ViewTab, FeatureSpec, ImplementationPlan, TaskBreakdown } from './types/speckit';
 import { ImportedFeatureData, useProjectWorkspace } from './hooks/useProjectWorkspace';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { JourneyHandoff } from './components/journey/JourneyHandoff';
@@ -40,6 +40,7 @@ function AppContent() {
   const [isAiSpecModalOpen, setIsAiSpecModalOpen] = useState<boolean>(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState<boolean>(false);
   const [isFeatureImportModalOpen, setIsFeatureImportModalOpen] = useState<boolean>(false);
+  const [deliveryIntake, setDeliveryIntake] = useState<{ scope: DeliveryScope; storyId?: string }>({ scope: 'feature' });
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState<boolean>(false);
 
   // Selected Task for Prompt Studio
@@ -71,6 +72,11 @@ function AppContent() {
     if (!journey.completedStages.includes(1)) {
       saveJourney(approveJourneyStage(journey, 1));
     }
+    setDeliveryIntake({ scope: 'feature' });
+    setIsFeatureImportModalOpen(true);
+  };
+  const openDeliveryIntake = (scope: DeliveryScope, storyId?: string) => {
+    setDeliveryIntake({ scope, storyId });
     setIsFeatureImportModalOpen(true);
   };
   const handleMergeIntoActiveProject = (stories: Parameters<typeof mergeImportedFeature>[0], data: ImportedFeatureData) => {
@@ -103,7 +109,7 @@ function AppContent() {
         // Repository setup has one guided path. The dedicated import studio is
         // retained as an explicitly enabled advanced migration tool.
         onOpenImportStudio={() => setActiveTab('workspace')}
-        onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
+        onOpenFeatureImport={() => openDeliveryIntake('feature')}
         onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
         onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
         onOpenAiSpecModal={() => setIsAiSpecModalOpen(true)}
@@ -137,7 +143,8 @@ function AppContent() {
             workspace={workspace}
             onNavigate={setActiveTab}
             onOpenAiSpec={() => setIsAiSpecModalOpen(true)}
-            onOpenFeatureImport={() => setIsFeatureImportModalOpen(true)}
+            onOpenFeatureImport={() => openDeliveryIntake('feature')}
+            onStartStoryDelivery={(storyId) => openDeliveryIntake('user-story', storyId)}
             onStartFeatureFromWorkspace={handleStartFeatureFromWorkspace}
             onSelectPromptTask={handleSelectTaskForPrompt}
             onPromptTaskHandled={() => setTargetPromptTaskId(undefined)}
@@ -154,6 +161,7 @@ function AppContent() {
           setActiveTab(tab);
           setIsQuickSearchOpen(false);
         }}
+        onStartStoryDelivery={(storyId) => { setIsQuickSearchOpen(false); openDeliveryIntake('user-story', storyId); }}
       /></Suspense>}
 
       {/* AI Spec Generation Modal */}
@@ -173,7 +181,14 @@ function AppContent() {
           setActiveTab('overview');
         }}
         activeProject={activeProject}
+        initialScope={deliveryIntake.scope}
+        initialStoryId={deliveryIntake.storyId}
         onMergeIntoActiveProject={handleMergeIntoActiveProject}
+        onStartStoryDelivery={(story, requirements, source, parentFeatureId) => {
+          const started = workspace.startStoryDelivery(story, requirements, source, parentFeatureId);
+          if (started) setActiveTab('overview');
+          return Boolean(started);
+        }}
         onOpenWorkspace={() => { setIsFeatureImportModalOpen(false); setActiveTab('workspace'); }}
       /></Suspense>}
 

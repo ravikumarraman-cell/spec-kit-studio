@@ -8,6 +8,7 @@ import {
 } from '../types/speckit';
 import { FeatureExtractionPackage } from './api/imports';
 import { createFeatureInboxItem } from './featureInbox';
+import { SPECKIT_VERSION } from './specKitCompliance';
 import { createUniqueId } from './ids';
 
 const defaultTaskPhase: TaskItem['phase'] = 'Phase 1: Setup';
@@ -101,7 +102,7 @@ export function createProjectFromFeatureExtraction(
 
   return {
     id: createUniqueId('project', timestamp), name: title, description: summary, createdAt: now, updatedAt: now,
-    spec, plan, tasks, constitution, version: '1.0.7',
+    spec, plan, tasks, constitution, version: SPECKIT_VERSION,
     featureInbox: [createFeatureInboxItem({ ...extraction, title, summary }, 'unknown', 0, now)],
     // A separate feature remains a separate Studio workspace, but it belongs
     // to the repository the user was working in. Carry read-only connection

@@ -16,6 +16,7 @@ import { StatCard } from '../common/StatCard';
 import { TraceabilityMatrix } from './TraceabilityMatrix';
 import { WorkflowActionCards } from './WorkflowActionCards';
 import { GovernanceSummaryCard } from './GovernanceSummaryCard';
+import { SPECKIT_VERSION } from '../../lib/specKitCompliance';
 
 interface OverviewDashboardProps {
   project: SpecKitProject;
@@ -69,7 +70,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = memo(({
                 </span>
               )}
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-400/40 font-mono">
-                Spec-Kit v{project.version || '1.0.7'}
+                Spec-Kit v{project.version || SPECKIT_VERSION}
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -112,7 +113,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = memo(({
 
       {/* Spec-Kit Version Control & Capability Matrix */}
       <SpecKitVersionSelector
-        currentVersion={project.version || '1.0.7'}
+        currentVersion={project.version || SPECKIT_VERSION}
         onSelectVersion={onSelectVersion}
         variant="full"
       />

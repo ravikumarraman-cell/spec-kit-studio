@@ -26,6 +26,7 @@ interface SpecEditorProps {
   onSaveSpec: (updatedSpec: FeatureSpec) => void;
   onTriggerAiGenerate: () => void;
   onOpenFeatureImport?: () => void;
+  onStartStoryDelivery?: (storyId: string) => void;
   featureInbox?: FeatureInboxItem[];
 }
 
@@ -45,6 +46,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   onSaveSpec,
   onTriggerAiGenerate,
   onOpenFeatureImport,
+  onStartStoryDelivery,
   featureInbox,
 }) => {
   const [activeView, setActiveView] = useState<SpecViewMode>('visual');
@@ -197,7 +199,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
               {storyGroups.map((group) => (
                 <section key={group.id} className={`rounded-xl border p-3 ${group.imported ? 'border-violet-400/25 bg-violet-500/5' : 'border-zinc-800 bg-zinc-950/35'}`}>
                   <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><h4 className="text-xs font-bold text-zinc-100">{group.label}</h4>{group.imported && <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-200">Imported feature</span>}</div><p className="mt-1 text-[11px] text-zinc-400">{group.description}</p></div><span className="shrink-0 rounded-full bg-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-300">{group.stories.length} {group.stories.length === 1 ? 'story' : 'stories'}</span></div>
-                  <div className="space-y-3">{group.stories.map((story) => <UserStoryCard key={story.id} story={story} onRemove={handleRemoveUserStory} />)}</div>
+                  <div className="space-y-3">{group.stories.map((story) => <UserStoryCard key={story.id} story={story} onRemove={handleRemoveUserStory} onStartDelivery={onStartStoryDelivery} />)}</div>
                 </section>
               ))}
             </div>

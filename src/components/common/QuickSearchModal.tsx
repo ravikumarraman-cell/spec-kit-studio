@@ -8,6 +8,7 @@ interface QuickSearchModalProps {
   onClose: () => void;
   project: SpecKitProject;
   onNavigateTab: (tab: ViewTab) => void;
+  onStartStoryDelivery?: (storyId: string) => void;
 }
 
 export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
@@ -15,6 +16,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
   onClose,
   project,
   onNavigateTab,
+  onStartStoryDelivery,
 }) => {
   const [query, setQuery] = useState('');
 
@@ -121,20 +123,19 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                 User Stories
               </div>
               {matchingStories.map((story) => (
-                <button
+                <div
                   key={story.id}
-                  onClick={() => {
-                    onNavigateTab('spec');
-                    onClose();
-                  }}
-                  className="w-full p-2.5 rounded-xl hover:bg-zinc-800 text-left flex items-center justify-between text-zinc-200"
+                  className="flex w-full items-center gap-1 rounded-xl hover:bg-zinc-800"
                 >
-                  <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => { onNavigateTab('spec'); onClose(); }} className="flex min-w-0 flex-1 items-center justify-between p-2.5 text-left text-zinc-200">
+                  <span className="flex min-w-0 items-center gap-2">
                     <span className="font-mono text-cyan-400 font-bold">{story.id}</span>
-                    <span>{story.title}</span>
-                  </div>
+                    <span className="truncate">{story.title}</span>
+                  </span>
                   <ArrowRight className="w-3 h-3 text-zinc-500" />
-                </button>
+                  </button>
+                  {onStartStoryDelivery && <button type="button" onClick={() => onStartStoryDelivery(story.id)} className="mr-2 rounded-md border border-cyan-400/25 px-2 py-1 text-[10px] font-bold text-cyan-200 hover:bg-cyan-500/10">Start</button>}
+                </div>
               ))}
             </div>
           )}

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TruthReport } from '../lib/connector';
 import { FeatureExtractionPackage } from '../lib/api/imports';
-import { createFeatureInboxItem } from '../lib/featureInbox';
+import { createFeatureInboxItem, createStoryInboxItem } from '../lib/featureInbox';
+import { deliveryScope } from '../lib/deliveryItems';
 import { storageService } from '../lib/storage';
 import { normalizeGitRemote } from '../lib/projectIdentity';
 import { recordFeatureImplementationReceipt } from '../lib/featureReceipts';
@@ -31,6 +32,7 @@ export interface ImportedFeatureData {
   functionalRequirements?: FunctionalRequirement[];
   tasks?: ImportedTask[];
 }
+export interface StoryDeliveryStartResult { status: 'created' | 'resumed'; itemId: string; }
 
 const taskPhases = new Set<TaskItem['phase']>([
   'Phase 1: Setup',
@@ -67,8 +69,17 @@ export function useProjectWorkspace() {
   }, []);
 
   useEffect(() => {
-    refresh();
-    return storageService.subscribe(refresh);
+    let mounted = true;
+    const unsubscribe = storageService.subscribe(() => {
+      if (mounted) refresh();
+    });
+    // IndexedDB hydration is asynchronous. Do not populate the workspace from
+    // the sample fallback until the durable store (and any legacy migration)
+    // has had a chance to complete.
+    void storageService.initialize().then(() => {
+      if (mounted) refresh();
+    });
+    return () => { mounted = false; unsubscribe(); };
   }, [refresh]);
 
   const updateActiveProject = useCallback((updater: (project: SpecKitProject) => SpecKitProject) => {
@@ -123,8 +134,20 @@ export function useProjectWorkspace() {
   const savePlan = useCallback((plan: ImplementationPlan) => updateActiveProject((project) => ({ ...project, plan })), [updateActiveProject]);
   const saveTasks = useCallback((tasks: TaskBreakdown) => updateActiveProject((project) => ({ ...project, tasks })), [updateActiveProject]);
   const saveConstitution = useCallback((constitution: ProjectConstitution) => updateActiveProject((project) => ({ ...project, constitution })), [updateActiveProject]);
-  const saveAudit = useCallback((audit: SpecAuditResult) => updateActiveProject((project) => ({ ...project, audit })), [updateActiveProject]);
-  const saveJourney = useCallback((journey: FeatureJourney) => updateActiveProject((project) => ({ ...project, journey })), [updateActiveProject]);
+  const saveAudit = useCallback((audit: SpecAuditResult) => updateActiveProject((project) => {
+    const activeItem = activeFeatureForProject(project);
+    if (!activeItem || deliveryScope(activeItem) === 'feature') return { ...project, audit };
+    return {
+      ...project,
+      audit,
+      featureInbox: (project.featureInbox || []).map((item) => item.id === activeItem.id ? { ...item, qualityAudit: audit } : item),
+    };
+  }), [updateActiveProject]);
+  const saveJourney = useCallback((journey: FeatureJourney) => updateActiveProject((project) => ({
+    ...project,
+    journey,
+    featureInbox: (project.featureInbox || []).map((item) => item.id === journey.featureId ? { ...item, journey } : item),
+  })), [updateActiveProject]);
   const saveStackProfile = useCallback((stackProfile: SpecKitProject['stackProfile']) => updateActiveProject((project) => ({ ...project, stackProfile })), [updateActiveProject]);
   const saveProcessCases = useCallback((processCases: StudioProcessCase[]) => updateActiveProject((project) => ({ ...project, processCases })), [updateActiveProject]);
   const saveWorkflowFocus = useCallback((workflowFocus: SpecKitProject['workflowFocus']) => updateActiveProject((project) => ({ ...project, workflowFocus })), [updateActiveProject]);
@@ -205,7 +228,66 @@ export function useProjectWorkspace() {
     return Boolean(importedFeatureId && updated?.featureInbox?.some((feature) => feature.id === importedFeatureId));
   }, [updateActiveProject]);
 
-  const saveLatestFeatureReview = useCallback((review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => {
+  const startStoryDelivery = useCallback((storyInput: UserStory, requirementsInput: FunctionalRequirement[], source: FeatureImportSource, parentFeatureId?: string): StoryDeliveryStartResult | null => {
+    let result: StoryDeliveryStartResult | null = null;
+    const updated = updateActiveProject((project) => {
+      const now = new Date().toISOString();
+      const existingStory = project.spec.userStories.find((story) => story.id === storyInput.id);
+      const isExistingSelection = source === 'repository' && Boolean(existingStory);
+      const usedStoryIds = new Set(project.spec.userStories.map((story) => story.id));
+      let storyId = storyInput.id || `US-${101 + project.spec.userStories.length}`;
+      if (!isExistingSelection && usedStoryIds.has(storyId)) {
+        let ordinal = 101 + project.spec.userStories.length;
+        while (usedStoryIds.has(`US-${ordinal}`)) ordinal += 1;
+        storyId = `US-${ordinal}`;
+      }
+
+      const duplicate = (project.featureInbox || []).find((item) => deliveryScope(item) === 'user-story' && item.primaryStoryId === storyId);
+      if (duplicate) {
+        result = { status: 'resumed', itemId: duplicate.id };
+        return { ...project, journey: { ...(project.journey || { activeStage: 2, completedStages: [], startedAt: now, updatedAt: now }), featureId: duplicate.id, updatedAt: now } };
+      }
+
+      const usedRequirementIds = new Set(project.spec.functionalRequirements.map((requirement) => requirement.id));
+      const requirementIdMap = new Map<string, string>();
+      const requirements = requirementsInput.map((requirement, index) => {
+        if (isExistingSelection && usedRequirementIds.has(requirement.id)) { requirementIdMap.set(requirement.id, requirement.id); return requirement; }
+        let id = requirement.id || `FR-${101 + project.spec.functionalRequirements.length + index}`;
+        if (usedRequirementIds.has(id)) {
+          let ordinal = 101 + project.spec.functionalRequirements.length + index;
+          while (usedRequirementIds.has(`FR-${ordinal}`)) ordinal += 1;
+          id = `FR-${ordinal}`;
+        }
+        usedRequirementIds.add(id); requirementIdMap.set(requirement.id, id);
+        return { ...requirement, id };
+      });
+      const story: UserStory = { ...storyInput, id: storyId, requirementIds: requirements.map((requirement) => requirementIdMap.get(requirement.id) || requirement.id) };
+      const item = createStoryInboxItem(story, requirements, source, project.featureInbox?.length || 0, parentFeatureId, now);
+      result = { status: 'created', itemId: item.id };
+      const completedStages = project.journey?.completedStages.includes(1) ? [1] : [];
+      const storyJourney: FeatureJourney = { featureId: item.id, activeStage: 2, completedStages, startedAt: now, updatedAt: now };
+      item.journey = storyJourney;
+      return {
+        ...project,
+        featureInbox: [...(project.featureInbox || []), item],
+        journey: storyJourney,
+        spec: {
+          ...project.spec,
+          userStories: isExistingSelection
+            ? project.spec.userStories.map((candidate) => candidate.id === story.id ? story : candidate)
+            : [...project.spec.userStories, story],
+          functionalRequirements: [
+            ...project.spec.functionalRequirements,
+            ...requirements.filter((requirement) => !project.spec.functionalRequirements.some((existing) => existing.id === requirement.id)),
+          ],
+          lastUpdated: now,
+        },
+      };
+    });
+    return updated ? result : null;
+  }, [updateActiveProject]);
+
+  const saveLatestFeatureReview = useCallback((review: { specification?: { path?: string; content: string; acceptedAt?: string }; impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => {
     updateActiveProject((project) => {
       const items = project.featureInbox || [];
       const activeFeature = activeFeatureForProject(project);
@@ -255,6 +337,6 @@ export function useProjectWorkspace() {
   return {
     projects, activeProject, selectProject, createProject, deleteProject, resetProjects,
     saveSpec, savePlan, saveTasks, saveConstitution, saveAudit, saveJourney, saveStackProfile, saveProcessCases, saveWorkflowFocus,
-    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, saveLatestFeatureReview, saveFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
+    applyAiSpecData, attachTruth, replaceFromImport, mergeImportedFeature, startStoryDelivery, saveLatestFeatureReview, saveFeatureImplementation, updateFeatureIdentity, selectVersion, restoreProjectSnapshot,
   };
 }

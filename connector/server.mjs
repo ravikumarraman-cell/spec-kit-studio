@@ -5,6 +5,7 @@
  * Start: STUDIO_ALLOWED_ROOTS=/absolute/parent npm run connector
  */
 import http from 'node:http';
+import { SPEC_KIT_CONFORMANCE_VERSION, validateStorySpecKitConformance } from './specKitConformance.mjs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -277,11 +278,16 @@ async function featurePreflight(root, project, featureId) {
     if (feature.branch && feature.branch !== branch.output.trim()) errors.push({ code: 'branch-mismatch', message: `This feature expects ${feature.branch}, but the folder is on ${branch.output.trim()}.` });
     if (feature.worktreePath && path.resolve(feature.worktreePath) !== root) errors.push({ code: 'worktree-mismatch', message: 'The selected folder is not the worktree registered for this feature.' });
     if (!gitDir.output.includes('/worktrees/')) warnings.push({ code: 'main-checkout', message: 'This is the repository’s main checkout. Use a linked Git worktree before implementation work.' });
+    if (feature.scope === 'user-story') {
+      if (branch.output.trim() !== feature.slug) errors.push({ code: 'speckit-branch-mismatch', message: `Strict story delivery requires branch ${feature.slug}; the selected folder is on ${branch.output.trim() || 'no branch'}.` });
+      const installedVersion = await specifyCommand(['version'], root);
+      errors.push(...await validateStorySpecKitConformance(root, feature, installedVersion.ok ? installedVersion.output : ''));
+    }
   }
   return { passed: errors.length === 0, errors, warnings, evidence: { remote: remote.output.trim(), branch: branch.output.trim(), commit: commit.output.trim(), isLinkedWorktree: gitDir.output.includes('/worktrees/') }, checkedAt: new Date().toISOString() };
 }
 async function createWorktree(root, targetPath, branch) {
-  if (!/^feat\/[a-z0-9][a-z0-9/_-]{2,120}$/i.test(String(branch || ''))) throw new Error('Use a feature branch such as feat/cai-142-export-csv.');
+  if (!/^(?:feat\/[a-z0-9][a-z0-9/_-]{2,120}|\d{3,}-[a-z0-9][a-z0-9-]{1,120})$/i.test(String(branch || ''))) throw new Error('Use an official numbered branch such as 001-export-csv or a legacy feature branch such as feat/cai-142-export-csv.');
   const target = path.resolve(String(targetPath || ''));
   if (!allowedRoots.some((allowed) => target.startsWith(`${allowed}${path.sep}`))) throw new Error('Worktree destination must be inside STUDIO_ALLOWED_ROOTS.');
   if (await fs.stat(target).then(() => true).catch(() => false)) throw new Error('Worktree destination already exists. Choose an empty, new folder.');

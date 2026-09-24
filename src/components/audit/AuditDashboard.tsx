@@ -13,6 +13,7 @@ import { AuditScoreOverview } from './AuditScoreOverview';
 import { AuditRecommendations } from './AuditRecommendations';
 import { auditBlockers, auditPassesQualityGate } from '../../lib/auditGate';
 import { activeFeatureForProject } from '../../lib/featureJourney';
+import { deliveryItemLabel, deliveryScope } from '../../lib/deliveryItems';
 
 interface AuditDashboardProps {
   project: SpecKitProject;
@@ -24,13 +25,13 @@ interface AuditDashboardProps {
 function localStructuralAudit(project: SpecKitProject): SpecAuditResult {
   const activeFeature = activeFeatureForProject(project);
   const hasFeatureScope = Boolean(activeFeature);
-  const hasSpec = project.spec.userStories.length > 0 && project.spec.functionalRequirements.length > 0;
+  const hasSpec = Boolean(activeFeature?.userStoryIds.length && activeFeature.requirementIds.length);
   const hasPlan = Boolean(activeFeature?.architecturePlan?.acceptedAt || project.plan.markdown?.trim());
   const hasTasks = Boolean(activeFeature?.deliveryPlan?.acceptedAt || project.tasks.markdown?.trim() || project.tasks.tasks.length);
   const hasConstitution = project.constitution.rules.length > 0;
   const missing = [
-    !hasFeatureScope && 'Missing an imported feature in focus.',
-    !hasSpec && 'Missing reviewed feature requirements.',
+    !hasFeatureScope && 'Missing a delivery item in focus.',
+    !hasSpec && 'Missing reviewed, scoped requirements.',
     !hasPlan && 'Missing a reviewed architecture plan.',
     !hasTasks && 'Missing a reviewed delivery task plan.',
     !hasConstitution && 'Missing applicable constitution rules.',
@@ -62,7 +63,9 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
   onApproveQualityGate,
 }) => {
   const [isAuditing, setIsAuditing] = useState(false);
-  const audit = project.audit || {
+  const activeItem = activeFeatureForProject(project);
+  const persistedAudit = activeItem && deliveryScope(activeItem) === 'user-story' ? activeItem.qualityAudit : activeItem?.qualityAudit || project.audit;
+  const audit = persistedAudit || {
     lastAudited: new Date().toISOString(),
     overallScore: 0,
     completenessScore: 0,
@@ -78,7 +81,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
     ],
   };
   const blockers = auditBlockers(audit);
-  const passesGate = Boolean(project.audit) && auditPassesQualityGate(audit);
+  const passesGate = Boolean(persistedAudit) && auditPassesQualityGate(audit);
 
   const handleRunAudit = async () => {
     setIsAuditing(true);
@@ -98,8 +101,8 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
       <EditorHeader
         icon={Activity}
         iconColor="text-purple-400"
-        title="Spec Quality Health & Audit"
-        subtitle="Local verification of required approved artifacts and requirement trace alignment. No AI account or coding agent is required."
+        title={`${activeItem ? deliveryItemLabel(activeItem) : 'Delivery'} Quality Health & Audit`}
+        subtitle="Local verification of this delivery item's approved artifacts and requirement trace alignment. No AI account or coding agent is required."
         badgeLabel="Quantitative Health Score"
         badgeColor="bg-purple-500/10 text-purple-400 border-purple-500/20"
         extraActions={
@@ -123,7 +126,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = memo(({
             <span className="text-4xl font-extrabold text-zinc-100">{audit.overallScore}</span>
             <span className="text-zinc-500 text-sm">/ 100</span>
             <span className={`px-2 py-0.5 rounded text-xs font-bold border ${passesGate ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-200 border-amber-500/20'}`}>
-              {passesGate ? 'Quality gate ready' : project.audit ? 'Needs review' : 'Audit not run'}
+              {passesGate ? 'Quality gate ready' : persistedAudit ? 'Needs review' : 'Audit not run'}
             </span>
           </div>
           <p className="text-xs text-zinc-300 max-w-xl pt-1 leading-relaxed">{audit.summary}</p>

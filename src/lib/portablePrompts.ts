@@ -1,6 +1,7 @@
 import { FeatureInboxItem, SpecKitProject, TaskItem } from '../types/speckit';
 import { FeatureDeliveryTask } from './featureDeliveryTasks';
 import { resolveStackProfile } from './stackProfiles';
+import { deliveryScope, primaryStoryForItem } from './deliveryItems';
 
 export type AgentTarget = 'copilot' | 'codex' | 'claude' | 'gemini' | 'cursor';
 
@@ -37,6 +38,7 @@ export function portableFeatureTaskPrompt(
 ) {
   const profile = resolveStackProfile(project);
   const focusedVerification = isFocusedVerificationTask(task);
+  const story = deliveryScope(feature) === 'user-story' ? primaryStoryForItem(project, feature) : undefined;
   const requirements = project.spec.functionalRequirements
     .filter((item) => feature.requirementIds.includes(item.id) && (task.requirementIds.length === 0 || task.requirementIds.includes(item.id)));
   const architecture = feature.architecturePlan?.content
@@ -50,11 +52,22 @@ export function portableFeatureTaskPrompt(
       : `- ${item.id}: ${item.title} — ${item.description}`).join('\n')
     : '- No task-specific requirement mapping was found. Read the feature specification and stop for clarification before widening scope.';
 
-  return `# ${target.toUpperCase()} implementation contract — ${task.id}
+  const scopeContract = story ? `## User story in focus
+${story.id}: ${story.title}
+As a ${story.asA}, I want to ${story.iWantTo}, so that ${story.soThat}.
 
-## Feature in focus
+### Acceptance criteria
+${story.acceptanceCriteria.map((criterion) => `- [ ] ${criterion}`).join('\n')}
+
+Sibling stories and broad feature cleanup are out of scope. Stop and ask before changing behavior beyond this story.
+` : `## Feature in focus
 ${feature.title}
 ${feature.summary}
+`;
+
+  return `# ${target.toUpperCase()} implementation contract — ${task.id}
+
+${scopeContract}
 
 ## Objective
 ${task.title}
@@ -64,7 +77,7 @@ ${requirementSummary}
 
 ## Delivery evidence
 Source: \`${feature.deliveryPlan?.path || 'tasks.md'}\`
-- This is ${task.id}, one task in the accepted delivery plan for ${feature.title}.
+- This is ${task.id}, one task in the accepted delivery plan for ${story ? story.id : feature.title}.
 ${evidence.length ? evidence.map((item) => `- ${item}`).join('\n') : '- Inspect relevant repository files before editing; do not assume framework conventions.'}
 ${architecture}
 ## Constitution
@@ -76,7 +89,7 @@ ${profile.label}: ${profile.guidance}
 - Never edit: ${profile.prohibitedPaths.join(', ')}.
 
 ## Definition of done
-- ${focusedVerification ? `Verify only ${task.id} for ${feature.title}; do not redesign, re-plan, or drift into shared workspace tasks.` : `Implement only ${task.id} for ${feature.title}; do not drift into shared workspace tasks.`}
+- ${focusedVerification ? `Verify only ${task.id} for ${story ? story.id : feature.title}; do not redesign, re-plan, or drift into shared workspace tasks.` : `Implement only ${task.id} for ${story ? story.id : feature.title}; do not drift into shared workspace tasks.`}
 - ${focusedVerification ? 'Run only the focused repository checks that prove this task, then report any failing command or missing evidence.' : 'Update or add tests that prove the mapped requirements.'}
 - ${focusedVerification ? 'Do not make unrelated application changes while verifying.' : "Run the repository's relevant typecheck, test, and build commands when available."}
 - Only after implementation and relevant verification pass, update exactly this

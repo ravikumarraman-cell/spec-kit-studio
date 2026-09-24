@@ -30,6 +30,7 @@ import {
 import { SpecKitProject, ViewTab } from '../../../types/speckit';
 import { useTheme, THEME_PRESETS, ThemeId } from '../../../context/ThemeContext';
 import { useClickOutside } from '../../../hooks/useClickOutside';
+import { SPECKIT_VERSION } from '../../../lib/specKitCompliance';
 
 interface TopUtilityBarProps {
   projects: SpecKitProject[];
@@ -144,7 +145,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
         <div className="h-4 w-px bg-zinc-800 mx-0.5 hidden sm:block shrink-0" />
 
         {/* Workspace Switcher Popover */}
-        <div className="relative shrink min-w-0 z-[100]" ref={workspaceDropdownRef}>
+        <div className="relative hidden sm:block shrink min-w-0 z-[100]" ref={workspaceDropdownRef}>
           <button
             type="button"
             onClick={() => setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)}
@@ -199,7 +200,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
                         <div className="truncate pr-2">
                           <div className="truncate text-xs font-semibold">{proj.name}</div>
                           <div className="text-[10px] text-zinc-500 truncate">
-                            v{proj.version || '1.0.7'} • {proj.spec.userStories?.length || 0} Stories
+                            v{proj.version || SPECKIT_VERSION} • {proj.spec.userStories?.length || 0} Stories
                           </div>
                         </div>
                       </button>
@@ -499,7 +500,7 @@ export const TopUtilityBar: React.FC<TopUtilityBarProps> = memo(({
               {/* Engine Status */}
               <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-2 px-2.5 pb-1 flex items-center justify-between text-[10px] text-zinc-500">
                 <span>Spec-Kit Engine</span>
-                <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">v{activeProject.version || '1.0.7'}</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">v{activeProject.version || SPECKIT_VERSION}</span>
               </div>
             </div>
           )}

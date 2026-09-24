@@ -105,6 +105,29 @@ test('does not mistake a shared workspace task file for a feature-scoped artifac
   assert.equal(isFeatureArtifactScoped('- [ ] T001 [FR-001] Render the detail panel', feature, '.specify/studio/tasks.md'), false);
 });
 
+test('story implementation prompt includes acceptance criteria and excludes sibling requirements', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  project.spec.userStories = [{ id: 'US-101', title: 'Export CSV', priority: 'High', asA: 'Analyst', iWantTo: 'export inventory', soThat: 'I can review it offline', acceptanceCriteria: ['CSV includes filtered rows.'], requirementIds: ['FR-101'] }];
+  project.spec.functionalRequirements = [
+    { id: 'FR-101', title: 'Export CSV', description: 'Generate CSV.', category: 'Core', priority: 'High' },
+    { id: 'FR-999', title: 'Unrelated deletion', description: 'Must not appear.', category: 'Core', priority: 'Low' },
+  ];
+  const item = { id: 'story-1', scope: 'user-story' as const, primaryStoryId: 'US-101', title: 'Export CSV', summary: '', source: 'repository' as const, importedAt: '', userStoryIds: ['US-101'], requirementIds: ['FR-101'], taskIds: ['T001'], deliveryPlan: { path: 'specs/story-1-export-csv/tasks.md', content: '- [ ] T001 [FR-101] Export filtered rows' } };
+  const [task] = parseFeatureDeliveryTasks(item.deliveryPlan.content);
+  const prompt = portableFeatureTaskPrompt(project, item, task, 'copilot');
+  assert.match(prompt, /User story in focus/);
+  assert.match(prompt, /CSV includes filtered rows/);
+  assert.match(prompt, /Sibling stories.*out of scope/);
+  assert.doesNotMatch(prompt, /Unrelated deletion/);
+});
+
+test('story artifacts require the story root or explicit story identity', () => {
+  const item = { id: 'story-1', scope: 'user-story' as const, primaryStoryId: 'US-101', slug: 'story-2026-1-export-csv', title: 'Export CSV', summary: '', source: 'repository' as const, importedAt: '', userStoryIds: ['US-101'], requirementIds: ['FR-101'], taskIds: [] };
+  assert.equal(isFeatureArtifactScoped('# Export CSV', item, 'specs/story-2026-1-export-csv/plan.md'), true);
+  assert.equal(isFeatureArtifactScoped('# Another plan', item, 'specs/another-story/plan.md'), false);
+  assert.equal(isFeatureArtifactScoped('# US-101 Export CSV', item, 'specs/imported-name/plan.md'), true);
+});
+
 test('deduplicates task ids and ignores prose that is not an executable task', () => {
   const tasks = parseFeatureDeliveryTasks([
     '# Delivery tasks',

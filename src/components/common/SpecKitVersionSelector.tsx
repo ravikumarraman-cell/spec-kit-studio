@@ -13,10 +13,23 @@ export interface SpecKitVersionOption {
 
 export const AVAILABLE_SPECKIT_VERSIONS: SpecKitVersionOption[] = [
   {
+    version: '1.0.11',
+    releaseTag: 'v1.0.11',
+    label: 'v1.0.11 (Strict conformance target)',
+    isLatest: true,
+    releaseDate: 'Sep 24, 2026',
+    summary: 'Current official SDD workflow with specify, implement, and convergence gates',
+    features: [
+      'Official numbered feature branches and templates',
+      'Specify → Plan → Tasks → Implement → Converge',
+      'Clarify, checklist, and analyze quality gates',
+      'Single-story features remain independently testable',
+    ],
+  },
+  {
     version: '1.0.7',
     releaseTag: 'v1.0.7',
-    label: 'v1.0.7 (Latest & Greatest)',
-    isLatest: true,
+    label: 'v1.0.7 (Legacy)',
     releaseDate: 'Sep 15, 2026',
     summary: 'Full SDD Engine with DocGuard CDD, MAQA v0.3.1, PDaC, and Extension Catalogs',
     features: [
@@ -108,7 +121,7 @@ export const SpecKitVersionSelector: React.FC<SpecKitVersionSelectorProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                   Spec-Kit Engine Versions
                 </span>
-                <span className="text-[10px] text-cyan-400 font-mono">Default: v1.0.7</span>
+                <span className="text-[10px] text-cyan-400 font-mono">Default: v1.0.11</span>
               </div>
 
               <div className="max-h-64 overflow-y-auto px-1 space-y-1">
@@ -164,7 +177,7 @@ export const SpecKitVersionSelector: React.FC<SpecKitVersionSelectorProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-zinc-400">
-            Spec-Kit Studio defaults to the latest release (v1.0.7). You can select older versions for legacy compatibility.
+            Strict story delivery targets Spec-Kit v1.0.11. Older versions remain selectable for legacy workspaces.
           </p>
         </div>
 

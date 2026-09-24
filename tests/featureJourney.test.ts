@@ -86,6 +86,34 @@ test('Stage 2 cannot be approved from shared stories without an imported feature
   assert.equal(stageTwo.ready(project), true);
 });
 
+test('story Stage 2 requires one valid story and only its scoped requirements', () => {
+  const project = createProjectWorkspace('Example', 'Example project');
+  project.spec.userStories = [
+    { id: 'US-101', title: 'Export CSV', priority: 'High', asA: 'Analyst', iWantTo: 'export inventory', soThat: 'I can review it offline', acceptanceCriteria: ['CSV downloads.'], requirementIds: ['FR-101'] },
+    { id: 'US-999', title: 'Delete tenant', priority: 'Low', asA: 'Admin', iWantTo: 'delete a tenant', soThat: 'old data is removed', acceptanceCriteria: ['Tenant is deleted.'], requirementIds: ['FR-999'] },
+  ];
+  project.spec.functionalRequirements = [
+    { id: 'FR-101', title: 'Export CSV', description: 'Generate CSV.', category: 'Core', priority: 'High' },
+    { id: 'FR-999', title: 'Delete tenant', description: 'Delete tenant.', category: 'Core', priority: 'Low' },
+  ];
+  const officialSpec = `# Feature Specification: Export CSV
+## User Scenarios & Testing
+### User Story 1 - Export CSV (Priority: P1)
+## Requirements
+### Functional Requirements
+## Success Criteria
+### Measurable Outcomes`;
+  project.featureInbox = [{ id: 'story-1', scope: 'user-story', primaryStoryId: 'US-101', title: 'Export CSV', featureKey: 'US-101', slug: '001-export-csv', summary: '', source: 'repository', importedAt: '', userStoryIds: ['US-101'], requirementIds: ['FR-101'], taskIds: [], specification: { path: 'specs/001-export-csv/spec.md', content: officialSpec, acceptedAt: '2026-09-24' } }];
+  project.journey = { ...createFeatureJourney(), featureId: 'story-1', activeStage: 2 };
+
+  assert.equal(featureJourneyStages.find((stage) => stage.id === 2)!.ready(project), true);
+  assert.match(engineInstructionForStage(2, project) || '', /speckit-specify/);
+  const instruction = engineInstructionForStage(4, project) || '';
+  assert.match(instruction, /USER STORY IN FOCUS: US-101/);
+  assert.match(instruction, /CSV downloads/);
+  assert.doesNotMatch(instruction, /Delete tenant/);
+});
+
 test('engine instructions are only supplied for Engine-capable stages and stay task-scoped', () => {
   const project = createProjectWorkspace('Example', 'Example project');
   assert.equal(engineInstructionForStage(2, project), null);

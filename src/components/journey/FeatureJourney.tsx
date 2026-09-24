@@ -17,6 +17,9 @@ import { FeatureRegistry } from './FeatureRegistry';
 import { canStartFeatureIntake, needsLegacyJourneyRepair } from '../../lib/workflowUx';
 import { featureArtifactRoot, identityIssues, legacyFeatureIdentity } from '../../lib/projectIdentity';
 import { readLocalAgentJobReference } from '../../lib/localAgentJobSession';
+import { deliveryScope } from '../../lib/deliveryItems';
+import { DeliveryScopeBanner } from './DeliveryScopeBanner';
+import { officialFeatureDirectoryFromSpecPath, validateSpecKitArtifacts } from '../../lib/specKitCompliance';
 
 function detectedAgent(): LocalAgentStatus | undefined {
   try {
@@ -62,7 +65,7 @@ interface Props {
   onNavigate: (tab: ViewTab) => void;
   onOpenFeatureImport: () => void;
   onSaveJourney: (journey: JourneyState) => void;
-  onSaveFeatureReview: (review: { impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => void;
+  onSaveFeatureReview: (review: { specification?: { path?: string; content: string; acceptedAt?: string }; impactMap?: { content: string; acceptedAt?: string }; architecturePlan?: { path?: string; content: string; acceptedAt?: string }; deliveryPlan?: { path?: string; content: string; acceptedAt?: string; repositoryPath?: string } }) => void;
   onUpdateFeatureIdentity: (featureId: string, identity: { featureKey?: string; slug?: string; branch?: string; worktreePath?: string; baselineCommit?: string }) => void;
 }
 
@@ -131,8 +134,8 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       const preflight = await client.preflight(repositoryPath, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
       if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' '));
       if (requiresFeatureWorktree && !preflight.evidence.isLinkedWorktree) throw new Error('Implementation is blocked in the main checkout. Create/select a linked Git worktree for this feature first.');
-      if (stageId === 4 || stageId === 5) {
-        const kind = stageId === 4 ? 'plan' : 'tasks';
+      if (stageId === 2 || stageId === 4 || stageId === 5) {
+        const kind = stageId === 2 ? 'spec' : stageId === 4 ? 'plan' : 'tasks';
         const { artifacts } = await client.readSpecKitArtifacts(repositoryPath);
         const existingArtifact = artifacts
           .filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, activeFeature, item.path))
@@ -150,10 +153,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       let job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
       setAgentJob(job);
       while (job.status === 'running') { await new Promise((resolve) => window.setTimeout(resolve, 750)); job = await client.getJob(job.id); setAgentJob(job); }
-      if (job.ok && (stageId === 4 || stageId === 5)) {
-        const kind = stageId === 4 ? 'plan' : 'tasks';
+      if (job.ok && (stageId === 2 || stageId === 4 || stageId === 5)) {
+        const kind = stageId === 2 ? 'spec' : stageId === 4 ? 'plan' : 'tasks';
         const { artifacts } = await client.readSpecKitArtifacts(repositoryPath);
-        const artifact = artifacts.filter((item) => item.kind === kind).sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+        const artifact = artifacts.filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, focusedFeature, item.path)).sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
         if (artifact) {
           job = { ...job, output: `${job.output}\n\n--- Official ${artifact.path} ---\n${artifact.content}` };
           setAgentJob(job);
@@ -172,15 +175,17 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const readiness = useMemo(() => featureJourneyStages.map((stage) => ({ stage, ready: stage.ready(project) })), [project]);
   const readinessByStage = useMemo(() => new Map(readiness.map(({ stage, ready }) => [stage.id, ready])), [readiness]);
   const activeFeature = activeFeatureForProject(project);
+  const storyScope = Boolean(activeFeature && deliveryScope(activeFeature) === 'user-story');
   const reviewingImportedFeature = current.id === 2 && Boolean(activeFeature);
   const awaitingFeatureImport = current.id === 2 && !activeFeature;
-  const currentTitle = awaitingFeatureImport ? 'Import a feature' : reviewingImportedFeature ? 'Review and confirm the feature' : current.title;
+  const storyStageTitles: Partial<Record<number, string>> = { 2: 'Confirm the user story', 3: "Ground this story's impact", 4: 'Design this use case', 5: 'Plan story delivery', 6: 'Validate story coverage', 7: 'Implement this story', 8: 'Verify and hand off this use case' };
+  const currentTitle = awaitingFeatureImport ? 'Start delivery work' : reviewingImportedFeature ? storyScope ? 'Review and confirm the user story' : 'Review and confirm the feature' : storyScope ? storyStageTitles[current.id] || current.title : current.title;
   const currentOutcome = awaitingFeatureImport
-    ? 'Import one PRD, ticket, document, or brief before any feature-specific work can begin.'
+    ? 'Start with one feature or one focused user story before delivery work begins.'
     : reviewingImportedFeature
-    ? 'Review the imported source, stories, requirements, and acceptance criteria before planning.'
+    ? storyScope ? 'Confirm this story, its acceptance criteria, and only the requirements needed for this use case.' : 'Review the imported source, stories, requirements, and acceptance criteria before planning.'
     : current.outcome;
-  const currentAction = awaitingFeatureImport ? 'Import feature' : reviewingImportedFeature ? 'Review imported feature with Engine' : current.action;
+  const currentAction = awaitingFeatureImport ? 'Start delivery work' : reviewingImportedFeature ? storyScope ? 'Review user story' : 'Review imported feature with Engine' : current.action;
   const safetyIssues = identityIssues(project, activeFeature);
   const suggestedWorktreePath = activeFeature && project.importedRepo?.repoUrl
     ? `${project.importedRepo.repoUrl.replace(/\/+$/, '')}-${activeFeature.slug || 'feature'}`
@@ -188,7 +193,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const createFeatureWorktree = async () => {
     const repositoryPath = repositoryPathForEngineStage(current.id, project.importedRepo?.repoUrl, activeFeature?.worktreePath);
     if (!activeFeature || !repositoryPath) return;
-    const branch = `feat/${activeFeature.slug || 'feature'}`;
+    const branch = storyScope ? activeFeature.slug || '001-story' : `feat/${activeFeature.slug || 'feature'}`;
     if (!worktreePath.trim() || !window.confirm(`Create ${branch} in ${worktreePath}? Git will create a new linked worktree from the current commit.`)) return;
     setIsCreatingWorktree(true); setEngineError('');
     try {
@@ -236,20 +241,20 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   }, [agentStageId, current.id]);
   useEffect(() => {
     const repositoryPath = project.importedRepo?.repoUrl;
-    const expectedKind = current.id === 4 ? 'plan' : current.id === 5 ? 'tasks' : null;
-    if (!repositoryPath || !expectedKind || (expectedKind === 'plan' && activeFeature?.architecturePlan?.path && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature, activeFeature.architecturePlan.path)) || (expectedKind === 'tasks' && activeFeature?.deliveryPlan?.path && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) { setDiscoveredArtifact(null); return; }
+    const expectedKind = current.id === 2 && storyScope ? 'spec' : current.id === 4 ? 'plan' : current.id === 5 ? 'tasks' : null;
+    if (!repositoryPath || !expectedKind || (expectedKind === 'spec' && activeFeature?.specification?.path) || (expectedKind === 'plan' && activeFeature?.architecturePlan?.path && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature, activeFeature.architecturePlan.path)) || (expectedKind === 'tasks' && activeFeature?.deliveryPlan?.path && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) { setDiscoveredArtifact(null); return; }
     const client = configuredConnectorClient(connectorToken);
     client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => setDiscoveredArtifact(artifacts.filter((item) => item.kind === expectedKind
       && isFeatureArtifactScoped(item.content, activeFeature, item.path)
       && (expectedKind !== 'tasks' || parseFeatureDeliveryTasks(item.content).length > 0))
       .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0] || null)).catch(() => setDiscoveredArtifact(null));
-  }, [activeFeature?.architecturePlan?.acceptedAt, activeFeature?.deliveryPlan?.acceptedAt, activeFeature?.worktreePath, connectorToken, current.id, project.importedRepo?.repoUrl]);
+  }, [activeFeature, connectorToken, current.id, project.importedRepo?.repoUrl, storyScope]);
   useEffect(() => {
     // Prefer a durable, feature-scoped repository artifact over a duplicate
     // agent transcript. This can occur when the initial artifact scan and a
     // user click race each other; the repository artifact is the reviewable
     // record and must be the only approval path shown.
-    if (discoveredArtifact && agentJob?.ok && (agentStageId === 4 || agentStageId === 5)) {
+    if (discoveredArtifact && agentJob?.ok && (agentStageId === 2 || agentStageId === 4 || agentStageId === 5)) {
       setAgentJob(null);
       setAgentStageId(null);
     }
@@ -280,13 +285,27 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     const acceptedAt = new Date().toISOString();
     if (agentStageId === 3) onSaveFeatureReview({ impactMap: { content: agentJob.output, acceptedAt } });
     const officialArtifact = officialArtifactFromAgentOutput(agentJob.output);
-    if ((agentStageId === 4 || agentStageId === 5) && !officialArtifact) {
-      setEngineError('Studio did not find an official plan.md or tasks.md in the agent result, so it was not accepted. Agent output and setup logs are not a feature artifact. Return to the stage and retry only when the official artifact is available.');
+    if ((agentStageId === 2 || agentStageId === 4 || agentStageId === 5) && !officialArtifact) {
+      setEngineError('Studio did not find the required official Spec-Kit artifact in the agent result, so it was not accepted. Agent output and setup logs are not feature evidence.');
       return;
     }
-    if ((agentStageId === 4 || agentStageId === 5) && officialArtifact && !isFeatureArtifactScoped(officialArtifact.content, activeFeature, officialArtifact.path)) {
+    if ((agentStageId === 2 || agentStageId === 4 || agentStageId === 5) && officialArtifact && !isFeatureArtifactScoped(officialArtifact.content, activeFeature, officialArtifact.path)) {
       setEngineError(`Studio found ${officialArtifact.path}, but it does not mention ${activeFeature?.title || 'the feature in focus'}. It was not accepted as feature evidence.`);
       return;
+    }
+    if ((agentStageId === 4 || agentStageId === 5) && officialArtifact && activeFeature && storyScope) {
+      const kind = agentStageId === 4 ? 'plan' : 'tasks';
+      const issues = validateSpecKitArtifacts(activeFeature, [{ ...officialArtifact, kind }], [kind]);
+      if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }
+    }
+    if (agentStageId === 2 && officialArtifact && activeFeature) {
+      const officialSlug = officialFeatureDirectoryFromSpecPath(officialArtifact.path);
+      if (!officialSlug) { setEngineError(`${officialArtifact.path} is not an official numbered Spec-Kit feature path.`); return; }
+      const officialItem = { ...activeFeature, slug: officialSlug };
+      const issues = validateSpecKitArtifacts(officialItem, [{ ...officialArtifact, kind: 'spec' }], ['spec']);
+      if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }
+      onUpdateFeatureIdentity(activeFeature.id, { slug: officialSlug, branch: officialSlug });
+      onSaveFeatureReview({ specification: { ...officialArtifact, acceptedAt } });
     }
     if (agentStageId === 4 && officialArtifact) onSaveFeatureReview({ architecturePlan: { ...officialArtifact, acceptedAt } });
     if (agentStageId === 5 && officialArtifact) {
@@ -299,7 +318,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     if (agentStageId === 5 && isReplacingDeliveryPlan) onSaveJourney(reopenJourneyStage(journey, 5, acceptedAt));
     else if (agentStageId === 5 && journey.completedStages.includes(5)) onSaveJourney({ ...journey, activeStage: 6, updatedAt: acceptedAt });
     if (agentStageId === 4 && journey.completedStages.includes(4)) onSaveJourney({ ...journey, activeStage: 5, updatedAt: acceptedAt });
-    setAcceptedNotice(agentStageId === 3 ? 'Impact map accepted and saved to this feature. Next: run the feature-scoped architecture plan.' : agentStageId === 4 ? 'Feature plan accepted and saved to this feature. You can now approve Stage 4.' : isReplacingDeliveryPlan ? 'Compact delivery tasks accepted. Stage 5 and later approvals were reopened so you can review the new plan before continuing.' : 'Feature delivery tasks accepted and saved to this feature. You can now approve Stage 5.');
+    setAcceptedNotice(agentStageId === 2 ? 'Official single-story specification accepted. You can now approve Stage 2.' : agentStageId === 3 ? 'Impact map accepted and saved to this feature. Next: run the feature-scoped architecture plan.' : agentStageId === 4 ? 'Feature plan accepted and saved to this feature. You can now approve Stage 4.' : isReplacingDeliveryPlan ? 'Compact delivery tasks accepted. Stage 5 and later approvals were reopened so you can review the new plan before continuing.' : 'Feature delivery tasks accepted and saved to this feature. You can now approve Stage 5.');
     setAgentJob(null);
     setAgentStageId(null);
     setIsReplacingDeliveryPlan(false);
@@ -311,6 +330,20 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       return;
     }
     const acceptedAt = new Date().toISOString();
+    if (current.id === 2 && activeFeature) {
+      const officialSlug = officialFeatureDirectoryFromSpecPath(discoveredArtifact.path);
+      if (!officialSlug) { setEngineError(`${discoveredArtifact.path} is not an official numbered Spec-Kit feature path.`); return; }
+      const officialItem = { ...activeFeature, slug: officialSlug };
+      const issues = validateSpecKitArtifacts(officialItem, [discoveredArtifact], ['spec']);
+      if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }
+      onUpdateFeatureIdentity(activeFeature.id, { slug: officialSlug, branch: officialSlug });
+      onSaveFeatureReview({ specification: { path: discoveredArtifact.path, content: discoveredArtifact.content, acceptedAt } });
+    }
+    if ((current.id === 4 || current.id === 5) && activeFeature && storyScope) {
+      const kind = current.id === 4 ? 'plan' : 'tasks';
+      const issues = validateSpecKitArtifacts(activeFeature, [discoveredArtifact], [kind]);
+      if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }
+    }
     if (current.id === 4) onSaveFeatureReview({ architecturePlan: { path: discoveredArtifact.path, content: discoveredArtifact.content, acceptedAt } });
     if (current.id === 5 && parseFeatureDeliveryTasks(discoveredArtifact.content).length === 0) {
       setEngineError('This tasks.md contains no parseable individual task IDs, so Studio cannot safely use it for implementation.');
@@ -326,7 +359,9 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     });
     if (current.id === 5 && journey.completedStages.includes(5)) onSaveJourney({ ...journey, activeStage: 6, updatedAt: acceptedAt });
     if (current.id === 4 && journey.completedStages.includes(4)) onSaveJourney({ ...journey, activeStage: 5, updatedAt: acceptedAt });
-    setAcceptedNotice(current.id === 4
+    setAcceptedNotice(current.id === 2
+      ? 'Existing official single-story specification accepted. You can now approve Stage 2.'
+      : current.id === 4
       ? 'Existing official plan accepted and linked to this feature. You can now approve Stage 4.'
       : 'Existing official tasks accepted and linked to this feature. You can now approve Stage 5.');
     setDiscoveredArtifact(null);
@@ -335,12 +370,12 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   if (current.id === 8 && journey.completedStages.includes(8)) {
     return <div className="feature-journey mx-auto max-w-5xl space-y-6 pb-12">
       <section className="rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-zinc-900 to-zinc-900 p-6 md:p-8">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Feature Journey complete · 8 of 8 stages approved</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">{storyScope ? 'User story' : 'Feature'} Journey complete · 8 of 8 stages approved</p>
         <h1 className="mt-2 text-2xl font-bold text-zinc-100">Handoff complete</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">{activeFeature?.title || 'This feature'} has a retained, editable history for every stage. No further agent execution or approval is required.</p>
         <div className="mt-5 grid gap-3 text-xs sm:grid-cols-3">
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-emerald-200">✓ Journey history retained</p><p className="mt-1 text-zinc-400">Specifications, plans, task evidence, and approvals remain available.</p></div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-cyan-200">✓ Feature package ready</p><p className="mt-1 text-zinc-400">Download the isolated package whenever you need a durable handoff record.</p></div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-cyan-200">✓ {storyScope ? 'Story' : 'Feature'} package ready</p><p className="mt-1 text-zinc-400">Download the isolated package whenever you need a durable handoff record.</p></div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"><p className="font-bold text-violet-200">Edit with review</p><p className="mt-1 text-zinc-400">If artifacts change, revisit the affected stage and re-review it before delivery.</p></div>
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -355,9 +390,11 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   return <div className="feature-journey mx-auto max-w-5xl space-y-6 pb-12">
     {agentRunIsActive && <AgentRunLockNotice agentLabel={selectedAgent() ? localAgentLabels[selectedAgent()!.id] : 'Local agent'} />}
     <div className={agentRunIsActive ? 'agent-run-locked' : undefined} aria-busy={agentRunIsActive} inert={agentRunIsActive || undefined}>
-    <section className="rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-zinc-900 to-zinc-900 p-5 md:p-7"><div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div><div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Spec-Kit Engine guided workflow</div><h1 className="mt-1 text-2xl font-bold text-zinc-100">Add a feature without losing the thread</h1><p className="mt-2 max-w-2xl text-sm text-zinc-400">One stage at a time. Studio keeps the repository evidence, human approvals, and Engine work in the right order.</p></div><div className="min-w-36 rounded-xl border border-cyan-500/25 bg-zinc-950/60 p-3 text-center"><div className="text-2xl font-black text-cyan-300">{progress}%</div><div className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{completedCount} of 8 approved</div></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div></section>
+    <section className="rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-zinc-900 to-zinc-900 p-5 md:p-7"><div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div><div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Spec-Kit Engine guided workflow</div><h1 className="mt-1 text-2xl font-bold text-zinc-100">Deliver one outcome without losing the thread</h1><p className="mt-2 max-w-2xl text-sm text-zinc-400">One stage at a time. Studio keeps scope, repository evidence, human approvals, and Engine work in the right order.</p></div><div className="min-w-36 rounded-xl border border-cyan-500/25 bg-zinc-950/60 p-3 text-center"><div className="text-2xl font-black text-cyan-300">{progress}%</div><div className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">{completedCount} of 8 approved</div></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div></section>
 
-    {canStartFeatureIntake(current.id) && <FeatureInbox project={project} onImport={onOpenFeatureImport} onNavigate={onNavigate} activeFeatureId={activeFeature?.id} onSelectFeature={(featureId) => onSaveJourney({ ...journey, featureId, updatedAt: new Date().toISOString() })} />}
+    <DeliveryScopeBanner project={project} item={activeFeature} />
+
+    {canStartFeatureIntake(current.id) && <FeatureInbox project={project} onImport={onOpenFeatureImport} onNavigate={onNavigate} activeFeatureId={activeFeature?.id} onSelectFeature={(featureId) => { const selected = project.featureInbox?.find((item) => item.id === featureId); const now = new Date().toISOString(); onSaveJourney(selected?.journey ? { ...selected.journey, featureId, updatedAt: now } : { featureId, activeStage: 2, completedStages: journey.completedStages.includes(1) ? [1] : [], startedAt: now, updatedAt: now }); }} />}
     <FeatureRegistry project={project} />
 
     {acceptedNotice && <div role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-100"><strong>Saved.</strong> {acceptedNotice}</div>}
@@ -375,7 +412,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
 
     {agentJob?.ok && (agentStageId === 3 || agentStageId === 4 || agentStageId === 5) && <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Review before accepting</p><h2 className="mt-1 font-bold text-zinc-100">{agentStageId === 3 ? 'Read-only impact map' : agentStageId === 4 ? 'Feature-scoped architecture plan' : 'Feature-scoped delivery tasks'} for {activeFeature?.title || 'the current feature'}</h2><p className="mt-1 text-zinc-300">Read the Engine result below. Accepting retains it with this imported feature and unlocks the next human approval; it does not approve the stage automatically.</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-300">{agentJob.output}</pre><button type="button" onClick={acceptEngineReview} className="mt-3 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Accept {agentStageId === 3 ? 'impact map' : agentStageId === 4 ? 'feature plan' : 'delivery tasks'}</button></section>}
 
-    {discoveredArtifact && (current.id === 4 || current.id === 5) && <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Already prepared — no agent run needed</p><h2 className="mt-1 font-bold text-zinc-100">Studio found {discoveredArtifact.path}</h2><p className="mt-1 text-zinc-300">This is an existing official {current.id === 4 ? 'architecture plan' : 'delivery task board'} in the connected repository. Review it once and link it to <strong>{activeFeature?.title || 'the current feature'}</strong>. Running Codex would be redundant.</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-300">{discoveredArtifact.content}</pre><button type="button" onClick={acceptDiscoveredArtifact} className="mt-3 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Review and accept existing {current.id === 4 ? 'plan' : 'tasks'}</button></section>}
+    {discoveredArtifact && (current.id === 2 || current.id === 4 || current.id === 5) && <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Already prepared — no agent run needed</p><h2 className="mt-1 font-bold text-zinc-100">Studio found {discoveredArtifact.path}</h2><p className="mt-1 text-zinc-300">This is an existing official {current.id === 2 ? 'single-story specification' : current.id === 4 ? 'architecture plan' : 'delivery task board'} in the connected repository. Review it once and link it to <strong>{activeFeature?.title || 'the current feature'}</strong>. Running the agent would be redundant.</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-300">{discoveredArtifact.content}</pre><button type="button" onClick={acceptDiscoveredArtifact} className="mt-3 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-emerald-300">Review and accept existing {current.id === 2 ? 'specification' : current.id === 4 ? 'plan' : 'tasks'}</button></section>}
 
     {current.id > 5 && activeFeature?.deliveryPlan?.acceptedAt && <section className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4 text-xs"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Demo planning option</p><h2 className="mt-1 font-bold text-zinc-100">Need a smaller delivery plan?</h2><p className="mt-1 max-w-3xl text-zinc-300">Reopen Stage 5 to choose a compact, three-task plan: confirm scope, implement the feature with focused coverage, then verify the change. It replaces only this feature’s task plan after review and reopens downstream approvals.</p><button type="button" onClick={() => { setDeliveryPlanMode('compact'); reopenStage(5); }} disabled={agentRunIsActive} className="mt-3 rounded-lg border border-violet-300/40 bg-violet-500/20 px-3 py-2 font-bold text-violet-100 hover:bg-violet-500/30 disabled:cursor-not-allowed disabled:opacity-50">Create compact demo plan</button></section>}
 

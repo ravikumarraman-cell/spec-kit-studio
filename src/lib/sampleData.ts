@@ -1,4 +1,5 @@
 import { SpecKitProject } from '../types/speckit';
+import { SPECKIT_VERSION } from './specKitCompliance';
 
 export const SAMPLE_PROJECTS: SpecKitProject[] = [
   {
@@ -7,7 +8,7 @@ export const SAMPLE_PROJECTS: SpecKitProject[] = [
     description: 'Visual Spec-Driven Development Studio Layer for GitHub Spec-Kit framework',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    version: '1.0.7',
+    version: SPECKIT_VERSION,
     spec: {
       id: 'spec-1',
       title: 'Spec-Kit Studio Visual Dashboard',
@@ -56,8 +57,8 @@ export const SAMPLE_PROJECTS: SpecKitProject[] = [
       functionalRequirements: [
         {
           id: 'FR-101',
-          title: 'Offline-First Dual Storage Engine',
-          description: 'Persist all projects locally in IndexedDB/localStorage with instant offline reactivity.',
+          title: 'Offline-First IndexedDB Persistence',
+          description: 'Persist projects in IndexedDB with a localStorage fallback when IndexedDB is unavailable.',
           category: 'Core',
           priority: 'High'
         },
@@ -105,9 +106,9 @@ export const SAMPLE_PROJECTS: SpecKitProject[] = [
         'User generates AI Agent prompt or exports full .spec-kit repository bundle as ZIP'
       ],
       edgeCases: [
-        'User loses internet connectivity while editing -> changes are saved safely to IndexedDB',
+        'User loses internet connectivity while editing -> changes are saved locally in IndexedDB',
         'Spec content contains invalid markdown syntax -> parser fallback prevents dashboard crash',
-        'Large project import exceeds 5MB -> IndexedDB chunking handles large assets'
+        'Large project imports use browser-managed IndexedDB capacity rather than the small localStorage quota'
       ],
       successMetrics: [
         '100% feature parity with GitHub Spec-Kit CLI workflow',
@@ -120,7 +121,7 @@ export const SAMPLE_PROJECTS: SpecKitProject[] = [
 Spec-Kit Studio provides a visual, zero-cognitive-overload studio layer over GitHub's spec-kit specification-driven development standard.
 
 ## Functional Requirements
-- **FR-101**: Offline-First Dual Storage Engine
+- **FR-101**: Offline-First IndexedDB Persistence
 - **FR-102**: Architectural Mermaid Diagram Rendering
 - **FR-103**: Spec Health Quality Audit Engine
 - **FR-104**: One-Click Spec-Kit CLI Repo Bundler`,
@@ -173,10 +174,10 @@ Spec-Kit Studio provides a visual, zero-cognitive-overload studio layer over Git
         },
         {
           id: 'ADR-002',
-          title: 'Dual IndexedDB & LocalStorage Cache Strategy',
+          title: 'IndexedDB Persistence Strategy',
           status: 'Accepted',
           context: 'Users require uninterrupted workspace usage even when offline or during transient network interruptions.',
-          decision: 'Implement a reactive client storage service with background auto-saving to local browser cache.',
+          decision: 'Persist the workspace in IndexedDB, migrate legacy localStorage data once, and keep a synchronous in-memory UI cache.',
           consequences: 'Zero reliance on continuous server network ping for basic editing.',
           date: '2026-09-17'
         }
@@ -197,7 +198,7 @@ Full-stack Express + Vite architecture with client-side offline storage and Gemi
       tasks: [
         {
           id: 'TASK-101',
-          title: 'Initialize Workspace Core & Offline Dual Storage Engine',
+          title: 'Initialize Workspace Core & IndexedDB Persistence',
           phase: 'Phase 1: Setup',
           description: 'Establish local persistence, project switcher, and state synchronization listeners.',
           status: 'done',

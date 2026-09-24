@@ -17,6 +17,7 @@ import { ViewTab, SpecKitProject } from '../../../types/speckit';
 import { HeaderMenuItem } from './types';
 import { ThemeSwitcher } from '../../common/ThemeSwitcher';
 import { SpecKitVersionSelector } from '../../common/SpecKitVersionSelector';
+import { SPECKIT_VERSION } from '../../../lib/specKitCompliance';
 
 interface MobileNavDrawerProps {
   isOpen: boolean;
@@ -124,12 +125,12 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = memo(({
               {activeProject.name}
             </div>
             <div className="text-[10px] text-zinc-500">
-              Version {activeProject.version || '1.0.7'} • {activeProject.spec.userStories?.length || 0} Stories
+              Version {activeProject.version || SPECKIT_VERSION} • {activeProject.spec.userStories?.length || 0} Stories
             </div>
 
             <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
               <SpecKitVersionSelector
-                currentVersion={activeProject.version || '1.0.7'}
+                currentVersion={activeProject.version || SPECKIT_VERSION}
                 onSelectVersion={onSelectVersion}
                 variant="compact"
               />

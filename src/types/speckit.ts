@@ -10,6 +10,7 @@ export interface UserStory {
   iWantTo: string;
   soThat: string;
   acceptanceCriteria: string[];
+  requirementIds?: string[];
 }
 
 export interface FunctionalRequirement {
@@ -188,9 +189,18 @@ export interface FeatureJourney {
 
 /** A durable, feature-level receipt for work imported into a Studio workspace. */
 export type FeatureImportSource = 'text' | 'file' | 'github' | 'preset' | 'repository' | 'unknown';
+export type DeliveryScope = 'feature' | 'user-story';
 
 export interface FeatureInboxItem {
   id: string;
+  /** Missing on legacy records; absence always means feature scope. */
+  scope?: DeliveryScope;
+  /** The one authoritative story when this item has user-story scope. */
+  primaryStoryId?: string;
+  /** Optional provenance only; it never controls artifact ownership. */
+  parentFeatureId?: string;
+  /** Item-owned progress used when switching between delivery items. */
+  journey?: FeatureJourney;
   /** Stable, tracker-friendly identity for safe concurrent feature work. */
   featureKey?: string;
   /** Filesystem-safe namespace; feature artifacts belong under specs/<slug>/. */
@@ -209,6 +219,8 @@ export interface FeatureInboxItem {
   userStoryIds: string[];
   requirementIds: string[];
   taskIds: string[];
+  /** Official Spec-Kit specification retained after Stage 2 review. */
+  specification?: { path?: string; content: string; acceptedAt?: string };
   /** Read-only Stage 3 architecture evidence, explicitly accepted by a reviewer. */
   impactMap?: { content: string; acceptedAt?: string };
   /** Stage 4 Engine plan retained with the feature that it was created for. */
@@ -220,6 +232,8 @@ export interface FeatureInboxItem {
   /** Historical receipts from an earlier delivery-plan revision. They remain
    * exportable evidence but never satisfy the current plan's completion gate. */
   supersededImplementationReceipts?: FeatureImplementationReceipt[];
+  /** Delivery-item-owned quality evidence. Legacy features may use project.audit. */
+  qualityAudit?: SpecAuditResult;
 }
 
 export interface FeatureImplementationReceipt {

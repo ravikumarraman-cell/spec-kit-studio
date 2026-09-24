@@ -1,54 +1,74 @@
 # Spec-Kit Studio
 
-## Deliberate software delivery with coding agents
+## A reviewable path from a delivery request to a handoff
 
-Spec-Kit Studio takes a feature from request to reviewable handoff without losing the reasoning in between. It does not claim an agent is correct. It makes the evidence, boundaries, and human decisions around an agent run visible enough to review.
+Spec-Kit Studio is a local-first web workspace for planning and guiding a bounded software change. It keeps the decisions around an AI-assisted change visible: the selected scope, repository evidence, reviewed artifacts, task-level receipts, verification output, and handoff package.
+
+It does not prove that a plan or coding-agent result is correct. It helps a reviewer see what was requested, what was checked, and what still needs a human decision.
 
 ```text
-Feature request → repository evidence → scoped design → ordered tasks
-                → one bounded implementation → verification → handoff
+Delivery request -> repository baseline -> reviewed specification -> design
+                 -> ordered tasks -> one bounded implementation -> handoff
 ```
 
-The useful outcome is not a large generated diff. It is a change that can answer what was intended, which repository constraints applied, what task changed what, what was checked, and how the next engineer can continue safely.
+## Start where the work actually begins
 
-## What Studio provides
+Studio has two equal entry points into the same reviewable delivery journey. **Feature** is the default for a larger request; **User story** is for one independently deliverable use case. A story does not need to be wrapped in a feature first.
 
-- Eight human-approved stages: connect, describe, impact, design, tasks, audit, implement, and handoff.
-- Feature-scoped impact maps, plans, task plans, audits, and implementation receipts.
-- One repository identity and stack profile per Studio project.
-- A feature key, branch, linked worktree, and `specs/<feature-slug>/` package per active feature.
-- Reviewed artifact writes: feature packages go only to `specs/<feature-slug>/`; workspace summaries go to `.specify/studio/`.
-- Local recovery snapshots and portable feature-only exports.
-
-## The eight-stage journey
-
-| Stage | Outcome | Evidence retained |
+| Starting point | Use it when | What Studio keeps in scope |
 | --- | --- | --- |
-| 1. Connect safely | Known repository baseline | Git, technology, and check evidence |
-| 2. Describe | Reviewed behavior and boundaries | stories, requirements, source receipt |
-| 3. Ground impact | Known owners, neighbours, rules, risks | impact map |
-| 4. Design safely | Compatible design | feature `plan.md` |
-| 5. Plan delivery | Traceable work order | feature `tasks.md` |
-| 6. Quality gate | Material gaps resolved | audit record |
-| 7. Implement deliberately | One approved task | changed files and receipt |
-| 8. Verify & hand off | Durable continuation record | package and verification trail |
+| **Feature** | The request includes several related stories or a larger capability. | The imported feature and its linked stories, requirements, tasks, and reviewed artifacts. |
+| **User story** | One user outcome can be planned and implemented independently. | Exactly one primary story, only its selected requirements, its own artifacts, receipts, worktree record, and handoff. |
 
-## Concurrent features, without shared-checkout mistakes
+To start a user-story journey, choose **Start delivery work → User story**. Then either:
 
-Use one Studio project per repository. Use one feature key, branch, linked worktree, and namespace per active feature.
+1. **Write or import** one story: paste a ticket/draft, upload `.md`, `.txt`, or `.json` source text, use the extractor if configured, and review the generated fields; or
+2. **Choose existing**: search workspace stories, select one, and explicitly select the requirements that this use case delivers.
+
+Studio requires a title, role, desired outcome, business value, and at least one acceptance criterion for a newly composed story. An existing story must have at least one selected requirement. The journey intentionally excludes sibling stories from its strict scope.
+
+## What is in the current product
+
+- Start delivery at either scope: an imported feature (the default) or one user story.
+- Keep a durable delivery item with its own identity, selected story/requirements, artifacts, task receipts, branch, and worktree record.
+- Guide review through eight stages: connect, describe, impact, design, tasks, audit, implement, and handoff.
+- Export feature packages and workspace summaries; story packages retain only their selected story and mapped requirements.
+- Run separate Bug Fix and Idea Assessment workflows with their own review steps and evidence packages.
+- Use an optional loopback connector to inspect a local repository, preview and apply reviewed artifacts, create a linked worktree, run declared checks, and launch a selected local coding agent after explicit confirmation.
+- Generate portable task prompts for Codex, Claude, GitHub Copilot CLI, Gemini, and Cursor.
+
+## Capability map
+
+| Area | Available functionality | Important boundary |
+| --- | --- | --- |
+| Repository workspace | Scan an allowed local repository for file/manifests, Git evidence, detected tools, Spec-Kit artifacts, and candidate baseline commands. | A URL or pasted request is not a substitute for repository evidence. |
+| Specifications | Edit stories, functional and non-functional requirements, edge cases, success metrics, and flows; use optional Gemini routes for generation. | Generated content is a review candidate. |
+| Design and delivery | Record technology choices, ADRs, API contracts, data schemas, task dependencies, and requirement mappings. | Studio does not infer that a mapping or plan is complete. |
+| Quality and prompts | Run local structural checks, optionally request AI audit output, and generate task-scoped prompts for several coding agents. | Scores and prompts do not prove correctness. |
+| Local implementation | Preview/apply reviewed artifacts, create linked worktrees, run supported checks, launch local agents, retain receipts, and inspect retained source changes. | Each consequential action requires confirmation; implementation uses a registered worktree. |
+| Independent workflows | Run a three-step Bug Fix flow or a five-step Idea Assessment flow, with reviewed evidence and separate packages. | They do not automatically modify the Feature Journey or make release decisions. |
+| Integrations | When server credentials are configured, use GitHub repository/issue/publication routes and Jira project/issue routes. | Treat credentials and remote publication as separate, explicitly configured operations. |
+| Export and recovery | Download workspace, feature, story, bug-fix, or idea-assessment packages; persist workspace state in IndexedDB and retain bounded browser recovery snapshots. | Commit reviewed artifacts to preserve them across browsers and collaborators. |
+
+Story-scoped delivery uses a strict Spec-Kit profile: Studio expects `specs/NNN-feature-name/{spec,plan,tasks}.md`, one `User Story 1`, and `T001`-style `[US1]` tasks with file paths before it permits strict story implementation.
+
+## How work stays bounded
 
 ```text
-Studio project → repository → stack profile
-       └── feature key → branch + linked worktree → specs/<feature-slug>/
+Studio project
+  -> connected repository and baseline
+  -> delivery item (feature or one user story)
+  -> branch + linked worktree
+  -> feature-owned artifacts and implementation receipts
 ```
 
-The Feature Registry exposes active features, branches, receipts, and declared source-path overlap. Shared APIs, migrations, lockfiles, IaC state, and runtime flags should be recorded as dependencies—not independently changed by two features.
+Studio stores project state in browser IndexedDB. On first use it migrates the previous `localStorage` project payload only after IndexedDB has committed it. Browsers that do not offer IndexedDB use the legacy localStorage fallback. Optional recovery snapshots remain in localStorage, but Studio prunes them on startup, every snapshot write, and every six hours while the app is open: snapshots older than seven days, more than three per project, or more than twelve total are deleted. This is convenient local state, not a shared source of truth. Export and commit the reviewed package with the implementation if it needs to persist across browsers or collaborators.
 
-Read the [multi-project operating model](docs/multi-project-feature-isolation-operating-model.md) and the [feature isolation user guide](docs/feature-isolation-user-guide.md).
+The connector confines repository paths to `STUDIO_ALLOWED_ROOTS`, binds only to `127.0.0.1`, supports an optional token, and requires explicit confirmation for writes, worktree creation, tool installation, checks, and local-agent execution. Those controls reduce accidental actions; they do not replace code review, repository policy, CI, or a security review.
 
 ## Quick start
 
-Requirements: Node.js 22.12+, npm, and Git. Codex, Claude Code, and GitHub Copilot CLI are optional local agents.
+Requirements: Node.js 22.12.0 or later within Node 22 (the package declares `>=22.12.0 <23`), npm, and Git. Local agents are optional.
 
 ```bash
 git clone <your-clone-url>
@@ -57,15 +77,15 @@ npm install
 npm run dev
 ```
 
-Before release:
+Validate the application before a release or merge:
 
 ```bash
 npm run verify
 ```
 
-### Production runtime
+`verify` runs TypeScript checking, the Node test suite, and a production build.
 
-Build and run the hardened Express/Vite artifact:
+## Production server
 
 ```bash
 npm ci
@@ -75,17 +95,17 @@ NODE_ENV=production npm start
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | unset | Enables Gemini-backed generation and audit routes |
-| `HOST` | `0.0.0.0` | HTTP bind address |
-| `PORT` | `3000` | HTTP port |
-| `REQUEST_BODY_LIMIT` | `10mb` | Maximum JSON request size |
-| `SHUTDOWN_GRACE_PERIOD_MS` | `10000` | Graceful shutdown deadline |
+| `GEMINI_API_KEY` | unset | Enables Gemini-backed generation and audit routes when configured. |
+| `HOST` | `0.0.0.0` | HTTP bind address. |
+| `PORT` | `3000` | HTTP port. |
+| `REQUEST_BODY_LIMIT` | `10mb` | Maximum JSON request size. |
+| `SHUTDOWN_GRACE_PERIOD_MS` | `10000` | Graceful-shutdown deadline. |
 
-Production responses include security headers, compression, request correlation, and structured request telemetry. Put the service behind TLS and preserve `x-request-id` at the edge. `GET /api/health` is the readiness endpoint.
+The Express server uses security headers, compression, request IDs, and request telemetry. Run it behind TLS in production. `GET /api/health` is the health endpoint.
 
-### Local connector
+## Optional local connector
 
-The optional connector is a loopback-only bridge for repository evidence, reviewed writes, and local agents.
+The connector is the boundary between the browser application and a local repository.
 
 ```env
 STUDIO_ALLOWED_ROOTS="/absolute/path/to/your/repos"
@@ -97,43 +117,25 @@ STUDIO_ALLOWED_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 npm run connector
 ```
 
-Use the narrowest parent directory that contains intended repositories—not a home directory. In **Connected Workspace**, scan the repository and record its baseline.
+Set `STUDIO_ALLOWED_ROOTS` to the narrowest parent directory that contains the repositories you intend to connect. In **Connected Workspace**, scan a repository before starting delivery work. See [the connector guide](docs/local-connector.md) for its exact capabilities and constraints.
 
-## A safe first feature
+## A grounded first run
 
-1. Scan and baseline the repository.
-2. Import and review the feature request.
-3. Review impact, design, tasks, and audit findings.
-4. Create a linked worktree before implementation. Studio records its branch, path, and baseline commit.
-5. Run one approved task and review its evidence.
-6. At handoff, export and commit `specs/<feature-slug>/` with the implementation.
+1. Connect and scan the repository; inspect the detected Git and technology evidence.
+2. Start feature delivery, or select/import one user story.
+3. Review the scope, impact map, plan, tasks, and audit findings rather than treating generated output as approved.
+4. Create and register a linked worktree before local-agent implementation.
+5. Run one approved task, inspect the changed files and focused verification result, and retain its receipt.
+6. Review the handoff and commit the exported, repository-relative artifacts with the implementation.
 
-## Data, recovery, and providers
+## Documentation
 
-Browser state is convenient, not the only durable record. Studio keeps bounded pre-change snapshots; export and commit feature packages for recovery across machines or browser profiles.
-
-- **Export templates only** is the credential-free default.
-- **GitHub** uses the existing explicit publication flow.
-- **GitLab** emits MR and CI templates without a token or remote write.
-
-Do not put secrets, production data, or credentials in feature text, prompts, or exports. See [Local connector safety](docs/local-connector.md).
-
-## Architecture
-
-```text
-React UI → workflow hooks → pure domain libraries → browser project store
-                                  ↓
-                       typed loopback connector client
-                                  ↓
-                    path-constrained repository + local agents
-```
-
-See [Architecture](docs/architecture.md), [Feature journey](docs/feature-journey-engine-first.md), and [Local connector](docs/local-connector.md).
+- [Feature journey](docs/feature-journey-engine-first.md) explains the actual eight-stage review model.
+- [Story-first delivery status](docs/user-story-first-workflow-implementation-plan.md) distinguishes the implemented contract from future ideas.
+- [Feature isolation guide](docs/feature-isolation-user-guide.md) covers concurrent work and worktrees.
+- [Local connector](docs/local-connector.md) describes local access, confirmations, and boundaries.
+- [Architecture](docs/architecture.md) and [modular architecture](docs/modular-architecture.md) describe code boundaries.
 
 ## Contributing
 
-Keep changes feature-scoped, preserve explicit approval for consequential actions, and add a regression test whenever a workflow rule changes.
-
-```bash
-npm run verify
-```
+Keep changes narrow, preserve explicit confirmation around consequential local actions, and add a focused regression test for workflow rules. Run `npm run verify` before submitting a change.

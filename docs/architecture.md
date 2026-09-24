@@ -25,12 +25,12 @@ The Studio is organized around narrow, replaceable boundaries:
 ## Project data flow
 
 ```text
-Screen event → hook use case → storage service → localStorage
+Screen event → hook use case → storage service → IndexedDB
                          ↓
                     SpecKitProject contract
 ```
 
-`useProjectWorkspace` is the single app-level adapter for the project aggregate. This lets a future API, IndexedDB, or cloud-backed repository replace the storage service without rewriting every screen. The aggregate also carries optional repository identity, stack-profile, feature identity, worktree, and governance metadata so legacy projects remain compatible.
+`useProjectWorkspace` is the single app-level adapter for the project aggregate. The storage service hydrates its in-memory cache from IndexedDB and performs a one-time migration from the legacy localStorage project payload only after IndexedDB has committed it. It falls back to localStorage only when IndexedDB is unavailable. This boundary still allows a future cloud-backed repository without rewriting every screen. The aggregate also carries optional repository identity, stack-profile, feature identity, worktree, and governance metadata so legacy projects remain compatible.
 
 ## HTTP lifecycle
 

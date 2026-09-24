@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, CheckCircle2, Compass } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../types/speckit';
 import { createFeatureJourney, getJourneyStageForTab } from '../../lib/featureJourney';
+import { activeDeliveryItemForProject, deliveryItemLabel } from '../../lib/deliveryItems';
 
 interface Props { project: SpecKitProject; activeTab: ViewTab; onOpenJourney: () => void; onNavigate: (tab: ViewTab) => void; onApproveStage: (stageId: number) => void; }
 
@@ -9,6 +10,8 @@ export function JourneyHandoff({ project, activeTab, onOpenJourney, onNavigate, 
   const handoff = getJourneyStageForTab(activeTab);
   if (!handoff) return null;
   const journey = project.journey || createFeatureJourney();
+  const activeItem = activeDeliveryItemForProject(project);
+  const scopeLabel = activeItem ? deliveryItemLabel(activeItem) : 'Delivery';
   const isCurrent = journey.activeStage === handoff.id;
   const isComplete = journey.completedStages.includes(handoff.id);
   if (!isCurrent && !isComplete) return null;
@@ -18,14 +21,14 @@ export function JourneyHandoff({ project, activeTab, onOpenJourney, onNavigate, 
     ? handoff.id === 8 ? 'View completed handoff' : 'Return to Feature Journey'
     : canApprove
       ? handoff.id === 8 ? 'Complete handoff' : `Approve Stage ${handoff.id} and continue`
-      : isCurrent ? 'See what is needed to approve' : 'Open Feature Journey';
+      : isCurrent ? 'See what is needed to approve' : `Open ${scopeLabel} Journey`;
   const handlePrimaryAction = () => canApprove ? onApproveStage(handoff.id) : onOpenJourney();
 
   return <section className="mx-auto mb-6 max-w-5xl rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-xs">
     <div className="flex gap-3">
       <div className="rounded-xl bg-cyan-500/15 p-2 text-cyan-300"><Compass className="h-4 w-4" /></div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-300">Feature Journey · Stage {handoff.id}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-300">{scopeLabel} Journey · Stage {handoff.id}</p>
         <h2 className="mt-1 font-bold text-zinc-100">{isComplete ? handoff.id === 8 ? 'Handoff complete' : 'This stage is approved — you can still edit it.' : handoff.handoffTitle}</h2>
         <p className="mt-1 text-zinc-400">{isComplete ? handoff.id === 8 ? 'The feature’s full eight-stage history and export package are retained. You can edit and re-review its artifacts whenever needed.' : 'Your next stage is available in the Journey. Changes here remain editable and should be re-reviewed if they affect later decisions.' : handoff.handoffGuidance}</p>
         <div className="mt-3 flex flex-wrap gap-2">

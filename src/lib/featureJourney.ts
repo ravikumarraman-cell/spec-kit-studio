@@ -2,6 +2,8 @@ import { FeatureJourney, SpecKitProject, ViewTab } from '../types/speckit';
 import { isFeatureArtifactScoped } from './featureArtifactScope';
 import { auditPassesQualityGate } from './auditGate';
 import { parseFeatureDeliveryTasks } from './featureDeliveryTasks';
+import { activeDeliveryItemForProject, deliveryScope, primaryStoryForItem, requirementsForDeliveryItem, validateDeliveryItem } from './deliveryItems';
+import { validateSpecKitArtifacts } from './specKitCompliance';
 
 /**
  * The single source of truth for Studio's guided feature workflow.
@@ -33,29 +35,49 @@ export type DeliveryPlanMode = 'detailed' | 'compact';
  * legacy migration fallback; new work must store journey.featureId explicitly.
  */
 export function activeFeatureForProject(project: SpecKitProject) {
-  const features = project.featureInbox || [];
-  const selectedId = project.journey?.featureId;
-  return features.find((feature) => feature.id === selectedId) || features.at(-1);
+  return activeDeliveryItemForProject(project);
 }
 function latestFeature(project: SpecKitProject) { return activeFeatureForProject(project); }
 function hasImportedFeatureDescription(project: SpecKitProject) {
   const feature = latestFeature(project);
-  if (!feature?.id || !feature.userStoryIds.length || !feature.requirementIds.length) return false;
+  if (!feature?.id || !feature.userStoryIds.length || !feature.requirementIds.length || validateDeliveryItem(project, feature).length) return false;
   const storyIds = new Set(project.spec.userStories.map((story) => story.id));
   const requirementIds = new Set(project.spec.functionalRequirements.map((requirement) => requirement.id));
-  return feature.userStoryIds.every((id) => storyIds.has(id))
-    && feature.requirementIds.every((id) => requirementIds.has(id));
+  const storyReady = deliveryScope(feature) === 'user-story'
+    ? Boolean(primaryStoryForItem(project, feature)?.acceptanceCriteria.length)
+    : feature.userStoryIds.every((id) => storyIds.has(id));
+  const officialStorySpecReady = deliveryScope(feature) !== 'user-story' || Boolean(
+    feature.specification?.acceptedAt
+    && feature.specification.path
+    && validateSpecKitArtifacts(feature, [{ ...feature.specification, path: feature.specification.path, kind: 'spec' }], ['spec']).length === 0,
+  );
+  return storyReady
+    && feature.requirementIds.every((id) => requirementIds.has(id))
+    && officialStorySpecReady;
 }
 function featureBrief(project: SpecKitProject) {
   const feature = latestFeature(project);
   if (!feature) return 'No imported feature is selected; stop and ask the reviewer to select one.';
+  if (deliveryScope(feature) === 'user-story') {
+    const story = primaryStoryForItem(project, feature);
+    const requirements = requirementsForDeliveryItem(project, feature).map((requirement) => `${requirement.id}: ${requirement.title}`).join('; ');
+    return `USER STORY IN FOCUS: ${story?.id || feature.primaryStoryId} — ${story?.title || feature.title}\nAS A: ${story?.asA || 'unresolved'}\nI WANT TO: ${story?.iWantTo || 'unresolved'}\nSO THAT: ${story?.soThat || 'unresolved'}\nACCEPTANCE CRITERIA:\n${story?.acceptanceCriteria.map((criterion) => `- ${criterion}`).join('\n') || '- none recorded'}\nSCOPED REQUIREMENTS: ${requirements || 'none recorded'}\nSCOPE BOUNDARY: Implement only this user story. Sibling stories and broad feature redesign are out of scope.`;
+  }
   const stories = project.spec.userStories.filter((story) => feature.userStoryIds.includes(story.id)).map((story) => `${story.id}: ${story.title}`).join('; ');
   const requirements = project.spec.functionalRequirements.filter((requirement) => feature.requirementIds.includes(requirement.id)).map((requirement) => `${requirement.id}: ${requirement.title}`).join('; ');
   return `FEATURE IN FOCUS: ${feature.title}\nFEATURE SUMMARY: ${feature.summary}\nUSER STORIES: ${stories || 'none recorded'}\nFUNCTIONAL REQUIREMENTS: ${requirements || 'none recorded'}`;
 }
 function hasAcceptedImpactMap(project: SpecKitProject) { return Boolean(latestFeature(project)?.impactMap?.acceptedAt); }
-function hasAcceptedFeaturePlan(project: SpecKitProject) { const feature = latestFeature(project); const plan = feature?.architecturePlan; return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path)); }
-function hasAcceptedDeliveryPlan(project: SpecKitProject) { const feature = latestFeature(project); const plan = feature?.deliveryPlan; return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path) && parseFeatureDeliveryTasks(plan.content).length > 0); }
+function hasAcceptedFeaturePlan(project: SpecKitProject) {
+  const feature = latestFeature(project); const plan = feature?.architecturePlan;
+  return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path)
+    && (deliveryScope(feature!) !== 'user-story' || validateSpecKitArtifacts(feature!, [{ ...plan, path: plan.path, kind: 'plan' }], ['plan']).length === 0));
+}
+function hasAcceptedDeliveryPlan(project: SpecKitProject) {
+  const feature = latestFeature(project); const plan = feature?.deliveryPlan;
+  return Boolean(plan?.acceptedAt && plan.path && isFeatureArtifactScoped(plan.content, feature, plan.path) && parseFeatureDeliveryTasks(plan.content).length > 0
+    && (deliveryScope(feature!) !== 'user-story' || validateSpecKitArtifacts(feature!, [{ ...plan, path: plan.path, kind: 'tasks' }], ['tasks']).length === 0));
+}
 function hasFeatureScopedDeliveryTasks(project: SpecKitProject) {
   const feature = latestFeature(project);
   const plan = feature?.deliveryPlan;
@@ -87,11 +109,11 @@ function allFeatureTasksReviewed(project: SpecKitProject) {
 
 export const featureJourneyStages: readonly FeatureJourneyStage[] = [
   { id: 1, title: 'Connect safely', shortLabel: 'Connect safely', destination: 'workspace', outcome: 'Establish a reviewable repository baseline.', evidence: 'Repository path, Git state, test commands, Spec-Kit status, and local-agent readiness.', engineStep: 'Read-only repository grounding', action: 'Connect and scan repository', handoffTitle: 'Connected Workspace', handoffGuidance: 'Scan the repository and establish a baseline before beginning feature work.', ready: (project) => Boolean(project.importedRepo?.repoUrl), readyHint: 'Scan the connected repository first.' },
-  { id: 2, title: 'Describe the feature', shortLabel: 'Describe feature', destination: 'spec', outcome: 'Agree on the user outcome and compatibility boundaries.', evidence: 'Feature brief, source ticket/PRD, success measure, and “must not break” constraints.', engineStep: 'speckit.specify', action: 'Describe feature with Engine', handoffTitle: 'Feature description ready for review', handoffGuidance: 'Save the feature spec, then confirm the user stories and requirements capture the intended outcome and compatibility boundaries.', ready: hasImportedFeatureDescription, readyHint: 'Import one feature and confirm that its own stories and requirements are present before continuing.' },
+  { id: 2, title: 'Describe the feature', shortLabel: 'Describe feature', destination: 'spec', outcome: 'Agree on the user outcome and compatibility boundaries.', evidence: 'Feature brief, source ticket/PRD, success measure, and “must not break” constraints.', engineStep: 'speckit.specify', action: 'Describe feature with Engine', handoffTitle: 'Feature description ready for review', handoffGuidance: 'Save the feature spec, then confirm the user stories and requirements capture the intended outcome and compatibility boundaries.', ready: hasImportedFeatureDescription, readyHint: 'Import one feature and confirm its stories and requirements. Story journeys also require a reviewed official spec.md from speckit.specify.' },
   { id: 3, title: 'Ground the impact map', shortLabel: 'Ground impact', destination: 'constitution', outcome: 'Know the owning code, neighbours, tests, contracts, and guardrails before design.', evidence: 'Scanned technology evidence, project constitution, key directories, and referenced code paths.', engineStep: 'Repository-evidence review + speckit.constitution when governance changes', action: 'Run Codex to prepare impact map', handoffTitle: 'Impact and guardrails ready for review', handoffGuidance: 'Accept the read-only impact map and confirm the applicable rules before approving the stage.', ready: (project) => Boolean(latestFeature(project)) && Boolean(project.journey?.completedStages.includes(1)) && project.constitution.rules.length > 0 && hasAcceptedImpactMap(project), readyHint: 'Import a feature, then run and accept its read-only impact map and confirm the applicable constitution rules.' },
   { id: 4, title: 'Design safely', shortLabel: 'Design safely', destination: 'plan', outcome: 'Approve a compatible technical plan.', evidence: 'Components, API contracts, schema changes, ADRs, test approach, and rollback considerations.', engineStep: 'speckit.plan + speckit.checklist', action: 'Run Codex to prepare architecture plan', handoffTitle: 'Architecture plan ready for review', handoffGuidance: 'Accept the feature-scoped plan, then verify its contracts, tests, risks, and rollback considerations before approving the design.', ready: (project) => hasAcceptedFeaturePlan(project), readyHint: 'Run, review, and accept a feature-scoped architecture plan before approval.' },
   { id: 5, title: 'Make delivery actionable', shortLabel: 'Plan delivery', destination: 'tasks', outcome: 'Approve a dependency-ordered, traceable delivery plan.', evidence: 'Tasks, requirement mappings, dependencies, phases, and test tasks.', engineStep: 'speckit.tasks + speckit.analyze', action: 'Run Codex to prepare delivery plan', handoffTitle: 'Delivery plan ready for review', handoffGuidance: 'Accept the feature-scoped task breakdown, then verify its mappings and dependency order before approving delivery planning.', ready: (project) => hasAcceptedDeliveryPlan(project), readyHint: 'Run, review, and accept feature-scoped delivery tasks before approval.' },
-  { id: 6, title: 'Pass the quality gate', shortLabel: 'Quality gate', destination: 'audit', outcome: 'Resolve specification gaps before code changes begin.', evidence: 'Cross-artifact consistency report, unresolved ambiguities, and reviewer decisions.', engineStep: 'Studio Spec Quality Audit', action: 'Open Spec Quality Audit', handoffTitle: 'Quality-gate results ready for review', handoffGuidance: 'Resolve or explicitly document every blocking finding. The Journey will show when the quality threshold is met.', ready: (project) => Boolean(latestFeature(project)) && auditPassesQualityGate(project.audit), readyHint: 'Import and select a feature, then run the audit and resolve its blocking gaps.' },
+  { id: 6, title: 'Pass the quality gate', shortLabel: 'Quality gate', destination: 'audit', outcome: 'Resolve specification gaps before code changes begin.', evidence: 'Cross-artifact consistency report, unresolved ambiguities, and reviewer decisions.', engineStep: 'Studio Spec Quality Audit', action: 'Open Spec Quality Audit', handoffTitle: 'Quality-gate results ready for review', handoffGuidance: 'Resolve or explicitly document every blocking finding. The Journey will show when the quality threshold is met.', ready: (project) => { const item = latestFeature(project); return Boolean(item) && auditPassesQualityGate(deliveryScope(item!) === 'user-story' ? item!.qualityAudit : item!.qualityAudit || project.audit); }, readyHint: 'Select a delivery item, then run its audit and resolve the blocking gaps.' },
   { id: 7, title: 'Implement deliberately', shortLabel: 'Implement', destination: 'prompt', outcome: 'Choose and execute one approved task or phase at a time.', evidence: 'Task-scoped agent prompt, changed files, command output, and focused test results.', engineStep: 'Task-scoped speckit.implement', action: 'Choose an implementation task', handoffTitle: 'Implementation work is ready to verify', handoffGuidance: 'Choose each task, review its scoped result, and retain a verified receipt for every task before approving implementation.', ready: allFeatureTasksReviewed, readyHint: 'Complete and retain a reviewed receipt for every task in the accepted feature delivery plan before approving this stage.' },
   { id: 8, title: 'Verify and hand off', shortLabel: 'Verify & hand off', destination: 'export', outcome: 'Review the final change set and retain a durable record.', evidence: 'Convergence findings, Git diff, verification results, and exported Spec-Kit artifacts.', engineStep: 'speckit.converge', action: 'Verify and export reviewed artifacts', handoffTitle: 'Handoff package ready for review', handoffGuidance: 'Export the reviewed artifacts and compare the final change set to the approved plan before marking the feature complete.', ready: allFeatureTasksReviewed, readyHint: 'Complete and retain review evidence for the approved feature tasks before final verification.' },
 ];
@@ -134,10 +156,15 @@ export function reopenJourneyStage(journey: FeatureJourney, stageId: number, now
 
 export function engineInstructionForStage(stageId: number, project: SpecKitProject, deliveryPlanMode: DeliveryPlanMode = 'detailed'): string | null {
   const nextTask = project.tasks.tasks.find((task) => task.status !== 'done');
+  const feature = latestFeature(project);
+  const artifactRoot = feature ? `specs/${feature.slug}` : 'specs/<numbered-feature-name>';
   const instructions: Partial<Record<number, string>> = {
+    ...(feature && deliveryScope(feature) === 'user-story' ? {
+      2: `Invoke the installed Spec-Kit specify workflow for exactly the single user story below. Use the integration's official command syntax (for example /speckit-specify in GitHub Copilot skills mode or /speckit.specify where slash-command syntax applies). Treat this story as one independently deliverable Spec-Kit feature, not as a partial multi-story specification. Create the canonical numbered branch and specs/NNN-short-name/spec.md using the installed official template. Include exactly one User Story 1, its independent test, Given/When/Then acceptance scenarios, scoped functional requirements, measurable success criteria, edge cases, and assumptions. Do not include sibling stories, technical implementation details, plan.md, tasks.md, or application code.\n\n${featureBrief(project)}`,
+    } : {}),
     3: `Feature Journey stage 3: inspect ${project.name} read-only and produce an evidence-backed impact map. Identify owning code paths, neighboring implementation, relevant tests, APIs, schemas, deployment workflows, and applicable constitution rules. Do not change files.`,
-    4: `Feature Journey stage 4: use the integration-appropriate Spec-Kit plan workflow for the exact feature below.\n\n${featureBrief(project)}\n\nCreate an official feature-scoped plan.md under specs/<feature-slug>/plan.md. Its title and summary must name the feature in focus, and every proposed component, API, schema, test, risk, and rollback decision must trace to its requirements. Do not use or overwrite a workspace-wide .specify/studio/plan.md. Do not generate tasks or application code; stop for human review.`,
-    5: `Feature Journey stage 5: use the integration-appropriate Spec-Kit tasks workflow for the exact feature below, then run the read-only analysis workflow.\n\n${featureBrief(project)}\n\nCreate an official feature-scoped tasks.md under specs/<feature-slug>/tasks.md. Its title must name the feature in focus; every task must map to one of the listed requirements and include implementation plus verification work. Do not use or overwrite a workspace-wide .specify/studio/tasks.md. ${deliveryPlanMode === 'compact'
+    4: `Invoke the installed Spec-Kit plan workflow for the exact feature below, using the integration's official command syntax. Then invoke the official checklist workflow when requirements-quality review is appropriate.\n\n${featureBrief(project)}\n\nCreate the official ${artifactRoot}/plan.md and its applicable research.md, data-model.md, contracts/, and quickstart.md design artifacts from the installed templates. Its title and summary must name the feature in focus, and every proposed component, API, schema, test, risk, and rollback decision must trace to its requirements. Do not use or overwrite a workspace-wide .specify/studio/plan.md. Do not generate tasks or application code; stop for human review.`,
+    5: `Invoke the installed Spec-Kit tasks workflow for the exact feature below, using the integration's official command syntax, then invoke the official read-only analyze workflow.\n\n${featureBrief(project)}\n\nCreate the official ${artifactRoot}/tasks.md. Its title must name the feature in focus; every implementation task must carry the [US1] label for a story-scoped journey, use T001-style IDs, include exact file paths, and include implementation plus verification work. Do not use or overwrite a workspace-wide .specify/studio/tasks.md. ${deliveryPlanMode === 'compact'
       ? 'This is a compact demo plan. Replace this feature\'s existing feature-scoped tasks.md if one exists. Create exactly three individual tasks: T001 confirms only genuine human scope decisions; T002 implements the entire approved feature and its focused unit coverage; T003 runs focused verification and source-scope review. Keep test details and requirement traceability within these three tasks. Do not create separate setup, fixture, accessibility, responsive, or final-verification tasks. Do not split a simple UI enhancement into more tasks. Do not implement code; stop for human review.'
       : 'Do not implement code; stop for human review.'}`,
     7: `Feature Journey stage 7: use the integration-appropriate Spec-Kit implement workflow for exactly this approved task in ${project.name}: ${nextTask?.id || 'the task selected in Studio'} — ${nextTask?.title || 'selected task'}. Respect checklist review state and task boundaries. Run focused checks, summarize changed files and results, then stop.`,

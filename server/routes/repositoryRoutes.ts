@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Type } from "@google/genai";
-import { asyncRoute } from '../middleware/errorHandling';
+import { asyncRoute, HttpError } from '../middleware/errorHandling';
 import { getGeminiClient } from '../services/geminiClient';
 
 export function createRepositoryRouter() {
@@ -201,6 +201,82 @@ Generate a complete GitHub Spec-Kit specification package tailored specifically 
             },
           },
           required: ["title", "summary", "userStories", "functionalRequirements", "techStack", "tasks", "mermaidDiagram"],
+        },
+      },
+    });
+
+    const data = JSON.parse(response.text || "{}");
+    res.json({ success: true, data });
+}));
+
+// Import one user story and the minimum requirements needed to deliver it.
+router.post("/api/story/import", asyncRoute(async (req, res) => {
+    const { storyContent, storyTitle, sourceType } = req.body || {};
+    if (typeof storyContent !== 'string' || !storyContent.trim()) {
+      throw new HttpError(400, 'STORY_CONTENT_REQUIRED', 'Add a user story or source ticket before extracting it.');
+    }
+    if (storyContent.length > 100_000) {
+      throw new HttpError(413, 'STORY_CONTENT_TOO_LARGE', 'User story input must be 100,000 characters or fewer.');
+    }
+
+    const client = getGeminiClient();
+    const prompt = `You are a product manager preparing exactly one user story for specification-driven delivery.
+
+Source type: ${typeof sourceType === 'string' ? sourceType : 'text'}
+${typeof storyTitle === 'string' && storyTitle.trim() ? `Suggested title: ${storyTitle.trim()}\n` : ''}
+Source content:
+"""
+${storyContent.trim()}
+"""
+
+Return one primary, independently deliverable user story. If the input contains several ideas, choose the smallest coherent use case that best matches the title and source intent. Do not expand it into sibling stories or a broad feature.
+
+Include:
+- story: id, title, priority, asA, iWantTo, soThat, acceptanceCriteria, and requirementIds
+- functionalRequirements: only requirements needed by this story
+- nonFunctionalRequirements: only constraints directly relevant to this story
+- compatibilityConstraints: behavior that must not break
+- sourceSummary: one concise sentence
+
+Every story requirementIds entry must match a returned functional requirement ID. Use testable acceptance criteria.`;
+
+    const response = await client.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            story: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING }, title: { type: Type.STRING }, priority: { type: Type.STRING },
+                asA: { type: Type.STRING }, iWantTo: { type: Type.STRING }, soThat: { type: Type.STRING },
+                acceptanceCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
+                requirementIds: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ["id", "title", "priority", "asA", "iWantTo", "soThat", "acceptanceCriteria", "requirementIds"],
+            },
+            functionalRequirements: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING }, title: { type: Type.STRING }, description: { type: Type.STRING },
+                  category: { type: Type.STRING }, priority: { type: Type.STRING },
+                },
+                required: ["id", "title", "description", "category", "priority"],
+              },
+            },
+            nonFunctionalRequirements: {
+              type: Type.ARRAY,
+              items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, title: { type: Type.STRING }, description: { type: Type.STRING } }, required: ["id", "title", "description"] },
+            },
+            compatibilityConstraints: { type: Type.ARRAY, items: { type: Type.STRING } },
+            sourceSummary: { type: Type.STRING },
+          },
+          required: ["story", "functionalRequirements", "compatibilityConstraints", "sourceSummary"],
         },
       },
     });

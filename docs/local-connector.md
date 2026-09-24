@@ -21,6 +21,8 @@ For a strict hosted-deployment bridge, add `STUDIO_CONNECTOR_MODE=production`. I
 
 Use the narrowest allowed parent directory that contains the repositories you intend to connect. Enter the connector URL, repository path, and token (when configured) in **Connected Workspace**.
 
+Keep the Studio UI and local connector from the same checkout/release. If Studio says the connector is older than the UI, stop its terminal process, pull or update Studio, start `npm run connector` from that updated `spec-kit-studio` folder, and refresh the browser. A deployed UI does not update a connector already running on your computer.
+
 ## What it actually does
 
 - Scans an allowed repository for a bounded inventory, manifests, Git evidence, Spec-Kit files, available baseline commands, and local-agent availability.

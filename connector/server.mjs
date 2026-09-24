@@ -22,6 +22,7 @@ const execFileAsync = promisify(execFile);
 const connectorConfiguration = loadConnectorConfiguration();
 const PORT = connectorConfiguration.port;
 const TOKEN = connectorConfiguration.token;
+const CONNECTOR_API_VERSION = '2';
 // ChatGPT-authenticated Codex no longer supports the retired gpt-5.4-mini
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
@@ -645,7 +646,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(req, res, 204, {});
   // Health is intentionally unauthenticated: it reveals only whether pairing is needed,
   // enabling a friendly client-side setup flow without exposing repository access.
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: '0.1.0', mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: '0.1.0', apiVersion: CONNECTOR_API_VERSION, capabilities: ['repository-scan', 'story-extraction', 'agent-adapters'], mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
   if (TOKEN && req.headers['x-studio-token'] !== TOKEN) return send(req, res, 401, { error: 'Connector token is required.' });
   try {
     if (req.method === 'GET' && req.url?.startsWith('/v1/jobs/')) {

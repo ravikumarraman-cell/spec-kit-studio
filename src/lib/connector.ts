@@ -122,6 +122,9 @@ export async function extractStoryWithLocalAgent(repositoryPath: string, agent: 
     throw new Error('Studio cannot reach the local connector. Start `npm run connector`, pair it in Connected Workspace, and retry.');
   }
   const body = await response.json().catch(() => ({} as { error?: string; data?: LocalStoryExtraction }));
+  if (response.status === 404) {
+    throw new Error('Your local connector is older than this Studio UI and does not support local story extraction. Stop the connector, update this repository, run `npm run connector` from the updated spec-kit-studio folder, then refresh Studio and retry.');
+  }
   if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : `Connector request failed (HTTP ${response.status}).`);
   if (!body.data) throw new Error('The local connector did not return a story package.');
   return body.data;

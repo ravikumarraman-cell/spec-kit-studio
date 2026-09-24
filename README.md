@@ -101,7 +101,7 @@ NODE_ENV=production npm start
 | `REQUEST_BODY_LIMIT` | `10mb` | Maximum JSON request size. |
 | `SHUTDOWN_GRACE_PERIOD_MS` | `10000` | Graceful-shutdown deadline. |
 
-The Express server uses security headers, compression, request IDs, and request telemetry. Run it behind TLS in production. `GET /api/health` is the health endpoint.
+The Express server uses security headers, compression, request IDs, and request telemetry. The Vercel configuration adds browser security headers and prevents API-response caching. Run it behind TLS in production. `GET /api/health` is the health endpoint. GitHub and Jira access tokens entered in Studio are held only for the active browser session; Studio migrates and removes tokens saved by older versions from `localStorage`.
 
 ## Optional local connector
 

@@ -29,9 +29,17 @@ export async function postApi<TResponse, TRequest>(path: string, body: TRequest,
   }
 
   const requestId = response.headers.get('x-request-id') || undefined;
-  const payload = await response.json().catch((cause) => {
-    throw new StudioApiError('The server returned an unreadable response.', response.status, 'INVALID_RESPONSE', requestId, { cause });
-  }) as ApiEnvelope<TResponse> & TResponse;
+  const platformError = response.headers.get('x-vercel-error');
+  const responseText = await response.text();
+  let payload: ApiEnvelope<TResponse> & TResponse;
+  try {
+    payload = JSON.parse(responseText) as ApiEnvelope<TResponse> & TResponse;
+  } catch (cause) {
+    const message = platformError
+      ? `The deployed Studio API function failed before it could return JSON (${platformError}). Open the Vercel Function Logs, then retry after the function is healthy.`
+      : 'The server returned an unreadable response.';
+    throw new StudioApiError(message, response.status, platformError ? 'PLATFORM_FUNCTION_FAILED' : 'INVALID_RESPONSE', requestId, { cause });
+  }
 
   if (!response.ok) {
     throw new StudioApiError(

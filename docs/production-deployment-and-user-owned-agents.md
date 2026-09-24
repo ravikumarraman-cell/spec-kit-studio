@@ -123,6 +123,7 @@ Before general availability, complete the following:
 - Perform independent application and desktop/Companion security review, penetration testing, dependency/license review, and remediation tracking.
 - Use a managed secrets system, key rotation, signed releases, SBOMs, vulnerability response targets, and provenance for both cloud and Companion builds.
 - Enforce HTTPS, HSTS, CSP, secure cookies, CSRF protection where relevant, rate limits, abuse controls, and structured audit logs in the hosted service.
+- Do not expose a hosted deployment with server-side AI or integration credentials to anonymous traffic. Put it behind identity-aware access controls until tenant-aware authentication, authorization, quotas, and auditing exist.
 - Define SLOs, alerts, on-call ownership, incident response, disaster recovery, restore testing, and customer support escalation.
 - Establish privacy notices, data-processing terms, subprocessors, accessibility validation, and jurisdiction-specific legal review appropriate to the intended market.
 

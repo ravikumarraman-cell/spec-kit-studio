@@ -57,7 +57,17 @@ function redactSensitiveOutput(value) {
 function send(req, res, status, body) {
   const origin = req.headers.origin;
   const corsOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': corsOrigin, 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'Content-Type, X-Studio-Token', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Private-Network': 'true' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Vary': 'Origin',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Studio-Token',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Private-Network': 'true',
+  });
   res.end(JSON.stringify(body));
 }
 async function body(req) {
@@ -290,6 +300,8 @@ async function createWorktree(root, targetPath, branch) {
   if (!/^(?:feat\/[a-z0-9][a-z0-9/_-]{2,120}|\d{3,}-[a-z0-9][a-z0-9-]{1,120})$/i.test(String(branch || ''))) throw new Error('Use an official numbered branch such as 001-export-csv or a legacy feature branch such as feat/cai-142-export-csv.');
   const target = path.resolve(String(targetPath || ''));
   if (!allowedRoots.some((allowed) => target.startsWith(`${allowed}${path.sep}`))) throw new Error('Worktree destination must be inside STUDIO_ALLOWED_ROOTS.');
+  const targetParent = await fs.realpath(path.dirname(target)).catch(() => { throw new Error('Worktree destination parent does not exist.'); });
+  if (!allowedRoots.some((allowed) => targetParent === allowed || targetParent.startsWith(`${allowed}${path.sep}`))) throw new Error('Worktree destination resolves outside STUDIO_ALLOWED_ROOTS.');
   if (await fs.stat(target).then(() => true).catch(() => false)) throw new Error('Worktree destination already exists. Choose an empty, new folder.');
   // A previously-created feature worktree can be removed outside Studio while
   // its branch remains. Prune only Git's stale metadata, then attach the

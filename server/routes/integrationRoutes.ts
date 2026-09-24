@@ -57,6 +57,11 @@ interface JiraCredentials {
   apiToken?: string;
 }
 
+const MAX_INTEGRATION_SECRET_LENGTH = 4_096;
+const MAX_COMMIT_FILES = 50;
+const MAX_COMMIT_FILE_BYTES = 1_000_000;
+const MAX_COMMIT_TOTAL_BYTES = 5_000_000;
+
 function githubHeaders(token?: string) {
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -67,9 +72,9 @@ function githubHeaders(token?: string) {
 
 function jiraCredentials(body: Record<string, unknown>): JiraCredentials {
   return {
-    domain: stringValue(body.domain) || process.env.JIRA_DOMAIN,
-    email: stringValue(body.email) || process.env.JIRA_EMAIL,
-    apiToken: stringValue(body.apiToken) || process.env.JIRA_API_TOKEN,
+    domain: boundedString(body.domain, 'Jira Domain', 255) || process.env.JIRA_DOMAIN,
+    email: boundedString(body.email, 'Jira Email', 320) || process.env.JIRA_EMAIL,
+    apiToken: boundedString(body.apiToken, 'Jira API Token', MAX_INTEGRATION_SECRET_LENGTH) || process.env.JIRA_API_TOKEN,
   };
 }
 
@@ -94,6 +99,14 @@ function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function boundedString(value: unknown, label: string, maximumLength: number) {
+  const result = stringValue(value);
+  if (result && result.length > maximumLength) {
+    throw new HttpError(400, 'INVALID_INTEGRATION_REQUEST', `${label} is too long.`);
+  }
+  return result;
+}
+
 function requireInput(condition: unknown, message: string): asserts condition {
   if (!condition) throw new HttpError(400, 'INVALID_INTEGRATION_REQUEST', message);
 }
@@ -102,11 +115,33 @@ function githubPathSegment(value: string) {
   return encodeURIComponent(value);
 }
 
+function requireGitHubIdentifier(value: string | undefined, label: string) {
+  requireInput(value && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(value), `${label} contains unsupported characters.`);
+  return value;
+}
+
+function requireGitHubBranch(value: string) {
+  requireInput(
+    value.length <= 255 && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) && !value.includes('..') && !value.endsWith('/') && !value.includes('//'),
+    'Branch must be a valid Git branch name.',
+  );
+  return value;
+}
+
+function specKitPath(requestedPath: string) {
+  requireInput(requestedPath.length > 0 && requestedPath.length <= 512, 'File path is invalid.');
+  const segments = requestedPath.replaceAll('\\', '/').split('/');
+  requireInput(!segments.some((segment) => !segment || segment === '.' || segment === '..'), 'File path must stay within .spec-kit/.');
+  const relativePath = segments[0] === '.spec-kit' ? segments.slice(1).join('/') : segments.join('/');
+  requireInput(Boolean(relativePath), 'File path must name a file inside .spec-kit/.');
+  return `.spec-kit/${relativePath}`;
+}
+
 export function createIntegrationRouter() {
   const router = Router();
 
   router.post('/api/github/repos', asyncRoute(async (request, response) => {
-    const token = stringValue(request.body.token) || process.env.GITHUB_TOKEN;
+    const token = boundedString(request.body.token, 'GitHub Personal Access Token', MAX_INTEGRATION_SECRET_LENGTH) || process.env.GITHUB_TOKEN;
     requireInput(token, 'GitHub Personal Access Token is required.');
 
     const upstream = await fetchIntegration('GitHub', 'https://api.github.com/user/repos?sort=updated&per_page=30', {
@@ -131,10 +166,9 @@ export function createIntegrationRouter() {
   }));
 
   router.post('/api/github/issues', asyncRoute(async (request, response) => {
-    const token = stringValue(request.body.token) || process.env.GITHUB_TOKEN;
-    const owner = stringValue(request.body.owner);
-    const repo = stringValue(request.body.repo);
-    requireInput(owner && repo, 'Owner and Repo name are required.');
+    const token = boundedString(request.body.token, 'GitHub Personal Access Token', MAX_INTEGRATION_SECRET_LENGTH) || process.env.GITHUB_TOKEN;
+    const owner = requireGitHubIdentifier(boundedString(request.body.owner, 'Owner', 100), 'Owner');
+    const repo = requireGitHubIdentifier(boundedString(request.body.repo, 'Repository name', 100), 'Repository name');
 
     const upstream = await fetchIntegration(
       'GitHub',
@@ -160,20 +194,27 @@ export function createIntegrationRouter() {
   }));
 
   router.post('/api/github/commit-spec', asyncRoute(async (request, response) => {
-    const token = stringValue(request.body.token) || process.env.GITHUB_TOKEN;
-    const owner = stringValue(request.body.owner);
-    const repo = stringValue(request.body.repo);
-    const branch = stringValue(request.body.branch) || 'main';
-    const commitMessage = stringValue(request.body.commitMessage);
+    const token = boundedString(request.body.token, 'GitHub Personal Access Token', MAX_INTEGRATION_SECRET_LENGTH) || process.env.GITHUB_TOKEN;
+    const owner = requireGitHubIdentifier(boundedString(request.body.owner, 'Owner', 100), 'Owner');
+    const repo = requireGitHubIdentifier(boundedString(request.body.repo, 'Repository name', 100), 'Repository name');
+    const branch = requireGitHubBranch(boundedString(request.body.branch, 'Branch', 255) || 'main');
+    const commitMessage = boundedString(request.body.commitMessage, 'Commit message', 500);
     const files = request.body.files as Record<string, unknown> | undefined;
     requireInput(token, 'GitHub Personal Access Token is required to commit files.');
-    requireInput(owner && repo && files && typeof files === 'object' && !Array.isArray(files), 'Owner, Repo, and files object are required.');
+    requireInput(files && typeof files === 'object' && !Array.isArray(files), 'Owner, Repo, and files object are required.');
+    const entries = Object.entries(files);
+    requireInput(entries.length > 0 && entries.length <= MAX_COMMIT_FILES, `Provide between 1 and ${MAX_COMMIT_FILES} files.`);
 
     const headers = githubHeaders(token);
     const results = [];
-    for (const [requestedPath, content] of Object.entries(files)) {
+    let totalBytes = 0;
+    for (const [requestedPath, content] of entries) {
       requireInput(typeof content === 'string', `File content for ${requestedPath} must be text.`);
-      const pathInRepo = requestedPath.startsWith('.spec-kit/') ? requestedPath : `.spec-kit/${requestedPath}`;
+      const contentBytes = Buffer.byteLength(content, 'utf8');
+      requireInput(contentBytes <= MAX_COMMIT_FILE_BYTES, `File ${requestedPath} exceeds the 1 MB limit.`);
+      totalBytes += contentBytes;
+      requireInput(totalBytes <= MAX_COMMIT_TOTAL_BYTES, 'The combined file content exceeds the 5 MB limit.');
+      const pathInRepo = specKitPath(requestedPath);
       const encodedPath = pathInRepo.split('/').map(githubPathSegment).join('/');
       const contentsUrl = `https://api.github.com/repos/${githubPathSegment(owner)}/${githubPathSegment(repo)}/contents/${encodedPath}`;
       const current = await fetchIntegration('GitHub', `${contentsUrl}?ref=${encodeURIComponent(branch)}`, { headers });
@@ -224,7 +265,7 @@ export function createIntegrationRouter() {
   }));
 
   router.post('/api/jira/issues', asyncRoute(async (request, response) => {
-    const projectKey = stringValue(request.body.projectKey);
+    const projectKey = boundedString(request.body.projectKey, 'Project key', 100);
     const { domain, email, apiToken } = jiraCredentials(request.body);
     requireInput(domain && email && apiToken && projectKey, 'Jira Domain, Email, API Token, and Project Key are required.');
     const normalizedDomain = normalizeJiraDomain(domain);
@@ -251,10 +292,10 @@ export function createIntegrationRouter() {
   }));
 
   router.post('/api/jira/create-issue', asyncRoute(async (request, response) => {
-    const projectKey = stringValue(request.body.projectKey);
-    const issueType = stringValue(request.body.issueType) || 'Story';
-    const summary = stringValue(request.body.summary);
-    const description = stringValue(request.body.description) || 'Created via Spec-Kit Studio';
+    const projectKey = boundedString(request.body.projectKey, 'Project key', 100);
+    const issueType = boundedString(request.body.issueType, 'Issue type', 100) || 'Story';
+    const summary = boundedString(request.body.summary, 'Summary', 255);
+    const description = boundedString(request.body.description, 'Description', 32_000) || 'Created via Spec-Kit Studio';
     const { domain, email, apiToken } = jiraCredentials(request.body);
     requireInput(domain && email && apiToken && projectKey && summary, 'Jira Domain, Email, API Token, Project Key, and Summary are required.');
     const normalizedDomain = normalizeJiraDomain(domain);

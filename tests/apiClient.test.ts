@@ -55,6 +55,21 @@ test('postApi identifies unreadable server responses', async () => {
   );
 });
 
+test('postApi identifies a Vercel function failure without exposing its response body', async () => {
+  globalThis.fetch = async () => new Response('FUNCTION_INVOCATION_FAILED', {
+    status: 500,
+    headers: { 'x-vercel-error': 'FUNCTION_INVOCATION_FAILED', 'x-request-id': 'request-789' },
+  });
+
+  await assert.rejects(
+    postApi('/api/test', {}, () => ({ ok: true })),
+    (error: unknown) => error instanceof StudioApiError
+      && error.code === 'PLATFORM_FUNCTION_FAILED'
+      && error.requestId === 'request-789'
+      && /Vercel Function Logs/.test(error.message),
+  );
+});
+
 test('postApi distinguishes network failures', async () => {
   globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
 

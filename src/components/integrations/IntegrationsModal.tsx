@@ -44,6 +44,8 @@ export function IntegrationsModal({
 }: IntegrationsModalProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"github" | "jira">("github");
+  const [githubCredentialRevision, setGithubCredentialRevision] = useState(0);
+  const [jiraCredentialRevision, setJiraCredentialRevision] = useState(0);
 
   // GitHub Local Config State
   const [ghToken, setGhToken] = useState("");
@@ -83,7 +85,7 @@ export function IntegrationsModal({
     refetch: refetchRepos,
     error: reposError,
   } = useQuery({
-    queryKey: ["github-repos", ghToken],
+    queryKey: ["github-repos", githubCredentialRevision],
     queryFn: async () => {
       if (!ghToken) return [];
       return (await integrationsApi.listGitHubRepositories(ghToken)).repos;
@@ -98,7 +100,7 @@ export function IntegrationsModal({
     refetch: refetchJira,
     error: jiraError,
   } = useQuery({
-    queryKey: ["jira-projects", jiraDomain, jiraEmail, jiraApiToken],
+    queryKey: ["jira-projects", jiraDomain, jiraEmail, jiraCredentialRevision],
     queryFn: async () => {
       if (!jiraDomain || !jiraEmail || !jiraApiToken) return [];
       return (await integrationsApi.listJiraProjects({ domain: jiraDomain, email: jiraEmail, apiToken: jiraApiToken })).projects;
@@ -256,6 +258,7 @@ export function IntegrationsModal({
                         defaultBranch: targetBranch,
                         isConnected: Boolean(ghToken),
                       });
+                      setGithubCredentialRevision((revision) => revision + 1);
                       refetchRepos();
                     }}
                     className="absolute right-1.5 top-1.5 px-3 py-1 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 text-xs font-bold rounded-lg border border-cyan-500/30 transition-all"
@@ -405,6 +408,7 @@ export function IntegrationsModal({
                       selectedProjectKey: selectedJiraProject,
                       isConnected: Boolean(jiraDomain && jiraEmail && jiraApiToken),
                     });
+                    setJiraCredentialRevision((revision) => revision + 1);
                     refetchJira();
                   }}
                   className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-xs font-bold rounded-xl transition-all"
@@ -486,7 +490,7 @@ export function IntegrationsModal({
 
         {/* Modal Footer */}
         <div className="integration-modal-footer p-4 px-6 border-t flex items-center justify-between text-xs">
-          <span>Config stored safely in browser local context.</span>
+          <span>Repository settings persist on this device; access tokens clear when this browser session ends.</span>
           <button
             onClick={onClose}
             className="integration-modal-done px-4 py-2 font-semibold rounded-xl transition-all"

@@ -323,5 +323,7 @@ Changing the token invalidates the previous browser pairing token. If the comput
 - [ ] The connector binds only to `127.0.0.1`; do not change it to a network address.
 - [ ] You understand that each agent run uses the local CLI account selected on that computer.
 - [ ] You review planned changes, diffs, and verification evidence before accepting a task.
+- [ ] GitHub and Jira tokens are entered only when needed. Studio retains them for the current browser session, not across browser restarts; revoke a token immediately if it was pasted into the wrong browser profile.
+- [ ] If `GEMINI_API_KEY`, `GITHUB_TOKEN`, or Jira server credentials are configured in Vercel, the deployment is protected by Vercel Deployment Protection or an equivalent identity-aware access layer. A public site with server-side provider credentials is not a safe multi-user production service.
 
 For the fuller enterprise architecture—device enrollment, single sign-on, short-lived signed action grants, durable audit logs, and organization-paid workers—see [Production deployment and user-owned agents](production-deployment-and-user-owned-agents.md) and the [production-readiness progress ledger](production-readiness-progress.md).

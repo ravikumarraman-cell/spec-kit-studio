@@ -16,7 +16,7 @@ This ledger records concrete evidence, not aspirational completion. It accompani
 | Fail closed without configured browser origins | Complete | Production mode requires explicit, exact HTTPS `STUDIO_ALLOWED_ORIGINS`; localhost defaults are development-only. |
 | Pairing token requirement | Complete | Production mode requires `STUDIO_CONNECTOR_TOKEN` with at least 32 UTF-8 bytes. It remains a local pairing control, not user identity. |
 | Connector production-policy tests | Complete | `tests/connectorProductionConfig.test.ts` covers development defaults and production rejection/acceptance paths. |
-| Full repository verification after this change | Complete with environment note | `npm run verify` passed on 2026-09-24: 149 tests, TypeScript validation, and build. The local machine used Node 20.15.1; Vite emitted a warning because the repository declares Node 22.12+ as its supported runtime. Validate the release artifact on Node 22.12+ before deployment. |
+| Full repository verification after this change | Complete | `npm run verify` passed on Node 22.19.0: 150 tests, TypeScript validation, public dependency-source validation, and the Vite/Express production build. |
 
 ## Implementation log
 
@@ -27,6 +27,7 @@ This ledger records concrete evidence, not aspirational completion. It accompani
 | 2026-09-24 | Ran full verification after the connector and documentation changes. | Complete with environment note | `npm run verify` passed: 149/149 tests, lint, and build. The existing test suite intentionally emits expected error logs for negative-path tests. Vite warned that the local Node 20.15.1 is below the package's declared Node 22.12+ runtime. |
 | 2026-09-24 | Added the layperson Vercel-to-local-connector deployment and pairing guide. | Complete | [Vercel-hosted Studio with local agents](vercel-local-connector-guide.md) documents deployment, local configuration, Studio pairing, billing boundaries, browser limitations, troubleshooting, and revocation. |
 | 2026-09-24 | Removed private registry resolution URLs from the npm lockfile and added public-source deployment guardrails. | Complete | `.npmrc` pins the public npm registry; `npm run check:public-deps` rejects private registry, Git/SSH, filesystem, and workspace dependency sources; `npm run verify` passed under Node 22.19.0 with 149 tests and a production build. |
+| 2026-09-24 | Hardened Vercel API routing/error reporting, static/API security headers, session-only browser integration secrets, GitHub publication validation, and loopback connector responses/worktree destination checks. | Complete | `npm run verify` passed on Node 22.19.0 with 150 tests and a production build. Production deployment still requires identity-aware access before server-side provider credentials may be configured. |
 
 ## Next milestone: Phase 1 — Studio Companion
 

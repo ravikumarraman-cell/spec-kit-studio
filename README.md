@@ -119,6 +119,16 @@ npm run connector
 
 Set `STUDIO_ALLOWED_ROOTS` to the narrowest parent directory that contains the repositories you intend to connect. In **Connected Workspace**, scan a repository before starting delivery work. See [the connector guide](docs/local-connector.md) for its exact capabilities and constraints.
 
+### Install without cloning Studio
+
+The deployed Studio site can serve a versioned standalone connector package. In **Connected Workspace**, expand **Install the local connector** and download it, then install it directly from the Studio URL:
+
+```bash
+npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.0.tgz
+```
+
+The package contains only the loopback connector runtime and its required Node dependency. It does not contain the Studio UI, repository data, or any user configuration. Run it from a private configuration folder containing `.env.local`; the complete, copy-and-paste setup is in [Install the local connector without cloning Studio](docs/install-local-connector.md).
+
 For a hosted deployment using the current loopback connector, set `STUDIO_CONNECTOR_MODE=production`. It then requires explicit absolute allowed roots, exact HTTPS origins, and a token with at least 32 bytes; it will not fall back to development defaults. This is a hardened bridge, not a multi-tenant companion service. See [production deployment and user-owned agents](docs/production-deployment-and-user-owned-agents.md) and [the production-readiness ledger](docs/production-readiness-progress.md) for the implemented boundary, target architecture, and remaining gates.
 
 ## A grounded first run
@@ -136,6 +146,7 @@ For a hosted deployment using the current loopback connector, set `STUDIO_CONNEC
 - [Story-first delivery status](docs/user-story-first-workflow-implementation-plan.md) distinguishes the implemented contract from future ideas.
 - [Feature isolation guide](docs/feature-isolation-user-guide.md) covers concurrent work and worktrees.
 - [Local connector](docs/local-connector.md) describes local access, confirmations, and boundaries.
+- [Installable local connector](docs/install-local-connector.md) explains the clone-free download, pairing, local-agent identity, and updates.
 - [Vercel-hosted Studio with local agents](docs/vercel-local-connector-guide.md) is the step-by-step deployment and pairing guide.
 - [Production deployment and user-owned agents](docs/production-deployment-and-user-owned-agents.md) explains billing, identity, Companion, and control-plane requirements.
 - [Architecture](docs/architecture.md) and [modular architecture](docs/modular-architecture.md) describe code boundaries.

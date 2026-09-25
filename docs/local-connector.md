@@ -2,7 +2,11 @@
 
 The optional connector is a Node process that bridges Studio to repositories on the same machine. It listens on `127.0.0.1`; it is not a network service or a remote-repository proxy.
 
-## Start it
+## Install and start it
+
+For a hosted Studio website, use the versioned standalone package offered in **Connected Workspace → Install the local connector**. It does not require a Studio checkout. The complete copy-and-paste guide is [Install the local connector without cloning Studio](install-local-connector.md).
+
+Contributors working from this repository can still start the connector directly:
 
 ```bash
 STUDIO_ALLOWED_ROOTS=/absolute/path/to/your/repos npm run connector
@@ -21,7 +25,7 @@ For a strict hosted-deployment bridge, add `STUDIO_CONNECTOR_MODE=production`. I
 
 Use the narrowest allowed parent directory that contains the repositories you intend to connect. Enter the connector URL, repository path, and token (when configured) in **Connected Workspace**.
 
-Keep the Studio UI and local connector from the same checkout/release. If Studio says the connector is older than the UI, stop its terminal process, pull or update Studio, start `npm run connector` from that updated `spec-kit-studio` folder, and refresh the browser. A deployed UI does not update a connector already running on your computer.
+Keep the Studio UI and local connector on compatible releases. A hosted Studio deployment does not update a connector already running on a computer: download and install the matching newer connector package, restart it, then refresh the browser. Contributors using a checkout can instead update that checkout and restart `npm run connector`.
 
 ## What it actually does
 
@@ -50,7 +54,7 @@ To add a CLI without changing Studio source, set `STUDIO_AGENT_ADAPTERS_JSON` in
 
 ```bash
 export STUDIO_AGENT_ADAPTERS_JSON='[{"id":"aider","label":"Aider","command":"aider","versionArgs":["--version"],"operations":{"planning":["--message","$PROMPT"],"implementation":["--message","$PROMPT"],"story-extraction":["--message","$PROMPT"]}}]'
-npm run connector
+spec-kit-studio-connector
 ```
 
 An adapter ID permits lowercase letters, digits, and hyphens; its command must be a simple executable name resolved from the connector's local `PATH`. Each operation is an argument array containing exactly one `$PROMPT`. The browser sends only the selected adapter ID and approved work packet: it cannot supply a command, flags, or shell expression. Scan **Connected Workspace** after restarting the connector, then choose the discovered agent in **Settings**. An agent appears only for the operations it declares.

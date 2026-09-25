@@ -37,7 +37,7 @@ You need:
 1. A Git repository containing this `spec-kit-studio` project.
 2. A Vercel account with permission to create a project from that repository.
 3. A current version of Node supported by this project. The project declares Node `>=22.12.0 <23` in `package.json`.
-4. The same project checked out on the computer where you will use Studio locally.
+4. The standalone local connector package downloaded from the deployed Studio site. A Studio checkout is optional and needed only for contributors.
 5. At least one local agent installed and signed in: Codex CLI, Claude Code, or GitHub Copilot CLI.
 6. A repository you want the agent to work on.
 7. A modern Chromium browser (Chrome or Edge recommended for the first setup).
@@ -139,13 +139,14 @@ Copy the output somewhere private temporarily. It is a key shared only by this b
 
 ### 6. Add local connector settings
 
-Open Terminal and go to your local Studio checkout:
+Create a private folder for connector settings, then open it in Terminal:
 
 ```bash
-cd /Users/your-name/develop/spec-kit-studio
+mkdir -p "$HOME/.spec-kit-studio-connector"
+cd "$HOME/.spec-kit-studio-connector"
 ```
 
-Create or update `.env.local` in that folder. Replace every example value below with your own values:
+Install the standalone connector from **Connected Workspace → Install the local connector** before continuing. Create `.env.local` in this private folder. Replace every example value below with your own values:
 
 ```env
 # Strict mode: production-safe local connector configuration.
@@ -177,7 +178,7 @@ Never commit `.env.local`. It should already be ignored by Git; confirm before c
 From that same Terminal window, run:
 
 ```bash
-npm run connector
+spec-kit-studio-connector
 ```
 
 Leave that Terminal window running while you use Studio. A successful start prints a message similar to:
@@ -281,7 +282,7 @@ The address in `STUDIO_ALLOWED_ORIGINS` does not exactly match the page open in 
 1. Copy the URL from the browser address bar.
 2. Keep only the origin: `https://host-name` with no path or trailing slash.
 3. Update `STUDIO_ALLOWED_ORIGINS` locally.
-4. Stop the connector with `Control+C`, start it again with `npm run connector`, and retry.
+4. Stop the connector with `Control+C`, start it again with `spec-kit-studio-connector`, and retry.
 
 For a Vercel preview URL, add that exact preview origin temporarily. Do not use a wildcard to make all preview deployments trusted.
 

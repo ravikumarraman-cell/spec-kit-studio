@@ -76,7 +76,10 @@ function adapterArgs(selected, operation, prompt) {
 const allowedRoots = connectorConfiguration.allowedRoots;
 const allowedOrigins = connectorConfiguration.allowedOrigins;
 const ignored = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage', '.venv', 'vendor']);
-const managedToolsDir = path.join(process.cwd(), 'connector', '.tools');
+// A globally installed connector may be started from any folder. Keep its
+// optional managed tools in a stable, user-owned location rather than inside
+// the package cache or the repository that happens to be the current folder.
+const managedToolsDir = path.resolve(process.env.STUDIO_CONNECTOR_TOOLS_DIR || path.join(os.homedir(), '.spec-kit-studio', 'connector-tools'));
 const managedUv = path.join(managedToolsDir, 'bin', 'uv');
 const managedPython = path.join(managedToolsDir, 'bin', 'python');
 const jobs = new Map();
@@ -774,5 +777,10 @@ const server = http.createServer(async (req, res) => {
     const message = redactSensitiveOutput(error instanceof Error ? error.message : 'Connector request failed.');
     return send(req, res, 400, { error: message || 'Connector request failed.' });
   }
+});
+server.once('error', (error) => {
+  const message = redactSensitiveOutput(error instanceof Error ? error.message : String(error));
+  process.stderr.write(`Spec-Kit Studio connector could not start on 127.0.0.1:${PORT}: ${message}\n`);
+  process.exitCode = 1;
 });
 server.listen(PORT, '127.0.0.1', () => console.log(`Spec-Kit Studio connector listening at http://127.0.0.1:${PORT}`));

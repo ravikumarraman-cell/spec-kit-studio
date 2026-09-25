@@ -4,6 +4,9 @@ import { getConnectorSessionToken } from './connectorSession';
 
 export const DEFAULT_CONNECTOR_URL = 'http://127.0.0.1:4318';
 const CONNECTOR_REQUEST_TIMEOUT_MS = 20_000;
+// Toolchain installation is explicit and can legitimately download/build a
+// CLI. Keep normal connector calls responsive while bounding this operation.
+const TOOLCHAIN_REQUEST_TIMEOUT_MS = 240_000;
 
 /**
  * Centralizes Studio's loopback-only connector configuration. UI modules should
@@ -78,14 +81,20 @@ export function connectorClient(baseUrl: string, token: string) {
   if (!/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(normalizedBaseUrl)) {
     throw new Error('For safety, Studio can connect only to a local connector URL (localhost or 127.0.0.1). Open Connected Workspace to correct it.');
   }
-  const request = async <T>(endpoint: string, payload?: unknown): Promise<T> => {
+  const request = async <T>(endpoint: string, payload?: unknown, timeoutMs = endpoint === '/v1/prerequisites/install-uv' || endpoint === '/v1/spec-kit/install' ? TOOLCHAIN_REQUEST_TIMEOUT_MS : CONNECTOR_REQUEST_TIMEOUT_MS): Promise<T> => {
     let response: Response;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), CONNECTOR_REQUEST_TIMEOUT_MS);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
     try {
       response = await fetch(`${normalizedBaseUrl}${endpoint}`, { method: payload ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Studio-Token': token } : {}) }, body: payload ? JSON.stringify(payload) : undefined, signal: controller.signal });
     } catch {
-      throw new Error('Studio could not get a response from the local connector within 20 seconds. Start or restart it, then confirm its URL and pairing token in Connected Workspace.');
+      if (timedOut) {
+        throw new Error(timeoutMs === TOOLCHAIN_REQUEST_TIMEOUT_MS
+          ? 'The local toolchain update did not finish within 4 minutes. Check the connector terminal for a network, proxy, or package-install error, then retry.'
+          : 'Studio could not get a response from the local connector within 20 seconds. Start or restart it, then confirm its URL and pairing token in Connected Workspace.');
+      }
+      throw new Error('Studio could not reach the local connector. Start or restart it, then confirm its URL and pairing token in Connected Workspace.');
     } finally {
       window.clearTimeout(timeout);
     }

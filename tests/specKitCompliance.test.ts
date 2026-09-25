@@ -29,6 +29,14 @@ test('accepts a complete single-story Spec-Kit artifact set', () => {
   assert.deepEqual(validateSpecKitArtifacts(item, artifacts), []);
 });
 
+test('accepts semantic official task-heading variants without relaxing task traceability', () => {
+  const variants = artifacts.map((artifact) => ({ ...artifact }));
+  variants[2].content = variants[2].content
+    .replace('## Dependencies & Execution Order', '## Dependencies and execution order')
+    .replace('## Implementation Strategy', '## MVP strategy');
+  assert.deepEqual(validateSpecKitArtifacts(item, variants), []);
+});
+
 test('rejects sibling stories, missing structure, and untraced tasks', () => {
   const invalid = artifacts.map((artifact) => ({ ...artifact }));
   invalid[0].content += '\n### User Story 2 - Delete tenant (Priority: P2)';

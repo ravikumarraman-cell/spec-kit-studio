@@ -36,8 +36,12 @@ const requiredHeadings: Record<SpecKitCoreArtifactKind, RegExp[]> = {
   tasks: [
     /^# Tasks:/m,
     /^## Phase 1:/m,
-    /^## Dependencies & Execution Order/m,
-    /^## Implementation Strategy/m,
+    // Official template revisions and supported agents use equivalent prose
+    // here. Require the decision-bearing sections, not one punctuation or
+    // capitalization variant, while retaining the strict task traceability
+    // rules below.
+    /^## Dependencies\s+(?:&|and)\s+Execution Order/im,
+    /^## (?:Implementation|MVP) Strategy/im,
   ],
 };
 

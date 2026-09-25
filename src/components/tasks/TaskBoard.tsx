@@ -18,6 +18,7 @@ import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
 import { configuredConnectorClient } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { currentFeatureDeliveryArtifact, deliveryPlanRepositoryPath, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 
 interface TaskBoardProps {
   projectId: string;
@@ -318,8 +319,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             </div>
           </div>
 
-          {/* Add Task Form */}
-          <AddTaskForm spec={spec} phases={PHASES} onAddTask={handleAddTask} />
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" label="Add a task" summary="use only when the accepted delivery plan needs another task">
+            <div className="p-4"><AddTaskForm spec={spec} phases={PHASES} onAddTask={handleAddTask} /></div>
+          </ProgressiveDisclosure>
         </div>
       )}
 
@@ -331,7 +333,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             onDelete={handleDeleteTask}
             onSelectForPrompt={onSelectTaskForPrompt}
           />
-          <AddTaskForm spec={spec} phases={PHASES} onAddTask={handleAddTask} />
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" label="Add a task" summary="use only when the accepted delivery plan needs another task">
+            <div className="p-4"><AddTaskForm spec={spec} phases={PHASES} onAddTask={handleAddTask} /></div>
+          </ProgressiveDisclosure>
         </div>
       )}
 

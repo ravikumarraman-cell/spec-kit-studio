@@ -19,6 +19,7 @@ import { RequirementCard } from './RequirementCard';
 import { AddRequirementForm } from './AddRequirementForm';
 import { SpecEdgeCases } from './SpecEdgeCases';
 import { SpecTanStackMatrix } from './SpecTanStackMatrix';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 
 interface SpecEditorProps {
   projectId: string;
@@ -207,8 +208,9 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
             <AddUserStoryForm onAddStory={handleAddUserStory} />
           </div>
 
-          {/* Functional Requirements Section */}
-          <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+          {/* Requirements are supporting detail while a user is shaping one story. */}
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" tone="context" label="Functional requirements" summary={`${currentSpec.functionalRequirements.length} verifiable requirement${currentSpec.functionalRequirements.length === 1 ? '' : 's'} · review or edit`}>
+          <div className="space-y-4 p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
@@ -264,12 +266,11 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
 
             <AddRequirementForm onAddFR={handleAddFR} />
           </div>
+          </ProgressiveDisclosure>
 
-          {/* Success Metrics & Edge Cases */}
-          <SpecEdgeCases
-            successMetrics={currentSpec.successMetrics}
-            edgeCases={currentSpec.edgeCases}
-          />
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" label="Success measures and edge cases" summary="quality criteria and exceptional behavior">
+            <div className="p-4"><SpecEdgeCases successMetrics={currentSpec.successMetrics} edgeCases={currentSpec.edgeCases} /></div>
+          </ProgressiveDisclosure>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, Cpu, HardDrive, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { CheckCircle2, Cpu, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 import { SpecKitProject } from '../../types/speckit';
 import { projectBackups } from '../../lib/projectBackup';
 import { resolveStackProfile } from '../../lib/stackProfiles';
@@ -8,16 +8,16 @@ import { localAgentLabel } from '../../lib/agentAvailability';
 import { readRuntimeAgentScan } from '../../lib/runtimeAgents';
 import { getStudioSettings, saveStudioSettings, StudioSettings as Settings } from '../../lib/studioSettings';
 import { SpecKitVersionSelector } from '../common/SpecKitVersionSelector';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 import { THEME_PRESETS, useTheme } from '../../context/ThemeContext';
 
-interface Props { project: SpecKitProject; onSelectVersion: (version: string) => void; onSaveStackProfile: (profile: SpecKitProject['stackProfile']) => void; onOpenWorkspace: () => void; onRestoreSnapshot: (savedAt: string) => boolean; }
+interface Props { project: SpecKitProject; onSelectVersion: (version: string) => void; onSaveStackProfile: (profile: SpecKitProject['stackProfile']) => void; onRestoreSnapshot: (savedAt: string) => boolean; }
 
-export function StudioSettings({ project, onSelectVersion, onSaveStackProfile, onOpenWorkspace, onRestoreSnapshot }: Props) {
+export function StudioSettings({ project, onSelectVersion, onSaveStackProfile, onRestoreSnapshot }: Props) {
   const profile = resolveStackProfile(project); const backups = projectBackups(project.id);
   const [settings, setSettings] = useState<Settings>(() => getStudioSettings());
   const { theme, setTheme } = useTheme();
   const update = (partial: Partial<Settings>) => { const next = { ...settings, ...partial }; setSettings(next); saveStudioSettings(next); };
-  const hasRepo = Boolean(project.importedRepo?.repoUrl);
   const configuredAgents = useMemo(() => readRuntimeAgentScan().agents, []);
 
   return <div className="mx-auto max-w-4xl space-y-6 pb-12">
@@ -25,6 +25,7 @@ export function StudioSettings({ project, onSelectVersion, onSaveStackProfile, o
 
     <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5"><div className="flex gap-3"><div className="rounded-xl bg-cyan-500/15 p-2 text-cyan-300"><Cpu className="h-5 w-5" /></div><div><h2 className="font-bold text-zinc-100">Engine & workflow</h2><p className="mt-1 text-xs text-zinc-400">Studio uses the compatible local agent you select. A hosted provider is always an explicit, optional choice.</p></div></div><div className="mt-4 grid gap-4 border-t border-cyan-500/15 pt-4 sm:grid-cols-2"><label className="text-xs font-semibold text-zinc-300">Preferred local agent<select value={settings.preferredAgent} onChange={(event) => update({ preferredAgent: event.target.value as Settings['preferredAgent'] })} className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-zinc-100"><option value="auto">Auto-select compatible agent</option>{configuredAgents.map((agent) => <option key={agent.id} value={agent.id}>{localAgentLabel(agent)}{agent.installed ? '' : ' (not detected)'}</option>)}</select><span className="mt-1 block text-[11px] font-normal text-zinc-500">Choices come from the last connector scan. Add a new CLI adapter, then scan again.</span></label><div className="space-y-2"><div className="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /><span><strong className="text-xs text-zinc-200">Human approval stays on</strong><span className="mt-1 block text-[11px] text-zinc-500">The Engine can prepare a stage, but only you advance the Journey or apply repository changes.</span></span></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><input type="checkbox" checked={settings.showAdvancedTools} onChange={(event) => update({ showAdvancedTools: event.target.checked })} className="mt-0.5 accent-cyan-400" /><span><strong className="text-xs text-zinc-200">Show advanced tools</strong><span className="mt-1 block text-[11px] text-zinc-500">Show Repository Import in the Journey Map. You can turn it on whenever you need it.</span></span></label></div></div></section>
 
+    <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-1" tone="context" label="More workspace settings" summary="compatibility, repository profile, recovery, providers, and appearance"><div className="space-y-4 p-3">
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><div className="flex gap-3"><div className="rounded-xl bg-indigo-500/15 p-2 text-indigo-300"><Sparkles className="h-5 w-5" /></div><div><h2 className="font-bold text-zinc-100">Spec-Kit compatibility</h2><p className="mt-1 text-xs text-zinc-400">Choose the Studio target version for this feature workspace. The connected repository remains the source of truth for the installed CLI and integration.</p></div></div><div className="mt-4"><SpecKitVersionSelector currentVersion={project.version} onSelectVersion={onSelectVersion} variant="full" /></div></section>
 
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><h2 className="font-bold text-zinc-100">Repository stack profile</h2><p className="mt-1 text-xs text-zinc-400">This drives task guardrails and handoff templates for this project only.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs text-zinc-300">Profile<select value={profile.id} onChange={(event) => onSaveStackProfile({ id: event.target.value })} className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-zinc-100"><option value="node">Node.js / TypeScript</option><option value="python">Python</option><option value="infrastructure">Infrastructure as Code</option><option value="generic">Repository-defined</option></select></label><div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[11px] text-zinc-400"><strong className="text-zinc-200">Default checks</strong><p className="mt-1">{profile.testCommands.join(' · ') || 'Use repository-declared checks.'}</p></div></div></section>
@@ -35,7 +36,7 @@ export function StudioSettings({ project, onSelectVersion, onSaveStackProfile, o
 
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><h2 className="font-bold text-zinc-100">Appearance</h2><p className="mt-1 text-xs text-zinc-400">Theme is a personal Studio preference and never changes repository files.</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{THEME_PRESETS.map((preset) => <button type="button" key={preset.id} onClick={() => setTheme(preset.id)} className={`rounded-xl border p-3 text-left ${theme === preset.id ? 'border-cyan-400 bg-cyan-500/10' : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700'}`}><div className="flex items-center justify-between"><strong className="text-xs text-zinc-100">{preset.name}</strong>{theme === preset.id && <CheckCircle2 className="h-4 w-4 text-cyan-300" />}</div><p className="mt-1 text-[11px] text-zinc-500">{preset.description}</p></button>)}</div></section>
 
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><div className="flex items-start justify-between gap-4"><div className="flex gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><HardDrive className="h-5 w-5" /></div><div><h2 className="font-bold text-zinc-100">Local connector & privacy</h2><p className="mt-1 text-xs text-zinc-400">Repository access and agent execution happen through the local connector. Pairing tokens are never saved in these settings.</p><p className="mt-2 text-[11px] text-zinc-500">{hasRepo ? `Connected: ${project.importedRepo?.repoName}` : 'No connected repository yet.'}</p></div></div><button type="button" onClick={onOpenWorkspace} className="shrink-0 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20">Open workspace</button></div></section>
+    </div></ProgressiveDisclosure>
 
     <p className="flex items-center gap-2 text-xs text-zinc-500"><ShieldCheck className="h-4 w-4 text-emerald-400" />Sensitive actions still require an explicit confirmation at the point of action.</p>
   </div>;

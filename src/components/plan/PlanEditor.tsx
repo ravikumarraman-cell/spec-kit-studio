@@ -21,6 +21,7 @@ import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { configuredConnectorClient } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { currentFeatureArchitectureArtifact, needsFeatureArchitectureReconciliation } from '../../lib/featureArchitectureReconciliation';
+import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
 
 interface PlanEditorProps {
   projectId: string;
@@ -222,12 +223,13 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
             onRemoveApi={handleRemoveApi}
           />
 
-          <DataSchemasSection dataSchemas={currentPlan.dataSchemas} />
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" label="Data schemas" summary={`${currentPlan.dataSchemas.length} schema${currentPlan.dataSchemas.length === 1 ? '' : 's'} · reference detail`}>
+            <div className="p-4"><DataSchemasSection dataSchemas={currentPlan.dataSchemas} /></div>
+          </ProgressiveDisclosure>
 
-          <AdrSection
-            adrs={currentPlan.adrs || []}
-            onAddAdr={handleAddAdr}
-          />
+          <ProgressiveDisclosure className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1" label="Architecture decisions" summary={`${(currentPlan.adrs || []).length} recorded decision${(currentPlan.adrs || []).length === 1 ? '' : 's'}`}>
+            <div className="p-4"><AdrSection adrs={currentPlan.adrs || []} onAddAdr={handleAddAdr} /></div>
+          </ProgressiveDisclosure>
         </div>
       )}
 

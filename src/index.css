@@ -742,6 +742,33 @@
 }
 .journey-next-step-details > summary { color: var(--theme-muted) !important; }
 
+/* The local companion is a prerequisite for repository work, so its compact
+   state always exposes an honest connection status instead of hiding setup
+   behind diagnostics. All hues resolve through shared theme roles. */
+.local-connector-setup {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.local-connector-setup summary::-webkit-details-marker { display: none; }
+.local-connector-setup summary p { color: var(--theme-muted) !important; }
+.local-connector-setup-icon { background: var(--theme-success-tint); color: var(--theme-success); }
+.local-connector-setup-status { background: var(--theme-success-tint); color: var(--theme-success); }
+.local-connector-setup--attention .local-connector-setup-icon,
+.local-connector-setup--attention .local-connector-setup-status { background: var(--theme-warning-tint); color: var(--theme-warning); }
+.local-connector-setup--not-connected .local-connector-setup-icon,
+.local-connector-setup--not-connected .local-connector-setup-status { background: var(--theme-info-tint); color: var(--theme-primary); }
+.local-connector-setup-body { border-color: var(--theme-border) !important; color: var(--theme-muted); }
+.local-connector-setup-step { background: var(--theme-raised); border-color: var(--theme-border); color: var(--theme-text); }
+.local-connector-setup-step p { color: var(--theme-muted); }
+.local-connector-setup-command { background: var(--theme-inset); color: var(--theme-text); }
+.connector-setup-primary { background: var(--theme-primary); color: #fff; }
+.connector-setup-primary:hover { background: var(--theme-primary-strong); }
+.connector-setup-copy { background: var(--theme-surface); border-color: var(--theme-border); color: var(--theme-primary); }
+.connector-setup-copy:hover { background: var(--theme-raised); color: var(--theme-primary-strong); }
+.local-connector-guide { background: var(--theme-surface); border-color: var(--theme-border); color: var(--theme-text); }
+.local-connector-guide p { color: var(--theme-muted); }
+
 /* Dialogs and the persistent local-agent status use the same semantic layers
    as every page. They must not inherit a dark-only Zinc surface just because
    they are rendered through a portal or fixed above the page. */

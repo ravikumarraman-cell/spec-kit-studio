@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Bot, CheckCircle2, CheckSquare, ChevronRight, Circle, FileText, FolderGit2, HardDrive, Map, Play, Settings, Terminal, Workflow, Wrench } from 'lucide-react';
+import { Activity, Bot, CheckCircle2, CheckSquare, ChevronRight, Circle, FileText, FolderGit2, HardDrive, Map, Settings, Terminal, Workflow, Wrench } from 'lucide-react';
 import { SpecKitProject, ViewTab } from '../../types/speckit';
 import { getStudioSettings } from '../../lib/studioSettings';
 import { featureJourneyStages, getJourneyStage, getProjectJourney } from '../../lib/featureJourney';
 import { processDefinitions } from '../../lib/processCases';
 import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
+import { configuredConnectorClient } from '../../lib/connector';
 
 interface SidebarProps { activeTab: ViewTab; onTabChange: (tab: ViewTab) => void; project: SpecKitProject; onReopenFeatureStage?: (stageId: number) => void; isCollapsed?: boolean; }
 const stageIcons: Record<ViewTab, React.ReactNode> = {
@@ -13,10 +14,25 @@ const stageIcons: Record<ViewTab, React.ReactNode> = {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, project, onReopenFeatureStage, isCollapsed = false }) => {
   const [showAdvancedTools, setShowAdvancedTools] = useState(() => getStudioSettings().showAdvancedTools);
+  const [connectorState, setConnectorState] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   useEffect(() => {
     const refresh = () => setShowAdvancedTools(getStudioSettings().showAdvancedTools);
     window.addEventListener('speckit-settings-change', refresh);
     return () => window.removeEventListener('speckit-settings-change', refresh);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const checkConnector = async () => {
+      try {
+        const health = await configuredConnectorClient().health();
+        if (active) setConnectorState(health.status === 'ok' ? 'ready' : 'unavailable');
+      } catch {
+        if (active) setConnectorState('unavailable');
+      }
+    };
+    void checkConnector();
+    const interval = window.setInterval(() => void checkConnector(), 15_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
   if (isCollapsed) return null;
   const workflowFocus = project.workflowFocus;
@@ -51,11 +67,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, projec
   };
 
   return <aside className="hidden shrink-0 select-none overflow-y-auto border-r border-slate-200 bg-slate-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/70 md:flex md:w-72 md:flex-col">
-    <button type="button" onClick={() => onTabChange('overview')} className={`rounded-xl border p-3 text-left transition-colors ${activeTab === 'overview' ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-slate-200 bg-white hover:border-cyan-500/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-cyan-500/30'}`}>
+    <div className={`rounded-xl border p-3 transition-colors ${activeTab === 'overview' ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-slate-200 bg-white hover:border-cyan-500/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-cyan-500/30'}`}>
+      <button type="button" onClick={() => onTabChange('overview')} className="w-full text-left">
       <div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-cyan-300">Feature journey</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{completed}/8</span></div>
       <div className="mt-2 flex items-end justify-between gap-3"><div><p className="text-xs font-bold text-slate-900 dark:text-zinc-100">{current.id}. {currentLabel}</p><p className="mt-0.5 text-[11px] text-slate-500 dark:text-zinc-400">{remaining} stage{remaining === 1 ? '' : 's'} remaining</p></div><ChevronRight className="h-4 w-4 text-cyan-500" /></div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400" style={{ width: `${Math.round((completed / featureJourneyStages.length) * 100)}%` }} /></div>
-    </button>
+      </button>
+      {connectorState !== 'ready' && <button type="button" onClick={() => onTabChange('workspace')} className="mt-3 flex w-full items-center gap-2 rounded-lg border border-amber-400/35 bg-amber-500/10 px-2.5 py-2 text-left text-[11px] font-bold text-amber-800 hover:bg-amber-500/15 dark:text-amber-200"><Terminal className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 flex-1">{connectorState === 'checking' ? 'Checking local connector…' : 'Set up local connector'}</span><ChevronRight className="h-3.5 w-3.5" /></button>}
+    </div>
 
     <div className="mt-5 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Your journey</div>
     <nav aria-label="Feature journey stages" className="mt-2 space-y-1">
@@ -66,6 +85,5 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, projec
 
     <div className="mt-5 border-t border-slate-200 pt-4 dark:border-zinc-800"><div className="px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Studio</div><button type="button" onClick={() => onTabChange('workflows')} className={`mt-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${activeTab === 'workflows' ? 'bg-slate-200 text-slate-950 dark:bg-zinc-900 dark:text-zinc-100' : 'text-slate-600 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'}`}><Wrench className="h-4 w-4" />Workflows</button><button type="button" onClick={() => onTabChange('settings')} className={`mt-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${activeTab === 'settings' ? 'bg-slate-200 text-slate-950 dark:bg-zinc-900 dark:text-zinc-100' : 'text-slate-600 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'}`}><Settings className="h-4 w-4" />Settings</button>{showAdvancedTools && <button type="button" onClick={() => onTabChange('import')} className={`mt-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ${activeTab === 'import' ? 'bg-slate-200 text-slate-950 dark:bg-zinc-900 dark:text-zinc-100' : 'text-slate-600 hover:bg-slate-200/70 dark:text-zinc-400 dark:hover:bg-zinc-900'}`}><FolderGit2 className="h-4 w-4" />Repository import <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-600">Advanced</span></button>}</div>
 
-    <div className="mt-auto border-t border-slate-200 px-2 pt-4 dark:border-zinc-800"><div className="rounded-xl border border-slate-200 bg-white p-3 text-[11px] dark:border-zinc-800 dark:bg-zinc-900/60"><div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-zinc-200"><HardDrive className="h-3.5 w-3.5 text-emerald-500" />{project.importedRepo?.repoName || 'No repository connected'}</div><p className="mt-1 text-slate-500 dark:text-zinc-400">{project.importedRepo ? `${project.importedRepo.primaryLanguage} · scan evidence attached` : 'Start Stage 1 to connect a repository.'}</p><button type="button" onClick={() => onTabChange(current.destination)} className="mt-2 inline-flex items-center gap-1 font-bold text-cyan-700 hover:text-cyan-600 dark:text-cyan-300">Resume Stage {current.id}<Play className="h-3 w-3" /></button></div></div>
   </aside>;
 };

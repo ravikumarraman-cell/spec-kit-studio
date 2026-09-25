@@ -21,7 +21,7 @@ You need Node `22.12` through `22.x`, a repository clone, and the exact HTTPS ad
 In Studio, go to **Connected Workspace → Install the local connector** and select **Download the local connector package**. In a terminal, install it directly from your Studio site:
 
 ```bash
-npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.3.tgz
+npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.4.tgz
 ```
 
 Replace `https://studio.example.com` with your exact Studio address. This downloads the standalone connector, not the Studio application source. If your organization later publishes the package to npm, it may give you the shorter equivalent:
@@ -143,3 +143,7 @@ To stop the connector, focus its terminal and press `Ctrl+C`. To update, downloa
 ## Safety guarantees
 
 The connector binds only to loopback, accepts configured exact origins, requires a pairing token in production mode, and rejects filesystem access outside the explicit roots. Repository writes, worktree creation, tool installation, and agent execution require explicit confirmation. It never auto-commits, pushes, creates pull requests, or deploys. Review diffs and test evidence before accepting any agent result.
+
+### When a planning branch is already open
+
+For implementation, Studio uses a linked Git worktree. If the feature’s planning branch is already checked out in the connected repository, Git cannot attach that same branch to a second directory. Studio handles this safely: it creates a clearly named `-worktree` implementation branch from the reviewed planning branch and copies only that feature’s canonical `specs/<number>-<name>/` artifacts into the new worktree. It does not switch, move, overwrite, or copy unrelated untracked files from the connected checkout.

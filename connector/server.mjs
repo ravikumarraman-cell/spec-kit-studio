@@ -28,7 +28,7 @@ const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
-const CONNECTOR_VERSION = '0.1.3';
+const CONNECTOR_VERSION = '0.1.4';
 // Studio launches Codex non-interactively. User-level plugins, skills, and
 // configuration can inject an unbounded amount of unrelated context into
 // every request, so isolate connector runs by default. Authentication remains
@@ -399,7 +399,13 @@ async function featurePreflight(root, project, featureId) {
     if (feature.worktreePath && path.resolve(feature.worktreePath) !== root) errors.push({ code: 'worktree-mismatch', message: 'The selected folder is not the worktree registered for this feature.' });
     if (!gitDir.output.includes('/worktrees/')) warnings.push({ code: 'main-checkout', message: 'This is the repository’s main checkout. Use a linked Git worktree before implementation work.' });
     if (feature.scope === 'user-story') {
-      if (branch.output.trim() !== feature.slug) errors.push({ code: 'speckit-branch-mismatch', message: `Strict story delivery requires branch ${feature.slug}; the selected folder is on ${branch.output.trim() || 'no branch'}.` });
+      // Planning may begin in the connected checkout. If its canonical story
+      // branch is already attached there, implementation receives a dedicated
+      // linked-worktree branch. The registered branch remains the authority;
+      // the canonical numbered artifact directory continues to identify the
+      // Spec-Kit feature.
+      const expectedBranch = feature.branch || feature.slug;
+      if (branch.output.trim() !== expectedBranch) errors.push({ code: 'speckit-branch-mismatch', message: `Strict story delivery requires registered branch ${expectedBranch}; the selected folder is on ${branch.output.trim() || 'no branch'}.` });
       const installedVersion = await specifyCommand(['version'], root);
       errors.push(...await validateStorySpecKitConformance(root, feature, installedVersion.ok ? installedVersion.output : ''));
     }
@@ -422,18 +428,54 @@ async function createWorktree(root, targetPath, branch) {
   const existingBranch = await command('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], root);
   const baseline = await command('git', ['rev-parse', existingBranch.ok ? branch : 'HEAD'], root);
   if (!baseline.ok) throw new Error('Studio could not determine the current Git commit.');
-  const args = existingBranch.ok
+  const worktreeList = await command('git', ['worktree', 'list', '--porcelain'], root);
+  if (!worktreeList.ok) throw new Error('Studio could not inspect existing Git worktrees.');
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const alreadyAttached = new RegExp(`(?:^|\\n)branch refs/heads/${escapeRegExp(branch)}(?:\\n|$)`).test(worktreeList.output);
+  let effectiveBranch = branch;
+  if (alreadyAttached) {
+    // Git refuses two working directories on one branch. Create a clearly
+    // feature-bound implementation branch from the approved planning branch
+    // instead of asking the user to move or discard their main checkout.
+    const branchBase = branch.slice(0, 104);
+    for (let ordinal = 0; ordinal < 100; ordinal += 1) {
+      const candidate = `${branchBase}-worktree${ordinal ? `-${ordinal + 1}` : ''}`;
+      const candidateExists = await command('git', ['show-ref', '--verify', '--quiet', `refs/heads/${candidate}`], root);
+      if (!candidateExists.ok) { effectiveBranch = candidate; break; }
+    }
+    if (effectiveBranch === branch) throw new Error('Studio could not reserve a safe implementation branch name. Choose a shorter feature branch name and retry.');
+  }
+  const args = effectiveBranch === branch && existingBranch.ok
     ? ['worktree', 'add', target, branch]
-    : ['worktree', 'add', '-b', branch, target, 'HEAD'];
+    : effectiveBranch === branch
+      ? ['worktree', 'add', '-b', branch, target, 'HEAD']
+      : ['worktree', 'add', '-b', effectiveBranch, target, branch];
   const result = await command('git', args, root, 60_000);
   if (!result.ok) {
     const detail = result.output || 'Git could not create the linked worktree.';
-    if (existingBranch.ok && /already checked out/i.test(detail)) {
-      throw new Error(`The feature branch ${branch} is already attached to another worktree. Reuse that registered worktree or choose a different feature branch.`);
-    }
     throw new Error(detail);
   }
-  return { repositoryPath: target, branch, baselineCommit: baseline.output.trim() };
+  // Planning artifacts are often intentionally uncommitted until human
+  // review. Carry only the canonical story artifact folder into the new
+  // implementation worktree; never copy unrelated untracked repository data.
+  if (/^\d{3,}-[a-z0-9][a-z0-9-]*$/i.test(branch)) {
+    const sourceArtifacts = path.join(root, 'specs', branch);
+    const destinationArtifacts = path.join(target, 'specs', branch);
+    const sourceExists = await fs.stat(sourceArtifacts).then((stat) => stat.isDirectory()).catch(() => false);
+    if (sourceExists) {
+      try {
+        await fs.cp(sourceArtifacts, destinationArtifacts, { recursive: true, force: false, errorOnExist: false });
+      } catch (error) {
+        // The worktree was created moments ago and has not run an agent. Roll
+        // back that new directory rather than leaving an ambiguous half-ready
+        // workspace. The newly reserved branch is intentionally retained for
+        // diagnosability and can be safely reused on the next attempt.
+        await command('git', ['worktree', 'remove', '--force', target], root, 60_000);
+        throw new Error(`Studio could not carry the reviewed feature artifacts into the new implementation worktree: ${error instanceof Error ? error.message : 'copy failed'}`);
+      }
+    }
+  }
+  return { repositoryPath: target, branch: effectiveBranch, baselineCommit: baseline.output.trim() };
 }
 async function runBaselineCommand(root, commandId) {
   const files = await walk(root);

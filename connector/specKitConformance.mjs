@@ -6,7 +6,7 @@ export const SPEC_KIT_CONFORMANCE_VERSION = '1.0.11';
 const requiredArtifactHeadings = {
   spec: [/^# Feature Specification:/m, /^## User Scenarios & Testing/m, /^## Requirements/m, /^### Functional Requirements/m, /^## Success Criteria/m, /^### Measurable Outcomes/m],
   plan: [/^# Implementation Plan:/m, /^## Summary/m, /^## Technical Context/m, /^## Constitution Check/m, /^## Project Structure/m],
-  tasks: [/^# Tasks:/m, /^## Phase 1:/m, /^## Dependencies & Execution Order/m, /^## Implementation Strategy/m],
+  tasks: [/^# Tasks:/m, /^## Phase 1:/m, /^## Dependencies\s+(?:&|and)\s+Execution Order/im, /^## (?:Implementation|MVP) Strategy/im],
 };
 
 export function versionAtLeast(actual, required) {

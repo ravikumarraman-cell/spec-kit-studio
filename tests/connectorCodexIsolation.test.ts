@@ -19,3 +19,11 @@ test('connector separates evidence-only planning from artifact-producing plannin
   assert.match(source, /const operation = writeScope === 'workspace-write' \? 'planning-write' : 'planning'/);
   assert.match(source, /agentOperations: Object\.fromEntries/);
 });
+
+test('connector creates a dedicated implementation branch when planning already owns the feature branch', async () => {
+  const source = await readFile(new URL('../connector/server.mjs', import.meta.url), 'utf8');
+  assert.match(source, /const alreadyAttached = new RegExp/);
+  assert.match(source, /-worktree/);
+  assert.match(source, /Carry only the canonical story artifact folder/);
+  assert.match(source, /registered branch/);
+});

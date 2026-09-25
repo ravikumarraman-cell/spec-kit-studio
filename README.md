@@ -6,6 +6,10 @@ Spec-Kit Studio is a local-first web workspace for planning and guiding a bounde
 
 It does not prove that a plan or coding-agent result is correct. It helps a reviewer see what was requested, what was checked, and what still needs a human decision.
 
+> “It's not about writing code anymore. It's about refining requirements, crafting precise specifications, and orchestrating agents and code generators to do the job for us”
+>
+> — Lakshmi Narasimhan, Sampath Kumar
+
 ```text
 Delivery request -> repository baseline -> reviewed specification -> design
                  -> ordered tasks -> one bounded implementation -> handoff

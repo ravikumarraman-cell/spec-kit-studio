@@ -342,7 +342,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
         setAcceptedNotice(hydrated.status === 'running'
           ? `Reconnected to the Stage ${stageId} agent run. You can safely leave this screen while it continues.`
           : `Your earlier Stage ${stageId} agent run is ready for review. Studio did not run it again.`);
-        if (!hydrated.ok && hydrated.status !== 'running') setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+        if (!hydrated.ok && hydrated.status !== 'running') {
+          clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
+          setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+        }
       } catch (error) {
         if (disposed) return;
         const message = error instanceof Error ? error.message : '';
@@ -368,7 +371,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
         setAgentJob(hydrated);
         if (hydrated.status !== 'running') {
           setIsRunningEngine(false);
-          if (!hydrated.ok) setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+          if (!hydrated.ok) {
+            if (activeFeature) clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
+            setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+          }
         }
       } catch {
         // Keep the saved reference. A temporary connector restart must not
@@ -423,6 +429,10 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       const issues = validateSpecKitArtifacts(activeFeature, [{ ...candidate, kind: expectedKind }], [expectedKind]);
       if (issues.length) {
         setDiscoveredArtifact(null);
+        // A completed-but-invalid artifact is not an active run. Remove an
+        // obsolete recovery handle so it cannot keep this stage locked behind
+        // a stale "reconnecting" state.
+        clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
         setEngineError(`Studio found ${candidate.path}, but it is not ready for approval: ${issues.map((issue) => issue.message).join(' ')}`);
         return;
       }

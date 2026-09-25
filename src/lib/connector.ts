@@ -3,6 +3,7 @@ import { LocalAgentId, LocalAgentStatus } from './agentAvailability';
 import { getConnectorSessionToken } from './connectorSession';
 
 export const DEFAULT_CONNECTOR_URL = 'http://127.0.0.1:4318';
+const CONNECTOR_REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * Centralizes Studio's loopback-only connector configuration. UI modules should
@@ -78,10 +79,14 @@ export function connectorClient(baseUrl: string, token: string) {
   }
   const request = async <T>(endpoint: string, payload?: unknown): Promise<T> => {
     let response: Response;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), CONNECTOR_REQUEST_TIMEOUT_MS);
     try {
-      response = await fetch(`${normalizedBaseUrl}${endpoint}`, { method: payload ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Studio-Token': token } : {}) }, body: payload ? JSON.stringify(payload) : undefined });
+      response = await fetch(`${normalizedBaseUrl}${endpoint}`, { method: payload ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Studio-Token': token } : {}) }, body: payload ? JSON.stringify(payload) : undefined, signal: controller.signal });
     } catch {
-      throw new Error('Studio cannot reach the local connector. Start or restart `npm run connector`, then confirm its URL and pairing token in Connected Workspace.');
+      throw new Error('Studio could not get a response from the local connector within 20 seconds. Start or restart it, then confirm its URL and pairing token in Connected Workspace.');
+    } finally {
+      window.clearTimeout(timeout);
     }
     const data = await response.json().catch(() => ({} as { error?: string }));
     if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : `Connector request failed (HTTP ${response.status}).`);
@@ -97,14 +102,18 @@ export async function activeConnectorJob(baseUrl: string, token: string, reposit
     throw new Error('For safety, Studio can connect only to a local connector URL (localhost or 127.0.0.1).');
   }
   let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CONNECTOR_REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${normalizedBaseUrl}/v1/jobs/active`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Studio-Token': token } : {}) },
-      body: JSON.stringify({ repositoryPath }),
+      body: JSON.stringify({ repositoryPath }), signal: controller.signal,
     });
   } catch {
-    throw new Error('Studio cannot reach the local connector. Start or restart `npm run connector`, then confirm its URL and pairing token in Connected Workspace.');
+    throw new Error('Studio could not get a response from the local connector within 20 seconds. Start or restart it, then confirm its URL and pairing token in Connected Workspace.');
+  } finally {
+    window.clearTimeout(timeout);
   }
   const data = await response.json().catch(() => ({} as { error?: string; job?: ConnectorJob | null }));
   if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : `Connector request failed (HTTP ${response.status}).`);

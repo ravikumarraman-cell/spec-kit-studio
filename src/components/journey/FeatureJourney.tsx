@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleAlert, Play, ShieldCheck } from 'lucide-react';
 import { FeatureJourney as JourneyState, SpecKitProject, ViewTab } from '../../types/speckit';
-import { activeConnectorJob, configuredConnectorClient, configuredConnectorUrl, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
+import { activeConnectorJob, configuredConnectorClient, configuredConnectorUrl, connectorPreflightProject, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
 import { LocalAgentStatus, localAgentLabel } from '../../lib/agentAvailability';
 import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
@@ -208,7 +208,9 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       // Stages 3–5 must be able to create and review feature artifacts in the
       // connected checkout. Passing a feature ID here would incorrectly demand
       // the implementation branch/worktree before implementation begins.
-      const preflight = await client.preflight(repositoryPath, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
+      const preflightFeatureId = featureIdForEnginePreflight(stageId, focusedFeature?.id);
+      const preflightProject = connectorPreflightProject(project, preflightFeatureId);
+      const preflight = await client.preflight(repositoryPath, preflightProject, preflightFeatureId);
       if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' '));
       if (requiresFeatureWorktree && !preflight.evidence.isLinkedWorktree) throw new Error('Implementation is blocked in the main checkout. Create/select a linked Git worktree for this feature first.');
       if (stageId === 2 || stageId === 4 || stageId === 5) {
@@ -227,7 +229,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       // before starting an agent. It must receive the same stage-scoped
       // feature identity as the UI preflight above, otherwise planning would
       // incorrectly be rejected for not yet using an implementation worktree.
-      const job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
+      const job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, preflightProject, preflightFeatureId);
       if (focusedFeature) saveConnectorRunReference({ jobId: job.id, projectId: project.id, repositoryPath, scope: 'journey-stage', ownerId: focusedFeature.id, stageId });
       setAgentJob(job);
       if (job.status !== 'running') {

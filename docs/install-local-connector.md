@@ -21,7 +21,7 @@ You need Node `22.12` through `22.x`, a repository clone, and the exact HTTPS ad
 In Studio, go to **Connected Workspace → Install the local connector** and select **Download the local connector package**. In a terminal, install it directly from your Studio site:
 
 ```bash
-npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.0.tgz
+npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.1.tgz
 ```
 
 Replace `https://studio.example.com` with your exact Studio address. This downloads the standalone connector, not the Studio application source. If your organization later publishes the package to npm, it may give you the shorter equivalent:
@@ -31,6 +31,16 @@ npm install --global @spec-kit-studio/local-connector
 ```
 
 Only use an organization-controlled package or the package downloaded from your Studio release.
+
+### Codex request isolation
+
+By default, the connector runs non-interactive Codex with user-level Codex configuration ignored. This keeps unrelated personal plugins and skills from being added to Studio work packets, while preserving Codex sign-in and the connected repository's context. This is especially helpful when Codex reports that a request is too large.
+
+Only add the following private `.env.local` setting when you intentionally need a trusted user-level Codex customization and understand that it can increase request context:
+
+```env
+STUDIO_CODEX_IGNORE_USER_CONFIG="false"
+```
 
 ## 2. Choose a narrow local boundary
 

@@ -1,5 +1,5 @@
 import { Check, CheckCircle2, Clipboard, Download, ExternalLink, HelpCircle, Terminal, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useClipboard } from '../../hooks/useClipboard';
 
@@ -12,7 +12,11 @@ interface Props {
   onOpenConnection: () => void;
 }
 
-const packagePath = '/downloads/spec-kit-studio-local-connector-0.1.0.tgz';
+const fallbackPackagePath = '/downloads/spec-kit-studio-local-connector-0.1.1.tgz';
+
+function isDownloadPath(value: unknown): value is string {
+  return typeof value === 'string' && /^\/downloads\/spec-kit-studio-local-connector-[\d.]+\.tgz$/.test(value);
+}
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const { copied, copy } = useClipboard();
@@ -23,6 +27,21 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 export function LocalConnectorSetup({ state, connectorUrl, websiteOrigin, onOpenConnection }: Props) {
   const [guideOpen, setGuideOpen] = useState(false);
+  const [packagePath, setPackagePath] = useState(fallbackPackagePath);
+  useEffect(() => {
+    let cancelled = false;
+    // The release manifest lets the hosted UI offer the matching connector
+    // package without hard-coding a version into every UI release. Older
+    // deployments retain a safe, explicit fallback package path.
+    fetch('/downloads/local-connector.json')
+      .then((response) => response.ok ? response.json() : null)
+      .then((manifest: unknown) => {
+        const candidate = manifest && typeof manifest === 'object' ? (manifest as { downloadPath?: unknown }).downloadPath : undefined;
+        if (!cancelled && isDownloadPath(candidate)) setPackagePath(candidate);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
   const downloadUrl = `${websiteOrigin}${packagePath}`;
   const installCommand = `npm install --global ${downloadUrl}`;
   const settingsTemplate = `STUDIO_CONNECTOR_MODE=production\nSTUDIO_ALLOWED_ROOTS="/absolute/path/to/your/studio-repositories"\nSTUDIO_ALLOWED_ORIGINS="${websiteOrigin}"\nSTUDIO_CONNECTOR_TOKEN="paste-a-long-random-token-here"`;

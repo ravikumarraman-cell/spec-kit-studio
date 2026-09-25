@@ -14,6 +14,7 @@ const version = process.env.npm_package_version || '0.1.0';
 const staging = path.join(root, 'dist', 'local-connector-package');
 const downloadDirectory = path.join(root, 'public', 'downloads');
 const packageName = '@spec-kit-studio/local-connector';
+const archiveName = `spec-kit-studio-local-connector-${version}.tgz`;
 
 const packageJson = {
   name: packageName,
@@ -70,4 +71,5 @@ if (packed.status !== 0) {
   process.stderr.write(packed.stderr || packed.stdout || 'Unable to package the local connector.\n');
   process.exit(packed.status || 1);
 }
-process.stdout.write(`Created ${path.join(downloadDirectory, `spec-kit-studio-local-connector-${version}.tgz`)}\n`);
+await writeFile(path.join(downloadDirectory, 'local-connector.json'), `${JSON.stringify({ packageName, version, apiVersion: 2, downloadPath: `/downloads/${archiveName}` }, null, 2)}\n`);
+process.stdout.write(`Created ${path.join(downloadDirectory, archiveName)}\n`);

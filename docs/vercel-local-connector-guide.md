@@ -163,6 +163,12 @@ STUDIO_CONNECTOR_TOKEN="paste-your-long-random-token-here"
 
 # Optional: choose the local Codex model only when your Codex account supports it.
 STUDIO_CODEX_MODEL="gpt-5.6-luna"
+
+# Optional advanced override. Defaults to true: connector-launched Codex runs
+# ignore user-level Codex configuration so unrelated plugins and skills cannot
+# inflate the request. Keep the default unless you intentionally need a
+# trusted user-level Codex customization.
+# STUDIO_CODEX_IGNORE_USER_CONFIG="false"
 ```
 
 If you use the Vercel-generated URL rather than a custom domain, it might look like this:

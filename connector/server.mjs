@@ -28,6 +28,13 @@ const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
+const CONNECTOR_VERSION = '0.1.1';
+// Studio launches Codex non-interactively. User-level plugins, skills, and
+// configuration can inject an unbounded amount of unrelated context into
+// every request, so isolate connector runs by default. Authentication remains
+// available to Codex; project-local instructions still apply. An advanced
+// user can deliberately opt back in for a trusted, known-small setup.
+const CODEX_IGNORE_USER_CONFIG = process.env.STUDIO_CODEX_IGNORE_USER_CONFIG !== 'false';
 const AGENT_ID = /^[a-z][a-z0-9-]{0,63}$/;
 const SAFE_EXECUTABLE = /^[A-Za-z0-9._-]+$/;
 const PROMPT_TOKEN = '$PROMPT';
@@ -46,7 +53,7 @@ function validArgs(args) {
 function configuredAgentAdapters() {
   const builtIns = [
     adapter('claude', 'Claude Code', 'claude', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
-    adapter('codex', 'Codex', 'codex', ['exec', '--help'], { planning: ['exec', '--model', CODEX_MODEL, PROMPT_TOKEN], implementation: ['exec', '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN], 'story-extraction': ['exec', '--model', CODEX_MODEL, PROMPT_TOKEN] }),
+    adapter('codex', 'Codex', 'codex', ['exec', '--help'], { planning: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--model', CODEX_MODEL, PROMPT_TOKEN], implementation: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN], 'story-extraction': ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--model', CODEX_MODEL, PROMPT_TOKEN] }),
     adapter('copilot', 'GitHub Copilot CLI', 'copilot', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
   ];
   let external = [];
@@ -740,7 +747,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(req, res, 204, {});
   // Health is intentionally unauthenticated: it reveals only whether pairing is needed,
   // enabling a friendly client-side setup flow without exposing repository access.
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: '0.1.0', apiVersion: CONNECTOR_API_VERSION, capabilities: ['repository-scan', 'story-extraction', 'agent-adapters'], mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: CONNECTOR_VERSION, apiVersion: CONNECTOR_API_VERSION, capabilities: ['repository-scan', 'story-extraction', 'agent-adapters', 'durable-job-recovery', 'codex-user-config-isolation'], mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
   if (TOKEN && req.headers['x-studio-token'] !== TOKEN) return send(req, res, 401, { error: 'Connector token is required.' });
   try {
     if (req.method === 'GET' && req.url?.startsWith('/v1/jobs/')) {

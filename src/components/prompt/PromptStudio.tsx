@@ -22,7 +22,7 @@ import { AgentTarget, portableFeatureTaskPrompt, portableTaskPrompt } from '../.
 import { generationApi } from '../../lib/api/generation';
 import { actionableFeatureDeliveryTasks, featureTaskExecutionMode, featureDeliveryTaskProgress, nextActionableFeatureDeliveryTask, parseFeatureDeliveryTasks } from '../../lib/featureDeliveryTasks';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
-import { activeConnectorJob, ConnectorJob, ConnectorJobEvidence, configuredConnectorClient, configuredConnectorUrl, repositoryEvidenceSnapshot } from '../../lib/connector';
+import { activeConnectorJob, connectorPreflightProject, ConnectorJob, ConnectorJobEvidence, configuredConnectorClient, configuredConnectorUrl, repositoryEvidenceSnapshot } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { agentFailureGuidance } from '../../lib/agentDiagnostics';
 import { AgentJobStatus } from '../common/AgentJobStatus';
@@ -383,7 +383,11 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
     setReceiptSaved(false);
     try {
       const client = configuredConnectorClient();
-      let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt, project, activeFeature.id);
+      // The connector only needs the immutable feature identity to verify the
+      // worktree. Sending retained artifacts or prior agent output can exceed
+      // its deliberately conservative request-size limit.
+      const featureContext = connectorPreflightProject(project, activeFeature.id);
+      let job = await client.startLocalAgentTask(repositoryPath, selectedLocalAgent, selectedTask.id, activeFeature.title, masterPrompt, featureContext, activeFeature.id);
       saveLocalAgentJobReference({ jobId: job.id, projectId: project.id, featureId: activeFeature.id, taskId: selectedTask.id, repositoryPath });
       setCodexJob(job);
       while (job.status === 'running') {

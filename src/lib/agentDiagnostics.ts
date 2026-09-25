@@ -6,6 +6,9 @@ export function agentFailureGuidance(agent: LocalAgentStatus['id'], output: stri
   if (/cannot reach the local connector|failed to fetch|networkerror|econnrefused/i.test(detail)) {
     return 'Studio cannot reach the local connector. Start or restart `npm run connector`, then confirm the local URL and pairing token in Connected Workspace.';
   }
+  if (/request is too large/i.test(detail)) {
+    return 'Studio stopped this request before the local agent started because the browser sent more context than the connector safely accepts. Refresh to load the current Studio release and retry; you do not need to shorten the task. If it continues after a hard refresh, update the deployed Studio UI.';
+  }
   if (agent === 'copilot' && /not logged in|please run\s+\/login/i.test(output)) {
     return 'GitHub Copilot CLI is installed but not signed in. In a Terminal, run `copilot`, enter `/login`, complete the GitHub sign-in, then return to Studio and run the work packet again. You can select Gemini instead if you want to continue without Copilot.';
   }

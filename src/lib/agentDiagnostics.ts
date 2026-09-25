@@ -9,6 +9,9 @@ export function agentFailureGuidance(agent: LocalAgentStatus['id'], output: stri
   if (/request is too large/i.test(detail)) {
     return 'Studio stopped this request before the local agent started because the browser sent more context than the connector safely accepts. Refresh to load the current Studio release and retry; you do not need to shorten the task. If it continues after a hard refresh, update the deployed Studio UI.';
   }
+  if (/Spec-Kit\s+\d+\.\d+\.\d+\s+or newer is required for strict story conformance/i.test(detail)) {
+    return 'This story is safely paused before implementation because the installed Spec-Kit CLI is too old for the required story format. Open Connected Workspace and choose Update official Spec-Kit, then retry the same task. No repository files need to be changed manually.';
+  }
   if (agent === 'copilot' && /not logged in|please run\s+\/login/i.test(output)) {
     return 'GitHub Copilot CLI is installed but not signed in. In a Terminal, run `copilot`, enter `/login`, complete the GitHub sign-in, then return to Studio and run the work packet again. You can select Gemini instead if you want to continue without Copilot.';
   }

@@ -27,3 +27,11 @@ test('connector creates a dedicated implementation branch when planning already 
   assert.match(source, /Carry only the canonical story artifact folder/);
   assert.match(source, /registered branch/);
 });
+
+test('connector upgrades an older Spec-Kit CLI and verifies the strict-story version', async () => {
+  const source = await readFile(new URL('../connector/server.mjs', import.meta.url), 'utf8');
+  assert.match(source, /specifyCommand\(\['self', 'upgrade'\]/);
+  assert.match(source, /'--force', '--from', `git\+https:\/\/github\.com\/github\/spec-kit\.git@v\$\{SPEC_KIT_CONFORMANCE_VERSION\}`/);
+  assert.match(source, /compatibility: \{ minimumVersion: SPEC_KIT_CONFORMANCE_VERSION/);
+  assert.match(source, /versionAtLeast\(verified\.output, SPEC_KIT_CONFORMANCE_VERSION\)/);
+});

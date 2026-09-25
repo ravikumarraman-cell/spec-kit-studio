@@ -30,6 +30,12 @@ test('connector compatibility and write-scope failures explain the safe recovery
   assert.match(agentFailureGuidance('codex', 'Codex is configured for read-only planning only.'), /cannot create this official artifact/);
 });
 
+test('an outdated Spec-Kit CLI directs users to the guided update before implementation', () => {
+  const guidance = agentFailureGuidance('codex', 'Spec-Kit 1.0.11 or newer is required for strict story conformance.');
+  assert.match(guidance, /safely paused before implementation/);
+  assert.match(guidance, /Update official Spec-Kit/);
+});
+
 test('Codex inherited-session skill failures direct the user to connector isolation', () => {
   const guidance = agentFailureGuidance('codex', 'ERROR codex_core::session: failed to load skill /tmp/SKILL.md: missing YAML frontmatter');
   assert.match(guidance, /unrelated local-session configuration/);

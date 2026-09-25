@@ -5,7 +5,7 @@
  * Start: STUDIO_ALLOWED_ROOTS=/absolute/parent npm run connector
  */
 import http from 'node:http';
-import { SPEC_KIT_CONFORMANCE_VERSION, validateStorySpecKitConformance } from './specKitConformance.mjs';
+import { SPEC_KIT_CONFORMANCE_VERSION, validateStorySpecKitConformance, versionAtLeast } from './specKitConformance.mjs';
 import { loadConnectorConfiguration } from './productionConfig.mjs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
@@ -799,9 +799,24 @@ async function initializeSpecKit(root, integration) {
   return specifyCommand(['init', '--here', '--force', '--non-interactive', '--integration', integration, '--ignore-agent-tools'], root, 180_000);
 }
 async function installSpecKit(root) {
-  // This follows the official PyPI installation route. It is intentionally separate
-  // from initialization: installation changes the developer toolchain; init changes a repo.
-  return uvCommand(['tool', 'install', 'specify-cli'], root, 180_000);
+  // A plain `uv tool install` does not reliably replace an existing older tool.
+  // Prefer the CLI's own installer first (it preserves its managed installation
+  // route), then use the official, release-pinned uv fallback for older CLIs.
+  const current = await specifyCommand(['version'], root);
+  if (current.ok && versionAtLeast(current.output, SPEC_KIT_CONFORMANCE_VERSION)) {
+    return { ok: true, output: `Spec-Kit already meets Studio's strict story requirement (${SPEC_KIT_CONFORMANCE_VERSION}+).\n${current.output}` };
+  }
+  const selfUpgrade = current.ok ? await specifyCommand(['self', 'upgrade'], root, 180_000) : null;
+  const afterSelfUpgrade = await specifyCommand(['version'], root);
+  if (afterSelfUpgrade.ok && versionAtLeast(afterSelfUpgrade.output, SPEC_KIT_CONFORMANCE_VERSION)) {
+    return { ok: true, output: `${selfUpgrade?.output || ''}\nVerified: ${afterSelfUpgrade.output}`.trim() };
+  }
+  const fallback = await uvCommand(['tool', 'install', 'specify-cli', '--force', '--from', `git+https://github.com/github/spec-kit.git@v${SPEC_KIT_CONFORMANCE_VERSION}`], root, 180_000);
+  const verified = await specifyCommand(['version'], root);
+  if (fallback.ok && verified.ok && versionAtLeast(verified.output, SPEC_KIT_CONFORMANCE_VERSION)) {
+    return { ok: true, output: `${fallback.output}\nVerified: ${verified.output}`.trim() };
+  }
+  return { ok: false, output: [selfUpgrade?.output, fallback.output, verified.output, `Spec-Kit ${SPEC_KIT_CONFORMANCE_VERSION} or newer is required.`].filter(Boolean).join('\n').slice(-12_000) };
 }
 async function installSpecKitExtension(root, extension) {
   if (!new Set(['bug', 'assess']).has(extension)) throw new Error('Unsupported Spec Kit extension.');
@@ -841,7 +856,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/feature/preflight') return send(req, res, 200, await featurePreflight(await safeRoot(payload.repositoryPath), payload.project, payload.featureId));
     if (req.method === 'POST' && req.url === '/v1/worktree/create') { if (payload.confirmation !== 'CREATE_WORKTREE') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, await createWorktree(await safeRoot(payload.repositoryPath), payload.targetPath, payload.branch)); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/artifacts/read') return send(req, res, 200, await readSpecKitArtifacts(await safeRoot(payload.repositoryPath)));
-    if (req.method === 'POST' && req.url === '/v1/spec-kit/status') { const root = await safeRoot(payload.repositoryPath); const uv = await uvCommand(['--version'], root); const version = uv.ok ? await specifyCommand(['version'], root) : { ok: false, output: 'uv is not available.' }; const check = version.ok ? await specifyCommand(['self', 'check'], root) : null; return send(req, res, 200, { installed: version.ok, version, check, prerequisites: { uvAvailable: uv.ok, uvOutput: uv.output } }); }
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/status') { const root = await safeRoot(payload.repositoryPath); const uv = await uvCommand(['--version'], root); const version = uv.ok ? await specifyCommand(['version'], root) : { ok: false, output: 'uv is not available.' }; const check = version.ok ? await specifyCommand(['self', 'check'], root) : null; return send(req, res, 200, { installed: version.ok, version, check, prerequisites: { uvAvailable: uv.ok, uvOutput: uv.output }, compatibility: { minimumVersion: SPEC_KIT_CONFORMANCE_VERSION, compatible: version.ok && versionAtLeast(version.output, SPEC_KIT_CONFORMANCE_VERSION) } }); }
     if (req.method === 'POST' && req.url === '/v1/prerequisites/install-uv') { if (payload.confirmation !== 'INSTALL_UV') return send(req, res, 400, { error: 'Explicit uv installation confirmation is required.' }); return send(req, res, 200, await installUv(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/install') { if (payload.confirmation !== 'INSTALL_SPEC_KIT') return send(req, res, 400, { error: 'Explicit installation confirmation is required.' }); return send(req, res, 200, await installSpecKit(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/spec-kit/extension/install') { if (payload.confirmation !== 'INSTALL_SPEC_KIT_EXTENSION') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, await installSpecKitExtension(await safeRoot(payload.repositoryPath), payload.extension)); }

@@ -572,15 +572,46 @@
 .feature-delivery-board-header .text-zinc-100 { color: var(--theme-text) !important; }
 .feature-delivery-board-header .text-zinc-400 { color: var(--theme-muted) !important; }
 
+.feature-delivery-board-title,
+.feature-delivery-board-card-title { color: var(--theme-text) !important; }
+.feature-delivery-board-title svg,
+.feature-delivery-board-task-id { color: var(--theme-primary) !important; }
+.feature-delivery-board-copy { color: var(--theme-muted) !important; }
+.feature-delivery-board-note { color: var(--theme-primary-strong) !important; }
+
 .feature-delivery-board-tabs {
   background-color: var(--theme-inset) !important;
   border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-tab { color: var(--theme-muted) !important; }
+.feature-delivery-board-tab:hover,
+.feature-delivery-board-tab--active {
+  background-color: var(--theme-info-tint) !important;
+  color: var(--theme-primary-strong) !important;
 }
 
 .feature-delivery-board-column {
   background-color: var(--theme-raised) !important;
   border-color: var(--theme-border) !important;
 }
+
+.feature-delivery-board-column--todo { border-color: var(--theme-border) !important; }
+.feature-delivery-board-column--active {
+  background-color: color-mix(in srgb, var(--theme-warning-tint) 34%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 48%, var(--theme-border)) !important;
+}
+.feature-delivery-board-column--complete {
+  background-color: color-mix(in srgb, var(--theme-success-tint) 30%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 44%, var(--theme-border)) !important;
+}
+
+.feature-delivery-board-column-label { color: var(--theme-muted) !important; }
+.feature-delivery-board-column--active .feature-delivery-board-column-label { color: var(--theme-warning) !important; }
+.feature-delivery-board-column--active .feature-delivery-board-dot { background-color: var(--theme-warning) !important; }
+.feature-delivery-board-column--complete .feature-delivery-board-column-label,
+.feature-delivery-board-column--complete .feature-delivery-board-icon { color: var(--theme-success) !important; }
+.feature-delivery-board-column--todo .feature-delivery-board-dot { background-color: var(--theme-faint) !important; }
 
 .feature-delivery-board-count {
   background-color: var(--theme-surface) !important;
@@ -596,6 +627,31 @@
 .feature-delivery-board-card .text-zinc-400,
 .feature-delivery-board-card .text-zinc-500 { color: var(--theme-muted) !important; }
 .feature-delivery-board-card .border-zinc-800 { border-color: var(--theme-border) !important; }
+
+.feature-delivery-board-card:hover {
+  border-color: color-mix(in srgb, var(--theme-primary) 45%, var(--theme-border)) !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--theme-primary) 10%, transparent) !important;
+}
+.feature-delivery-board-card-footer { border-color: var(--theme-border) !important; }
+.feature-delivery-board-requirements {
+  background-color: color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 35%, var(--theme-border)) !important;
+  color: var(--theme-secondary) !important;
+}
+.feature-delivery-board-status { font-weight: 600; }
+.feature-delivery-board-status--planned { background-color: var(--theme-inset) !important; color: var(--theme-muted) !important; }
+.feature-delivery-board-status--active { background-color: var(--theme-warning-tint) !important; color: var(--theme-warning) !important; }
+.feature-delivery-board-status--tasks-md { background-color: var(--theme-info-tint) !important; color: var(--theme-primary-strong) !important; }
+.feature-delivery-board-status--reviewed-receipt { background-color: var(--theme-success-tint) !important; color: var(--theme-success) !important; }
+
+.feature-delivery-board-matrix { color: var(--theme-muted) !important; }
+.feature-delivery-board-matrix thead { color: var(--theme-faint) !important; }
+.feature-delivery-board-matrix tbody tr { border-top: 1px solid var(--theme-border) !important; }
+.feature-delivery-board-matrix-requirements { color: var(--theme-secondary) !important; }
+.feature-delivery-board-source {
+  background-color: var(--theme-inset) !important;
+  color: var(--theme-muted) !important;
+}
 
 .feature-delivery-board-empty {
   background-color: var(--theme-inset) !important;
@@ -638,6 +694,72 @@
 .implementation-handoff-safety span { color: var(--theme-muted) !important; }
 .implementation-handoff-context .text-zinc-200 { color: var(--theme-text) !important; }
 .implementation-handoff-context .text-zinc-400 { color: var(--theme-muted) !important; }
+
+/* Implementation is intentionally a one-decision screen. The compact setup
+   and optional disclosures use the same semantic palette as the journey,
+   preventing dark utility colors from leaking into a selected theme. */
+.implementation-setup {
+  background: linear-gradient(105deg, var(--theme-info-tint), var(--theme-surface) 58%) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)) !important;
+}
+.implementation-setup-eyebrow { color: var(--theme-primary) !important; }
+.implementation-setup-title { color: var(--theme-text) !important; }
+.implementation-setup-copy { color: var(--theme-muted) !important; }
+.implementation-setup-summary {
+  background-color: var(--theme-success-tint) !important;
+  color: var(--theme-success) !important;
+}
+.implementation-setup-label { color: var(--theme-text) !important; }
+.implementation-setup-select {
+  background-color: var(--theme-surface) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.implementation-setup-select:focus { border-color: var(--theme-primary) !important; }
+.implementation-setup-details,
+.implementation-handoff-details,
+.implementation-prompt {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-muted) !important;
+}
+.implementation-setup-details summary,
+.implementation-handoff-details summary,
+.implementation-prompt summary { color: var(--theme-primary-strong) !important; }
+.implementation-setup-details > div,
+.implementation-handoff-details > div,
+.implementation-prompt-content { border-color: var(--theme-border) !important; }
+.implementation-setup-details strong,
+.implementation-handoff-details strong { color: var(--theme-text) !important; }
+.implementation-setup-alert { background-color: var(--theme-warning-tint) !important; color: var(--theme-warning) !important; }
+.implementation-setup-success { background-color: var(--theme-success-tint) !important; color: var(--theme-success) !important; }
+.implementation-prompt-content { background-color: var(--theme-inset) !important; }
+.implementation-prompt-content textarea {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary-strong) !important;
+}
+
+.task-decision-gate {
+  background-color: var(--theme-success-tint) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 35%, var(--theme-border)) !important;
+}
+.task-decision-gate-icon { color: var(--theme-success) !important; }
+.task-decision-gate-title { color: var(--theme-text) !important; }
+.task-decision-gate-copy { color: var(--theme-muted) !important; }
+.task-decision-gate-details,
+.task-decision-gate-field {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.task-decision-gate-details summary { color: var(--theme-success) !important; }
+.task-decision-gate-details > div { border-color: var(--theme-border) !important; }
+.task-decision-gate-select {
+  background-color: var(--theme-inset) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.task-decision-gate-select:focus { border-color: var(--theme-success) !important; }
 
 /* Credentials remain local-only, but their integration dialog is a regular
    application surface and must follow the selected palette just like every

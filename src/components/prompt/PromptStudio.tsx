@@ -529,15 +529,16 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Unified Editor Header */}
-      <EditorHeader
+      {/* The active feature already supplies the meaningful page context. Keep
+          the generic editor header only for the standalone workspace view. */}
+      {!activeFeature && <EditorHeader
         icon={Bot}
         iconColor="text-purple-400"
         title="AI Agent Prompt Studio"
-        subtitle="Prepare one evidence-grounded implementation handoff at a time. The active feature stays in focus."
+        subtitle="Prepare one evidence-grounded implementation handoff at a time."
         badgeLabel="Context Grounding"
         badgeColor="bg-purple-500/10 text-purple-400 border-purple-500/20"
-      />
+      />}
 
       {activeFeature && featureTasks.length > 0 && (
         <FeatureExecutionFocus
@@ -565,15 +566,20 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         </details>
       )}
 
-      {/* Target Task and Agent Configuration Grid */}
-      <div className={`grid grid-cols-1 gap-4 text-xs ${isHumanApprovalTask ? '' : 'md:grid-cols-2'}`}>
-        {/* Task Selection */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
-          <label className="font-bold text-zinc-200 block">Select feature task to implement</label>
+      {/* One compact setup step. Detail is available on demand rather than
+          competing with the run action below. */}
+      <section className="implementation-setup rounded-2xl border p-5 text-xs">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="implementation-setup-eyebrow text-[10px] font-black uppercase tracking-[0.16em]">Before you run</p><h2 className="implementation-setup-title mt-1 text-base font-bold">Choose one approved task</h2><p className="implementation-setup-copy mt-1">Studio sends one bounded task at a time and keeps the rest of the plan out of the way.</p></div>
+          {featureTasks.length > 0 && <span className="implementation-setup-summary rounded-lg px-3 py-2 font-semibold">{actionableFeatureTasks.length} task{actionableFeatureTasks.length === 1 ? '' : 's'} ready</span>}
+        </div>
+        <div className={`mt-4 grid gap-3 ${isHumanApprovalTask ? '' : 'md:grid-cols-2'}`}>
+          <div>
+            <label className="implementation-setup-label mb-2 block font-bold">Task</label>
           <select
             value={selectedTaskId}
             onChange={(e) => { setSelectedTaskId(e.target.value); setCompletionNotice(null); }}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 font-medium focus:outline-none focus:border-purple-500/50"
+            className="implementation-setup-select w-full rounded-xl px-3 py-2 font-medium focus:outline-none"
           >
             {taskOptions.map((task) => (
               <option key={task.id} value={task.id}>
@@ -581,64 +587,14 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
               </option>
             ))}
           </select>
-
-          {featureTasks.length === 0 && (
-            <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">Studio cannot find a parseable feature-scoped <code>tasks.md</code> yet. It is checking the connected repository now. If this message remains after a refresh, return to Stage 5 and review the feature delivery plan.</p>
-          )}
-
-          {featureTasks.length > 0 && (
-            <p className="rounded-lg border border-cyan-400/20 bg-cyan-500/5 p-3 text-[11px] leading-relaxed text-cyan-100">
-              <span className="font-bold">Feature implementation queue:</span> {actionableFeatureTasks.length} remaining of {featureTasks.length} task{featureTasks.length === 1 ? '' : 's'} in this feature’s <code>tasks.md</code>.
-            </p>
-          )}
-
-          {featureTasks.length > 0 && actionableFeatureTasks.length === 0 && (
-            <p className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100">All feature tasks are already complete or have reviewed implementation receipts. There is nothing to rerun.</p>
-          )}
-
-          {selectedTask && (
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1.5 text-[11px]">
-              <div className="text-zinc-400">
-                Scope: <strong className="text-zinc-200">{activeFeature?.title || 'Current feature'}</strong>
-              </div>
-              <div className="text-zinc-400">
-                Requirement{selectedTask.requirementIds.length > 1 ? 's' : ''}:{' '}
-                <strong className="text-cyan-400 font-mono">
-                  {selectedTask.requirementIds.join(', ') || 'Read feature spec'}
-                </strong>
-              </div>
-              {selectedTask.detail && <p className="text-zinc-300 leading-snug">{selectedTask.detail}</p>}
-            </div>
-          )}
-
-        </div>
-
-        {/* Agent Profile Selector: human approval gates do not receive an agent. */}
-        {!isHumanApprovalTask && <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
-          <label className="font-bold text-zinc-200 block">Target Agent Architecture</label>
-          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-            {agentFrameworks.map((agent) => (
-              <div
-                key={agent.name}
-                onClick={() => { if (!isRunningCodex) setSelectedAgent(agent.name); }}
-                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between ${isRunningCodex ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
-                  selectedAgent === agent.name
-                    ? 'bg-purple-500/10 border-purple-500/40 text-purple-300'
-                    : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                }`}
-              >
-                <div>
-                  <div className="font-semibold text-zinc-200">{agent.name}</div>
-                  <div className="text-[10px] text-zinc-500">{agent.desc}</div>
-                </div>
-                {selectedAgent === agent.name && (
-                  <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
-                )}
-              </div>
-            ))}
           </div>
-        </div>}
-      </div>
+          {!isHumanApprovalTask && <div><label className="implementation-setup-label mb-2 block font-bold">Agent</label><select value={selectedAgent} disabled={isRunningCodex} onChange={(event) => setSelectedAgent(event.target.value)} className="implementation-setup-select w-full rounded-xl px-3 py-2 font-medium focus:outline-none">{agentFrameworks.map((agent) => <option key={agent.name} value={agent.name}>{agent.name} — {agent.desc}</option>)}</select></div>}
+        </div>
+        {featureTasks.length === 0 && <p className="implementation-setup-alert mt-3 rounded-lg p-3 leading-relaxed">Studio cannot find a usable feature-scoped <code>tasks.md</code>. Return to Plan delivery to review the delivery plan.</p>}
+        {featureTasks.length > 0 && actionableFeatureTasks.length === 0 && <p className="implementation-setup-success mt-3 rounded-lg p-3">All feature tasks already have reviewed evidence. There is nothing to rerun.</p>}
+        {selectedTask && <details className="implementation-setup-details mt-3 rounded-xl"><summary className="cursor-pointer px-3 py-2.5 font-semibold">Task scope and requirements</summary><div className="border-t px-3 py-3 leading-relaxed"><p><strong>Feature:</strong> {activeFeature?.title || 'Current feature'}</p><p className="mt-1"><strong>Requirements:</strong> <span className="font-mono">{selectedTask.requirementIds.join(', ') || 'Read feature spec'}</span></p>{selectedTask.detail && <p className="mt-2">{selectedTask.detail}</p>}</div></details>}
+        {!isHumanApprovalTask && <details className="implementation-setup-details mt-3 rounded-xl"><summary className="cursor-pointer px-3 py-2.5 font-semibold">Optional instructions for this task</summary><div className="border-t p-3"><label className="sr-only" htmlFor="implementation-notes">Optional instructions</label><input id="implementation-notes" type="text" placeholder="e.g. Use focused Jest coverage." value={customNotes} onChange={(e) => setCustomNotes(e.target.value)} className="implementation-setup-select w-full rounded-xl px-3 py-2" /></div></details>}
+      </section>
 
       {decisionGate && (
         <TaskDecisionGate
@@ -648,19 +604,6 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         />
       )}
 
-      {/* Additional Instructions only apply to agent handoffs. */}
-      {!isHumanApprovalTask && <div className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2 text-xs">
-        <label className="font-bold text-zinc-300 block">
-          Custom Directives & Extra Task Instructions (Optional)
-        </label>
-        <input
-          type="text"
-          placeholder="e.g. Ensure strict type narrowing and provide Jest unit tests."
-          value={customNotes}
-          onChange={(e) => setCustomNotes(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-purple-500/50"
-        />
-      </div>}
 
       {activeFeature && featureTasks.length > 0 && (
         <section className="implementation-handoff overflow-hidden rounded-2xl border shadow-[0_0_50px_rgba(34,211,238,0.06)]">
@@ -676,11 +619,7 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
               </div>
               <div className="implementation-handoff-safety rounded-lg border px-3 py-2 text-[11px]">{isHumanApprovalTask ? 'Human-review only' : selectedLocalAgent ? 'Workspace-write only' : 'Portable prompt only'}<br /><span>No commit · No push</span></div>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3 text-[11px]">
-              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">Feature</span><p className="mt-1 text-zinc-400">{activeFeature.title}</p></div>
-              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">Task</span><p className="mt-1 font-mono text-cyan-200">{selectedTask?.id || 'Choose a task'}</p></div>
-              <div className="implementation-handoff-context rounded-lg border p-3"><span className="font-bold text-zinc-200">{isHumanApprovalTask ? 'Required evidence' : 'Implementation worktree'}</span><p className="mt-1 truncate text-zinc-400">{isHumanApprovalTask ? 'Reviewed feature spec and plan' : implementationWorkspace || 'Create isolated worktree first'}</p></div>
-            </div>
+            <details className="implementation-handoff-details mt-4 rounded-lg border text-[11px]"><summary className="cursor-pointer px-3 py-2.5 font-semibold">Task context and safety</summary><div className="grid gap-2 border-t p-3 sm:grid-cols-3"><div><span className="font-bold">Feature</span><p className="mt-1">{activeFeature.title}</p></div><div><span className="font-bold">Task</span><p className="mt-1 font-mono">{selectedTask?.id || 'Choose a task'}</p></div><div><span className="font-bold">{isHumanApprovalTask ? 'Required evidence' : 'Implementation worktree'}</span><p className="mt-1 truncate">{isHumanApprovalTask ? 'Reviewed feature spec and plan' : implementationWorkspace || 'Create isolated worktree first'}</p></div></div></details>
           </div>
           {!isHumanApprovalTask && !implementationWorkspace && <div className="mx-5 mt-5 rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"><p className="font-bold">Implementation is safely blocked until this feature has its own worktree.</p><p className="mt-1 text-amber-200">The shared repository checkout is read-only for this feature. No Codex run has been started from this screen.</p>{onOpenJourney && <button type="button" onClick={onOpenJourney} className="mt-3 rounded-lg bg-amber-300 px-3 py-2 font-bold text-zinc-950 hover:bg-amber-200">Set up isolated worktree</button>}</div>}
           <div className="flex flex-wrap items-center gap-3 p-5">
@@ -732,8 +671,12 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
         </section>
       )}
 
-      {/* Compiled Master Prompt Output */}
-      {!isHumanApprovalTask && <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-5 space-y-3">
+      {/* Portable prompt and Gemini are useful escape hatches, not part of the
+          primary local-agent path. Keep them available without taking over
+          the implementation screen. */}
+      {!isHumanApprovalTask && <details className="implementation-prompt rounded-2xl border">
+        <summary className="cursor-pointer px-5 py-4 text-xs font-semibold">View, copy, or simulate the portable task prompt <span className="ml-1 font-normal">Optional</span></summary>
+        <div className="implementation-prompt-content space-y-3 border-t p-5">
         <div className="flex items-center justify-between text-xs text-zinc-400 font-mono pb-2 border-b border-zinc-900">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-purple-400" />
@@ -771,11 +714,14 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
           className="w-full p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 text-cyan-300 font-mono text-xs focus:outline-none leading-relaxed resize-y cursor-text"
           spellCheck={false}
         />
-      </div>}
+        </div>
+      </details>}
 
       {/* Simulated AI Output Panel */}
       {!isHumanApprovalTask && aiSimulationOutput && (
-        <div className="p-5 rounded-2xl bg-zinc-900/90 border border-purple-500/40 space-y-3 text-xs">
+        <details open className="implementation-prompt rounded-2xl border">
+          <summary className="cursor-pointer px-5 py-4 text-xs font-semibold">Optional Gemini simulation result</summary>
+          <div className="implementation-prompt-content space-y-3 border-t p-5 text-xs">
           <div className="flex items-center justify-between font-bold text-purple-300">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
@@ -794,7 +740,8 @@ export const PromptStudio: React.FC<PromptStudioProps> = memo(({
           <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
             {aiSimulationOutput}
           </div>
-        </div>
+          </div>
+        </details>
       )}
     </div>
   );

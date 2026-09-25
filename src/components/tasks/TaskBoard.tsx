@@ -15,10 +15,11 @@ import { TasksTanStackMatrix } from './TasksTanStackMatrix';
 import { MarkdownSourceView } from '../common/MarkdownSourceView';
 import { isFeatureArtifactScoped } from '../../lib/featureArtifactScope';
 import { FeatureDeliveryBoard } from '../common/FeatureDeliveryBoard';
-import { configuredConnectorClient } from '../../lib/connector';
+import { activeConnectorJob, configuredConnectorClient, configuredConnectorUrl, ConnectorJob } from '../../lib/connector';
 import { getConnectorSessionToken } from '../../lib/connectorSession';
 import { currentFeatureDeliveryArtifact, deliveryPlanRepositoryPath, needsFeatureDeliveryReconciliation } from '../../lib/featureDeliveryReconciliation';
 import { ProgressiveDisclosure } from '../common/ProgressiveDisclosure';
+import { readLocalAgentJobReference } from '../../lib/localAgentJobSession';
 
 interface TaskBoardProps {
   projectId: string;
@@ -61,6 +62,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [activeView, setActiveView] = useState<TaskViewMode>('kanban');
   const [activePhaseFilter, setActivePhaseFilter] = useState<string>('all');
   const [currentTasks, setCurrentTasks] = useState<TaskItem[]>(taskBreakdown.tasks);
+  const [activeFeatureTaskId, setActiveFeatureTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentTasks(taskBreakdown.tasks);
@@ -86,6 +88,35 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [focusFeature?.id, focusFeature?.deliveryPlan?.path, focusFeature?.deliveryPlan?.content, focusFeature?.deliveryPlan?.repositoryPath, focusFeature?.worktreePath, onRecoverFeatureDeliveryPlan, repositoryPath]);
+
+  useEffect(() => {
+    const worktreePath = focusFeature?.worktreePath;
+    if (!focusFeature || !worktreePath) {
+      setActiveFeatureTaskId(null);
+      return;
+    }
+    let cancelled = false;
+    const client = configuredConnectorClient(getConnectorSessionToken());
+    const refresh = async () => {
+      const reference = readLocalAgentJobReference(projectId, focusFeature.id, worktreePath);
+      let job: ConnectorJob | null = null;
+      let jobTaskId: string | null = null;
+      if (reference) {
+        try { job = await client.getJob(reference.jobId); jobTaskId = reference.taskId; } catch { /* Connector restarts may discard completed job history. */ }
+      }
+      if (!job) {
+        try { job = await activeConnectorJob(configuredConnectorUrl(), getConnectorSessionToken(), worktreePath); } catch { /* Keep the last known board state during a temporary connector outage. */ }
+      }
+      if (cancelled) return;
+      const taskId = job?.status === 'running'
+        ? jobTaskId || job.label.match(/\bT\d{3,}\b/)?.[0] || null
+        : null;
+      setActiveFeatureTaskId(taskId);
+    };
+    void refresh();
+    const interval = window.setInterval(() => { void refresh(); }, 1_500);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [projectId, focusFeature?.id, focusFeature?.worktreePath]);
 
   const handleUpdateStatus = useCallback(
     (taskId: string, newStatus: TaskStatus) => {
@@ -168,7 +199,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           <h1 className="mt-1 text-lg font-bold text-zinc-100">{focusFeature.title}</h1>
           {hasFeaturePlan ? <>
             <p className="mt-1 text-xs text-zinc-300">Only the accepted tasks in this feature’s official <code>tasks.md</code> are shown here and may be implemented for this feature. This count is deliberately separate from any draft or shared workspace board.</p>
-            <FeatureDeliveryBoard content={focusFeature.deliveryPlan!.content} sourcePath={focusFeature.deliveryPlan!.path!} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} authorityLabel={focusFeature.deliveryPlan?.repositoryPath === focusFeature.worktreePath ? 'Registered feature worktree' : 'Accepted planning repository'} />
+            <FeatureDeliveryBoard content={focusFeature.deliveryPlan!.content} sourcePath={focusFeature.deliveryPlan!.path!} completedTaskIds={focusFeature.implementationReceipts?.map((receipt) => receipt.taskId)} activeTaskId={activeFeatureTaskId} authorityLabel={focusFeature.deliveryPlan?.repositoryPath === focusFeature.worktreePath ? 'Registered feature worktree' : 'Accepted planning repository'} />
           </> : <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100"><strong>No usable feature delivery plan yet.</strong> Return to Plan delivery to find or generate this feature’s <code>tasks.md</code>.</div>}
         </section>
       </div>

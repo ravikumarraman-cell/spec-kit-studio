@@ -17,6 +17,7 @@ import { FeatureRegistry } from './FeatureRegistry';
 import { canStartFeatureIntake, needsLegacyJourneyRepair } from '../../lib/workflowUx';
 import { featureArtifactRoot, identityIssues, legacyFeatureIdentity } from '../../lib/projectIdentity';
 import { readLocalAgentJobReference } from '../../lib/localAgentJobSession';
+import { clearConnectorRunReference, readConnectorRunReference, saveConnectorRunReference } from '../../lib/connectorRunSession';
 import { deliveryScope } from '../../lib/deliveryItems';
 import { DeliveryScopeBanner } from './DeliveryScopeBanner';
 import { officialFeatureDirectoryFromSpecPath, validateSpecKitArtifacts } from '../../lib/specKitCompliance';
@@ -130,10 +131,30 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
   const [deliveryPlanMode, setDeliveryPlanMode] = useState<DeliveryPlanMode>('detailed');
   const [isReplacingDeliveryPlan, setIsReplacingDeliveryPlan] = useState(false);
+  const activeFeature = activeFeatureForProject(project);
+  const storyScope = Boolean(activeFeature && deliveryScope(activeFeature) === 'user-story');
   const agentRunIsActive = isRunningEngine || agentJob?.status === 'running';
   const pendingImplementationJob = activeFeatureForProject(project)?.worktreePath
     ? readLocalAgentJobReference(project.id, activeFeatureForProject(project)!.id, activeFeatureForProject(project)!.worktreePath!)
     : null;
+  const hydrateJourneyJob = async (job: ConnectorJob, stageId: number, repositoryPath: string) => {
+    if (!job.ok || !(stageId === 2 || stageId === 4 || stageId === 5)) return job;
+    try {
+      const kind = stageId === 2 ? 'spec' : stageId === 4 ? 'plan' : 'tasks';
+      const { artifacts } = await configuredConnectorClient(connectorToken).readSpecKitArtifacts(repositoryPath);
+      const artifact = artifacts
+        .filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, activeFeatureForProject(project), item.path))
+        .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+      return artifact
+        ? { ...job, output: `${job.output}\n\n--- Official ${artifact.path} ---\n${artifact.content}` }
+        : job;
+    } catch {
+      // A completed job remains a completed job even if a follow-up artifact
+      // scan is temporarily unavailable. The user can still inspect its safe
+      // summary and retry the non-mutating artifact discovery later.
+      return job;
+    }
+  };
   const complete = (stage: typeof current) => {
     if (!stage.ready(project)) return;
     onSaveJourney(approveJourneyStage(journey, stage.id));
@@ -197,21 +218,14 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       // before starting an agent. It must receive the same stage-scoped
       // feature identity as the UI preflight above, otherwise planning would
       // incorrectly be rejected for not yet using an implementation worktree.
-      let job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
+      const job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, project, featureIdForEnginePreflight(stageId, focusedFeature?.id));
+      if (focusedFeature) saveConnectorRunReference({ jobId: job.id, projectId: project.id, repositoryPath, scope: 'journey-stage', ownerId: focusedFeature.id, stageId });
       setAgentJob(job);
-      while (job.status === 'running') { await new Promise((resolve) => window.setTimeout(resolve, 750)); job = await client.getJob(job.id); setAgentJob(job); }
-      if (job.ok && (stageId === 2 || stageId === 4 || stageId === 5)) {
-        const kind = stageId === 2 ? 'spec' : stageId === 4 ? 'plan' : 'tasks';
-        const { artifacts } = await client.readSpecKitArtifacts(repositoryPath);
-        const artifact = artifacts.filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, focusedFeature, item.path)).sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-        if (artifact) {
-          job = { ...job, output: `${job.output}\n\n--- Official ${artifact.path} ---\n${artifact.content}` };
-          setAgentJob(job);
-        } else {
-          setEngineError(`The agent completed, but no official ${kind}.md was found. Review its output before retrying; Studio did not create a substitute artifact.`);
-        }
+      if (job.status !== 'running') {
+        const hydratedJob = await hydrateJourneyJob(job, stageId, repositoryPath);
+        setAgentJob(hydratedJob);
+        if (!hydratedJob.ok) setEngineError(agentFailureGuidance(agent.id, hydratedJob.output));
       }
-      if (!job.ok) setEngineError(agentFailureGuidance(agent.id, job.output));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Studio could not run the local agent.';
       setEngineError(agentFailureGuidance(agent?.id || 'copilot', message));
@@ -221,8 +235,6 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const progress = Math.round((completedCount / featureJourneyStages.length) * 100);
   const readiness = useMemo(() => featureJourneyStages.map((stage) => ({ stage, ready: stage.ready(project) })), [project]);
   const readinessByStage = useMemo(() => new Map(readiness.map(({ stage, ready }) => [stage.id, ready])), [readiness]);
-  const activeFeature = activeFeatureForProject(project);
-  const storyScope = Boolean(activeFeature && deliveryScope(activeFeature) === 'user-story');
   const reviewingImportedFeature = current.id === 2 && Boolean(activeFeature);
   const awaitingFeatureImport = current.id === 2 && !activeFeature;
   const storyStageTitles: Partial<Record<number, string>> = { 2: 'Confirm the user story', 3: "Ground this story's impact", 4: 'Design this use case', 5: 'Plan story delivery', 6: 'Validate story coverage', 7: 'Implement this story', 8: 'Verify and hand off this use case' };
@@ -257,6 +269,65 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     onUpdateFeatureIdentity(activeFeature.id, identity);
     setAcceptedNotice(`Assigned ${identity.featureKey} and ${identity.slug}. Existing stage evidence was preserved.`);
   };
+  useEffect(() => {
+    // A Journey stage can outlive this screen. Restore both an in-flight run
+    // and a completed, not-yet-reviewed result so navigation never becomes an
+    // invitation to run the same agent work twice.
+    const repositoryPath = project.importedRepo?.repoUrl;
+    if (agentJob || !activeFeature || !repositoryPath) return;
+    const reference = readConnectorRunReference(project.id, 'journey-stage', activeFeature.id, repositoryPath);
+    if (!reference?.stageId) return;
+    if (reference.stageId < 2 || reference.stageId > 5 || reference.stageId !== current.id) return;
+    let disposed = false;
+    void (async () => {
+      try {
+        const recovered = await configuredConnectorClient(connectorToken).getJob(reference.jobId);
+        const hydrated = await hydrateJourneyJob(recovered, reference.stageId!, repositoryPath);
+        if (disposed) return;
+        setAgentStageId(reference.stageId!);
+        setAgentJob(hydrated);
+        setIsRunningEngine(false);
+        setAcceptedNotice(hydrated.status === 'running'
+          ? `Reconnected to the Stage ${reference.stageId} agent run. You can safely leave this screen while it continues.`
+          : `Your earlier Stage ${reference.stageId} agent run is ready for review. Studio did not run it again.`);
+        if (!hydrated.ok && hydrated.status !== 'running') setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+      } catch (error) {
+        if (disposed) return;
+        const message = error instanceof Error ? error.message : '';
+        if (message.includes('HTTP 404')) {
+          clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
+          setEngineError('The local connector was restarted before Studio could retrieve the earlier run. Studio did not start a replacement. Check whether its expected artifact was written, then run this stage again only if there is no result to review.');
+        } else {
+          setEngineError('Studio cannot reconnect to the saved local-agent run yet. Start the same local connector again; this screen will restore the run when you return.');
+        }
+      }
+    })();
+    return () => { disposed = true; };
+  }, [activeFeature, agentJob, connectorToken, project]);
+  useEffect(() => {
+    if (!agentJob || agentJob.status !== 'running' || !agentStageId) return;
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const next = await configuredConnectorClient(connectorToken).getJob(agentJob.id);
+        const repositoryPath = project.importedRepo?.repoUrl;
+        const hydrated = repositoryPath ? await hydrateJourneyJob(next, agentStageId, repositoryPath) : next;
+        if (disposed) return;
+        setAgentJob(hydrated);
+        if (hydrated.status !== 'running') {
+          setIsRunningEngine(false);
+          if (!hydrated.ok) setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
+        }
+      } catch {
+        // Keep the saved reference. A temporary connector restart must not
+        // erase a run that can be recovered on the next successful poll.
+        if (!disposed) setEngineError('Connection to the local agent was interrupted. Studio is still preserving this run and will reconnect automatically when the connector is available.');
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => { void poll(); }, 1000);
+    return () => { disposed = true; window.clearInterval(interval); };
+  }, [agentJob, agentStageId, connectorToken, project]);
   useEffect(() => {
     // Older Studio versions could approve Stage 2 from workspace-wide stories
     // without ever retaining a feature receipt. Never let that orphaned state
@@ -302,10 +373,11 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     // user click race each other; the repository artifact is the reviewable
     // record and must be the only approval path shown.
     if (discoveredArtifact && agentJob?.ok && (agentStageId === 2 || agentStageId === 4 || agentStageId === 5)) {
+      if (activeFeature) clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
       setAgentJob(null);
       setAgentStageId(null);
     }
-  }, [agentJob?.ok, agentStageId, discoveredArtifact]);
+  }, [activeFeature, agentJob?.ok, agentStageId, discoveredArtifact, project.id]);
   // Finding a repository artifact is intentionally not acceptance. A plan or
   // tasks file may have been created by a prior command, a teammate, or a
   // partial run. The explicit review action below is the only path that writes
@@ -369,6 +441,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     else if (agentStageId === 5 && journey.completedStages.includes(5)) onSaveJourney({ ...journey, activeStage: 6, updatedAt: acceptedAt });
     if (agentStageId === 4 && journey.completedStages.includes(4)) onSaveJourney({ ...journey, activeStage: 5, updatedAt: acceptedAt });
     setAcceptedNotice(agentStageId === 2 ? 'Official single-story specification accepted. You can now approve Stage 2.' : agentStageId === 3 ? 'Impact map accepted and saved to this feature. Next: run the feature-scoped architecture plan.' : agentStageId === 4 ? 'Feature plan accepted and saved to this feature. You can now approve Stage 4.' : isReplacingDeliveryPlan ? 'Compact delivery tasks accepted. Stage 5 and later approvals were reopened so you can review the new plan before continuing.' : 'Feature delivery tasks accepted and saved to this feature. You can now approve Stage 5.');
+    if (activeFeature) clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
     setAgentJob(null);
     setAgentStageId(null);
     setIsReplacingDeliveryPlan(false);
@@ -414,6 +487,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       : current.id === 4
       ? 'Existing official plan accepted and linked to this feature. You can now approve Stage 4.'
       : 'Existing official tasks accepted and linked to this feature. You can now approve Stage 5.');
+    if (activeFeature) clearConnectorRunReference(project.id, 'journey-stage', activeFeature.id);
     setDiscoveredArtifact(null);
   };
 

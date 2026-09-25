@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, CircleAlert, FileSearch, GitBranch, HardDrive, LoaderCircle, Sparkles, Terminal, XCircle } from 'lucide-react';
 import { SpecKitProject } from '../../types/speckit';
-import { ConnectorJob, connectorClient, TruthReport, ValidationResult, WorkspaceChange } from '../../lib/connector';
+import { ConnectorHealth, ConnectorJob, connectorClient, TruthReport, ValidationResult, WorkspaceChange } from '../../lib/connector';
+import { ConnectorRelease, fetchConnectorRelease, isConnectorVersionOlder } from '../../lib/connectorRelease';
 import { createWorkspaceFiles } from '../../lib/workspaceFiles';
 import { EditorHeader } from '../common/EditorHeader';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
@@ -36,17 +37,21 @@ function Step({ number, title, description, state, children }: { number: number;
 export function WorkspaceControlCenter({ project, onTruthAttached, onOpenJourney, onOpenFeatureImport, onOpenWorkflow }: Props) {
   const [baseUrl, setBaseUrl] = useState(defaultUrl); const [token, setToken] = useState(() => getConnectorSessionToken()); const [repositoryPath, setRepositoryPath] = useState('');
   const [connectorReachable, setConnectorReachable] = useState<boolean | null>(null);
+  const [connectorHealth, setConnectorHealth] = useState<ConnectorHealth | null>(null);
+  const [connectorRelease, setConnectorRelease] = useState<ConnectorRelease | null>(null);
   const [integration, setIntegration] = useState('copilot'); const [truth, setTruth] = useState<TruthReport | null>(null); const [cliInstalled, setCliInstalled] = useState<boolean | null>(null); const [uvAvailable, setUvAvailable] = useState<boolean | null>(null);
   const [setupMessage, setSetupMessage] = useState('Choose a clean repository, then scan it.'); const [setupError, setSetupError] = useState(''); const [busyAction, setBusyAction] = useState<string | null>(null); const [connectionOpen, setConnectionOpen] = useState(false);
   const [baseline, setBaseline] = useState<BaselineResult[]>([]); const [ignoredBaselineChecks, setIgnoredBaselineChecks] = useState<string[]>([]); const [baselineSkipped, setBaselineSkipped] = useState(false); const [validation, setValidation] = useState<ValidationResult | null>(null); const [changes, setChanges] = useState<WorkspaceChange[]>([]); const [diagnostics, setDiagnostics] = useState(''); const [dependencyJob, setDependencyJob] = useState<ConnectorJob | null>(null); const [baselineJob, setBaselineJob] = useState<ConnectorJob | null>(null); const [baselineProgress, setBaselineProgress] = useState<{ current: number; total: number } | null>(null);
   const client = useMemo(() => connectorClient(baseUrl, token), [baseUrl, token]); const files = useMemo(() => createWorkspaceFiles(project), [project]); const ready = Boolean(truth?.specKit.detected); const isBusy = busyAction !== null;
-  useEffect(() => { let active = true; client.health().then((health) => { if (active) setConnectorReachable(health.status === 'ok'); }).catch(() => { if (active) setConnectorReachable(false); }); return () => { active = false; }; }, [client]);
+  const recordConnectorHealth = (health: ConnectorHealth) => { setConnectorHealth(health); setConnectorReachable(health.status === 'ok'); };
+  useEffect(() => { let active = true; client.health().then((health) => { if (active) recordConnectorHealth(health); }).catch(() => { if (active) { setConnectorHealth(null); setConnectorReachable(false); } }); return () => { active = false; }; }, [client]);
+  useEffect(() => { let active = true; fetchConnectorRelease().then((release) => { if (active) setConnectorRelease(release); }); return () => { active = false; }; }, []);
   const action = async (name: string, work: () => Promise<void>) => { setBusyAction(name); setSetupError(''); try { await work(); } catch (error: any) { const raw = error.message || 'Something went wrong.'; setSetupError(explainError(raw)); setDiagnostics(`Technical detail:\n${raw}`); setConnectionOpen(true); } finally { setBusyAction(null); } };
   const inspectOfficial = async () => { setSetupMessage('Checking the official Spec-Kit CLI…'); const result = await client.specKitStatus(repositoryPath); setCliInstalled(result.installed); setUvAvailable(result.prerequisites.uvAvailable); setDiagnostics(result.installed ? `${result.version.output}\n${result.check?.output || ''}`.trim() : result.version.output); setSetupMessage(result.installed ? 'Official Spec-Kit is installed. You can initialize this fresh clone.' : !result.prerequisites.uvAvailable ? 'uv is needed before we can install official Spec-Kit.' : 'Official Spec-Kit needs to be installed on this machine.'); return result; };
   const scan = () => action('scan', async () => {
     localStorage.setItem('speckit_connector_url', baseUrl);
     setConnectorSessionToken(token);
-    const health = await client.health(); setConnectorReachable(health.status === 'ok');
+    const health = await client.health(); recordConnectorHealth(health);
     if (health.tokenRequired && !token.trim()) {
       setSetupError('This local connector requires a pairing token before it can read any repository.');
       setSetupMessage('Enter your pairing token to continue.');
@@ -81,10 +86,11 @@ export function WorkspaceControlCenter({ project, onTruthAttached, onOpenJourney
   }
   const nextTitle = !truth ? 'Connect a repository' : !ready ? cliInstalled === false && uvAvailable === false ? 'Install uv first' : cliInstalled === false ? 'Install the official Spec-Kit CLI' : cliInstalled ? 'Initialize this fresh clone' : 'Checking your setup' : firstBaseline ? 'Establish a clean baseline' : baselinePassed ? 'Create your first feature specification' : 'Resolve the baseline checks';
   const nextDescription = !truth ? 'We will read the repository first. No files are changed during a scan.' : !ready ? setupMessage : truth.specKit.detected && truth.specKit.artifactFiles.length > 0 ? `Existing Spec-Kit workspace recognized. ${truth.specKit.artifactFiles.length} retained workflow artifact${truth.specKit.artifactFiles.length === 1 ? '' : 's'} will remain available in this isolated Studio workspace.` : truth.specKit.detected ? 'Existing Spec-Kit setup recognized and preserved. No retained feature artifacts were found in this checkout.' : firstBaseline ? 'Run the checks this repository already provides before planning feature work.' : baselinePassed ? 'Your repository and official workflow are ready. Define the feature next, then return here to validate and export it.' : 'At least one baseline check failed. Review its result before creating a feature.';
+  const connectorOutdated = Boolean(connectorReachable && connectorHealth?.version && connectorRelease && isConnectorVersionOlder(connectorHealth.version, connectorRelease.version));
 
   return <div className="space-y-6 pb-12 max-w-5xl mx-auto">
     <EditorHeader icon={HardDrive} iconColor="text-cyan-400" title="Connected Workspace" subtitle="A calm, guided path from a local repository to a feature-ready workspace." badgeLabel={ready ? 'Workspace ready' : 'Guided setup'} badgeColor={ready ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'} />
-    {connectorReachable !== true && <LocalConnectorSetup state={setupError || connectorReachable === false ? 'attention' : 'not-connected'} connectorUrl={baseUrl} websiteOrigin={window.location.origin} onOpenConnection={() => setConnectionOpen(true)} />}
+    {(connectorReachable !== true || connectorOutdated) && <LocalConnectorSetup state={connectorOutdated ? 'connected' : setupError || connectorReachable === false ? 'attention' : 'not-connected'} connectorUrl={baseUrl} websiteOrigin={window.location.origin} connectorVersion={connectorOutdated ? connectorHealth?.version : undefined} release={connectorOutdated ? connectorRelease : null} onOpenConnection={() => setConnectionOpen(true)} />}
     {baselineJob?.status === 'running' && <AgentJobStatus job={baselineJob} preparingLabel={`Running baseline check: ${baselineJob.label}`} />}
     {dependencyJob?.status === 'running' && <AgentJobStatus job={dependencyJob} preparingLabel={`Installing dependencies: ${dependencyJob.label}`} />}
     <section className="workspace-next-step rounded-2xl border p-5 md:p-6"><div className="flex flex-col md:flex-row gap-5 md:items-center md:justify-between"><div><div className="text-[10px] uppercase tracking-[0.18em] font-black text-cyan-400">Your next step</div><h2 className="mt-1 text-lg font-bold text-zinc-100">{nextTitle}</h2><p className="mt-1 text-sm text-zinc-400 max-w-2xl">{nextDescription}</p></div>{ready && <div className="shrink-0 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-center"><div className="text-2xl font-black text-emerald-400">{baselinePassed ? '✓' : '2/3'}</div><div className="text-[10px] text-emerald-300 uppercase tracking-wide font-bold">{baselinePassed ? 'Ready to plan' : 'Setup complete'}</div></div>}</div></section>

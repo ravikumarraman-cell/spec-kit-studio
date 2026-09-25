@@ -111,6 +111,10 @@ test('story Stage 2 requires one valid story and only its scoped requirements', 
   const instruction = engineInstructionForStage(4, project) || '';
   assert.match(instruction, /USER STORY IN FOCUS: US-101/);
   assert.match(instruction, /CSV downloads/);
+  assert.match(instruction, /Completion check \(required\)/);
+  assert.match(instruction, /If a slash command, skill, or integration command is unavailable, do not stop/);
+  assert.match(instruction, /official template unchanged/);
+  assert.match(instruction, /\[FEATURE NAME\]/);
   assert.doesNotMatch(instruction, /Delete tenant/);
 });
 

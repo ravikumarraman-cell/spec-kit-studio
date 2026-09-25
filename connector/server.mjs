@@ -20,7 +20,7 @@ dotenv.config({ path: '.env.local' });
 const connectorConfiguration = loadConnectorConfiguration();
 const PORT = connectorConfiguration.port;
 const TOKEN = connectorConfiguration.token;
-const CONNECTOR_API_VERSION = '2';
+const CONNECTOR_API_VERSION = '3';
 // Story extraction is an interactive UI action, not a background batch job.
 // Bound it so a stalled CLI never leaves a user waiting indefinitely.
 const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
@@ -28,7 +28,7 @@ const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
-const CONNECTOR_VERSION = '0.1.1';
+const CONNECTOR_VERSION = '0.1.2';
 // Studio launches Codex non-interactively. User-level plugins, skills, and
 // configuration can inject an unbounded amount of unrelated context into
 // every request, so isolate connector runs by default. Authentication remains
@@ -52,9 +52,17 @@ function validArgs(args) {
 }
 function configuredAgentAdapters() {
   const builtIns = [
-    adapter('claude', 'Claude Code', 'claude', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
-    adapter('codex', 'Codex', 'codex', ['exec', '--help'], { planning: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--model', CODEX_MODEL, PROMPT_TOKEN], implementation: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN], 'story-extraction': ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--model', CODEX_MODEL, PROMPT_TOKEN] }),
-    adapter('copilot', 'GitHub Copilot CLI', 'copilot', ['--version'], { planning: ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
+    // The CLI owner defines the actual write behavior. Studio names this
+    // separately so it never accidentally uses an evidence-only operation to
+    // create review artifacts.
+    adapter('claude', 'Claude Code', 'claude', ['--version'], { planning: ['-p', PROMPT_TOKEN], 'planning-write': ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
+    adapter('codex', 'Codex', 'codex', ['exec', '--help'], {
+      planning: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--sandbox', 'read-only', '--model', CODEX_MODEL, PROMPT_TOKEN],
+      'planning-write': ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN],
+      implementation: ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--json', '--sandbox', 'workspace-write', '--model', CODEX_MODEL, PROMPT_TOKEN],
+      'story-extraction': ['exec', ...(CODEX_IGNORE_USER_CONFIG ? ['--ignore-user-config'] : []), '--sandbox', 'read-only', '--model', CODEX_MODEL, PROMPT_TOKEN],
+    }),
+    adapter('copilot', 'GitHub Copilot CLI', 'copilot', ['--version'], { planning: ['-p', PROMPT_TOKEN], 'planning-write': ['-p', PROMPT_TOKEN], implementation: ['-p', PROMPT_TOKEN], 'story-extraction': ['-p', PROMPT_TOKEN] }),
   ];
   let external = [];
   if (process.env.STUDIO_AGENT_ADAPTERS_JSON) {
@@ -507,10 +515,16 @@ async function startFeatureVerification(root) {
   if (!selected) throw new Error('No declared automated test command was detected. Use the repository’s documented verification command, inspect the result, and record your review when ready.');
   return startCommandJob({ label: 'Feature verification · ' + selected.label, commandName: selected.commandName, args: selected.args, cwd: path.join(root, selected.workingDirectory), timeout: 300_000, captureEvidence: true });
 }
-function startSpecKitAgent(root, agent, prompt) {
+function startSpecKitAgent(root, agent, prompt, writeScope = 'workspace-write') {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 50_000) throw new Error('A valid, reasonably sized Engine work packet is required.');
-  const selected = agentAdapter(agent, 'planning');
-  return startCommandJob({ commandName: selected.commandName, args: adapterArgs(selected, 'planning', prompt), label: `${selected.label} · Spec-Kit planning`, cwd: root, timeout: 600_000 });
+  if (!['read-only', 'workspace-write'].includes(writeScope)) throw new Error('Studio received an invalid local-agent write scope.');
+  // Artifact-producing work and evidence-only work have separate adapter
+  // operations. A custom adapter must opt into planning-write explicitly;
+  // silently falling back to planning is how a successful-looking read-only
+  // run can leave an official template untouched.
+  const operation = writeScope === 'workspace-write' ? 'planning-write' : 'planning';
+  const selected = agentAdapter(agent, operation);
+  return startCommandJob({ commandName: selected.commandName, args: adapterArgs(selected, operation, prompt), label: `${selected.label} · Spec-Kit ${writeScope === 'workspace-write' ? 'artifact generation' : 'read-only planning'}`, cwd: root, timeout: 600_000, captureEvidence: writeScope === 'workspace-write' });
 }
 function storyExtractionPrompt(storyContent, storyTitle, sourceType) {
   return `Prepare exactly one independently deliverable user story. This is read-only: do not create, edit, commit, or delete files.\n\nSource type: ${sourceType}\n${storyTitle ? `Suggested title: ${storyTitle}\n` : ''}Source:\n---\n${storyContent}\n---\n\nReturn ONLY valid JSON, no markdown or commentary: {"story":{"id":"US-101","title":"...","priority":"High|Medium|Low","asA":"...","iWantTo":"...","soThat":"...","acceptanceCriteria":["..."],"requirementIds":["FR-101"]},"functionalRequirements":[{"id":"FR-101","title":"...","description":"...","category":"Core|UI/UX|API|Database|Security|Performance|Integration","priority":"High|Medium|Low"}],"nonFunctionalRequirements":[],"compatibilityConstraints":[],"sourceSummary":"..."}. Choose the smallest coherent use case. Return at least one testable acceptance criterion and one functional requirement; every requirementIds item must reference a returned requirement.`;
@@ -747,7 +761,12 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(req, res, 204, {});
   // Health is intentionally unauthenticated: it reveals only whether pairing is needed,
   // enabling a friendly client-side setup flow without exposing repository access.
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { status: 'ok', version: CONNECTOR_VERSION, apiVersion: CONNECTOR_API_VERSION, capabilities: ['repository-scan', 'story-extraction', 'agent-adapters', 'durable-job-recovery', 'codex-user-config-isolation'], mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN) });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, {
+    status: 'ok', version: CONNECTOR_VERSION, apiVersion: CONNECTOR_API_VERSION,
+    capabilities: ['repository-scan', 'story-extraction', 'agent-adapters', 'durable-job-recovery', 'codex-user-config-isolation', 'workspace-write-planning'],
+    agentOperations: Object.fromEntries(agentAdapters.map((item) => [item.id, Object.keys(item.operations)])),
+    mode: connectorConfiguration.mode, tokenRequired: Boolean(TOKEN),
+  });
   if (TOKEN && req.headers['x-studio-token'] !== TOKEN) return send(req, res, 401, { error: 'Connector token is required.' });
   try {
     if (req.method === 'GET' && req.url?.startsWith('/v1/jobs/')) {
@@ -771,7 +790,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/workspace/apply') { if (payload.confirmation !== 'APPLY') return send(req, res, 400, { error: 'Explicit confirmation is required.' }); return send(req, res, 200, { applied: await apply(await safeRoot(payload.repositoryPath), payload.files) }); }
     if (req.method === 'POST' && req.url === '/v1/baseline/run') return send(req, res, 202, await startBaselineCommand(await safeRoot(payload.repositoryPath), payload.commandId));
     if (req.method === 'POST' && req.url === '/v1/dependencies/install') { if (payload.confirmation !== 'INSTALL_DEPENDENCIES') return send(req, res, 400, { error: 'Explicit dependency-install confirmation is required.' }); return send(req, res, 202, await startWorkspaceDependencyInstall(await safeRoot(payload.repositoryPath), payload.workingDirectory)); }
-    if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); const root = await safeRoot(payload.repositoryPath); if (payload.project) { const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' ')); } return send(req, res, 202, startSpecKitAgent(root, payload.agent, payload.prompt)); }
+    if (req.method === 'POST' && req.url === '/v1/spec-kit/agent/run') { if (payload.confirmation !== 'RUN_SPEC_KIT_AGENT') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can run a local coding agent.' }); const root = await safeRoot(payload.repositoryPath); if (payload.project) { const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed) throw new Error(preflight.errors.map((item) => item.message).join(' ')); } return send(req, res, 202, startSpecKitAgent(root, payload.agent, payload.prompt, payload.writeScope)); }
     if (req.method === 'POST' && req.url === '/v1/local-agent/task/run') { if (payload.confirmation !== 'RUN_LOCAL_AGENT_TASK') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio can let a local coding agent edit a repository.' }); const root = await safeRoot(payload.repositoryPath); const preflight = await featurePreflight(root, payload.project, payload.featureId); if (!preflight.passed || !preflight.evidence.isLinkedWorktree) throw new Error([...preflight.errors.map((item) => item.message), ...(!preflight.evidence.isLinkedWorktree ? ['Implementation requires a linked Git worktree.'] : [])].join(' ')); return send(req, res, 202, startLocalAgentImplementation(root, payload.agent, payload.prompt, payload.taskId, payload.featureTitle)); }
     if (req.method === 'POST' && req.url === '/v1/feature/verify') { if (payload.confirmation !== 'VERIFY_FEATURE') return send(req, res, 400, { error: 'Explicit confirmation is required before Studio runs repository verification.' }); return send(req, res, 202, await startFeatureVerification(await safeRoot(payload.repositoryPath))); }
     if (req.method === 'POST' && req.url === '/v1/jobs/active') return send(req, res, 200, { job: activeJob(await safeRoot(payload.repositoryPath)) });

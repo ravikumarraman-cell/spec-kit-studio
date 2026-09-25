@@ -71,5 +71,5 @@ if (packed.status !== 0) {
   process.stderr.write(packed.stderr || packed.stdout || 'Unable to package the local connector.\n');
   process.exit(packed.status || 1);
 }
-await writeFile(path.join(downloadDirectory, 'local-connector.json'), `${JSON.stringify({ packageName, version, apiVersion: 2, downloadPath: `/downloads/${archiveName}` }, null, 2)}\n`);
+await writeFile(path.join(downloadDirectory, 'local-connector.json'), `${JSON.stringify({ packageName, version, apiVersion: 3, downloadPath: `/downloads/${archiveName}` }, null, 2)}\n`);
 process.stdout.write(`Created ${path.join(downloadDirectory, archiveName)}\n`);

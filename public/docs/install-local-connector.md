@@ -21,7 +21,7 @@ You need Node `22.12` through `22.x`, a repository clone, and the exact HTTPS ad
 In Studio, go to **Connected Workspace → Install the local connector** and select **Download the local connector package**. In a terminal, install it directly from your Studio site:
 
 ```bash
-npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.1.tgz
+npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.2.tgz
 ```
 
 Replace `https://studio.example.com` with your exact Studio address. This downloads the standalone connector, not the Studio application source. If your organization later publishes the package to npm, it may give you the shorter equivalent:
@@ -31,6 +31,8 @@ npm install --global @spec-kit-studio/local-connector
 ```
 
 Only use an organization-controlled package or the package downloaded from your Studio release.
+
+When Studio shows a **connector update required** notice, install the release shown in **Connected Workspace** and restart the connector. The website checks connector capabilities before it asks a local agent to create an official `spec.md`, `plan.md`, or `tasks.md`; this prevents an older, read-only connector from reporting a successful run while leaving a template unchanged.
 
 ### Codex request isolation
 

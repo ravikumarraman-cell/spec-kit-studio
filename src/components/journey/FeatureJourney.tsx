@@ -146,7 +146,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const pendingImplementationJob = activeFeatureForProject(project)?.worktreePath
     ? readLocalAgentJobReference(project.id, activeFeatureForProject(project)!.id, activeFeatureForProject(project)!.worktreePath!)
     : null;
-  const hydrateJourneyJob = async (job: ConnectorJob, stageId: number, repositoryPath: string) => {
+  const hydrateJourneyJob = async (job: ConnectorJob, stageId: number, repositoryPath: string): Promise<ConnectorJob> => {
     if (!job.ok || !(stageId === 2 || stageId === 4 || stageId === 5)) return job;
     try {
       const kind = stageId === 2 ? 'spec' : stageId === 4 ? 'plan' : 'tasks';
@@ -154,14 +154,28 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       const artifact = artifacts
         .filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, activeFeatureForProject(project), item.path))
         .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-      return artifact
-        ? { ...job, output: `${job.output}\n\n--- Official ${artifact.path} ---\n${artifact.content}` }
-        : job;
+      if (!artifact) return job;
+      const feature = activeFeatureForProject(project);
+      const issues = feature && (stageId === 2 || stageId === 4 || stageId === 5)
+        ? validateSpecKitArtifacts(feature, [{ ...artifact, kind }], [kind])
+        : [];
+      const output = `${job.output}\n\n--- Official ${artifact.path} ---\n${artifact.content}`;
+      // A process exit is not a successful Journey result when the official
+      // artifact is still a template. Present retry—not approval—as the one
+      // next action, while retaining the redacted output for review.
+      return issues.length
+        ? { ...job, status: 'failed' as const, ok: false, output: `${output}\n\n--- Studio artifact check ---\n${issues.map((issue) => issue.message).join('\n')}` }
+        : { ...job, output };
     } catch {
-      // A completed job remains a completed job even if a follow-up artifact
-      // scan is temporarily unavailable. The user can still inspect its safe
-      // summary and retry the non-mutating artifact discovery later.
-      return job;
+      // Artifact-producing stages cannot be approved based on a process exit
+      // alone. A temporary scan failure is therefore a retryable failure, not
+      // a misleading "accept" state.
+      return {
+        ...job,
+        status: 'failed' as const,
+        ok: false,
+        output: `${job.output}\n\n--- Studio artifact check ---\nStudio could not verify the required official artifact after the agent finished. Check the local connector and retry; no stage can be approved until verification succeeds.`,
+      };
     }
   };
   const complete = (stage: typeof current) => {
@@ -205,6 +219,14 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     try {
       setConnectorSessionToken(connectorToken);
       const client = configuredConnectorClient(connectorToken);
+      const writeScope = stageId === 3 ? 'read-only' : 'workspace-write';
+      const health = await client.health();
+      if (writeScope === 'workspace-write' && !health.capabilities?.includes('workspace-write-planning')) {
+        throw new Error('Your local connector needs an update before it can safely generate Spec-Kit artifacts. Open Connected Workspace to install the current connector release, restart it, then retry.');
+      }
+      if (writeScope === 'workspace-write' && health.agentOperations && !health.agentOperations[agent.id]?.includes('planning-write')) {
+        throw new Error(`${localAgentLabel(agent)} is configured for read-only planning only. Ask the connector administrator to add a planning-write operation for this agent, then retry.`);
+      }
       // Stages 3–5 must be able to create and review feature artifacts in the
       // connected checkout. Passing a feature ID here would incorrectly demand
       // the implementation branch/worktree before implementation begins.
@@ -219,17 +241,28 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
         const existingArtifact = artifacts
           .filter((item) => item.kind === kind && isFeatureArtifactScoped(item.content, activeFeature, item.path))
           .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
-        if (existingArtifact && !compactReplacement) {
+        const existingIssues = existingArtifact && focusedFeature
+          ? validateSpecKitArtifacts(focusedFeature, [{ ...existingArtifact, kind }], [kind])
+          : [];
+        if (existingArtifact && !compactReplacement && existingIssues.length === 0) {
           setDiscoveredArtifact(existingArtifact);
           setAcceptedNotice(`Studio found the existing feature-scoped ${kind}.md. No agent was started; review and accept it when ready.`);
           return;
+        }
+        if (existingArtifact && existingIssues.length) {
+          // A stale template is evidence of a prior incomplete run, not a
+          // finished artifact. Keep it in place for the agent to complete or
+          // replace, rather than routing the user back to a blocked accept
+          // action.
+          setDiscoveredArtifact(null);
+          setAcceptedNotice(`Studio found an incomplete ${kind}.md and will regenerate it. ${existingIssues.map((issue) => issue.message).join(' ')}`);
         }
       }
       // The connector performs its own authoritative preflight immediately
       // before starting an agent. It must receive the same stage-scoped
       // feature identity as the UI preflight above, otherwise planning would
       // incorrectly be rejected for not yet using an implementation worktree.
-      const job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, preflightProject, preflightFeatureId);
+      const job = await client.startSpecKitAgent(repositoryPath, agent.id, instruction, preflightProject, preflightFeatureId, writeScope);
       if (focusedFeature) saveConnectorRunReference({ jobId: job.id, projectId: project.id, repositoryPath, scope: 'journey-stage', ownerId: focusedFeature.id, stageId });
       setAgentJob(job);
       if (job.status !== 'running') {
@@ -381,10 +414,20 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     const expectedKind = current.id === 2 && storyScope ? 'spec' : current.id === 4 ? 'plan' : current.id === 5 ? 'tasks' : null;
     if (!repositoryPath || !expectedKind || (expectedKind === 'spec' && activeFeature?.specification?.path) || (expectedKind === 'plan' && activeFeature?.architecturePlan?.path && isFeatureArtifactScoped(activeFeature.architecturePlan.content, activeFeature, activeFeature.architecturePlan.path)) || (expectedKind === 'tasks' && activeFeature?.deliveryPlan?.path && isFeatureArtifactScoped(activeFeature.deliveryPlan.content, activeFeature, activeFeature.deliveryPlan.path) && parseFeatureDeliveryTasks(activeFeature.deliveryPlan.content).length > 0)) { setDiscoveredArtifact(null); return; }
     const client = configuredConnectorClient(connectorToken);
-    client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => setDiscoveredArtifact(artifacts.filter((item) => item.kind === expectedKind
-      && isFeatureArtifactScoped(item.content, activeFeature, item.path)
-      && (expectedKind !== 'tasks' || parseFeatureDeliveryTasks(item.content).length > 0))
-      .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0] || null)).catch(() => setDiscoveredArtifact(null));
+    client.readSpecKitArtifacts(repositoryPath).then(({ artifacts }) => {
+      const candidate = artifacts.filter((item) => item.kind === expectedKind
+        && isFeatureArtifactScoped(item.content, activeFeature, item.path)
+        && (expectedKind !== 'tasks' || parseFeatureDeliveryTasks(item.content).length > 0))
+        .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))[0];
+      if (!candidate || !activeFeature) { setDiscoveredArtifact(null); return; }
+      const issues = validateSpecKitArtifacts(activeFeature, [{ ...candidate, kind: expectedKind }], [expectedKind]);
+      if (issues.length) {
+        setDiscoveredArtifact(null);
+        setEngineError(`Studio found ${candidate.path}, but it is not ready for approval: ${issues.map((issue) => issue.message).join(' ')}`);
+        return;
+      }
+      setDiscoveredArtifact(candidate);
+    }).catch(() => setDiscoveredArtifact(null));
   }, [activeFeature, connectorToken, current.id, project.importedRepo?.repoUrl, storyScope]);
   useEffect(() => {
     // Prefer a durable, feature-scoped repository artifact over a duplicate
@@ -434,7 +477,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       setEngineError(`Studio found ${officialArtifact.path}, but it does not mention ${activeFeature?.title || 'the feature in focus'}. It was not accepted as feature evidence.`);
       return;
     }
-    if ((agentStageId === 4 || agentStageId === 5) && officialArtifact && activeFeature && storyScope) {
+    if ((agentStageId === 4 || agentStageId === 5) && officialArtifact && activeFeature) {
       const kind = agentStageId === 4 ? 'plan' : 'tasks';
       const issues = validateSpecKitArtifacts(activeFeature, [{ ...officialArtifact, kind }], [kind]);
       if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }
@@ -481,7 +524,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       onUpdateFeatureIdentity(activeFeature.id, { slug: officialSlug, branch: officialSlug });
       onSaveFeatureReview({ specification: { path: discoveredArtifact.path, content: discoveredArtifact.content, acceptedAt } });
     }
-    if ((current.id === 4 || current.id === 5) && activeFeature && storyScope) {
+    if ((current.id === 4 || current.id === 5) && activeFeature) {
       const kind = current.id === 4 ? 'plan' : 'tasks';
       const issues = validateSpecKitArtifacts(activeFeature, [discoveredArtifact], [kind]);
       if (issues.length) { setEngineError(issues.map((issue) => issue.message).join(' ')); return; }

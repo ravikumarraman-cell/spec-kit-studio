@@ -30,6 +30,15 @@ export function agentFailureGuidance(agent: LocalAgentStatus['id'], output: stri
   if (/repository path does not exist/i.test(detail)) {
     return 'Studio cannot find that repository folder. Reconnect the workspace using an existing absolute path, then retry.';
   }
+  if (/local connector needs an update before it can safely generate Spec-Kit artifacts/i.test(detail)) {
+    return 'This Studio release requires a newer local connector before it can safely create official artifacts. Open Connected Workspace, install the current connector release, restart it, then retry.';
+  }
+  if (/configured for read-only planning only/i.test(detail)) {
+    return 'The selected local agent is configured for evidence-only work and cannot create this official artifact. Select an agent with artifact-generation access or add its planning-write connector operation, then retry.';
+  }
+  if (/still contains (?:an official )?template placeholder|still contains template placeholders/i.test(detail)) {
+    return 'The agent created an official file but left a template marker in it, so Studio cannot approve it. Run the stage again; Studio will require a completed, feature-specific artifact before review.';
+  }
   const conciseDetail = detail.replace(/\s+/g, ' ').trim().slice(0, 500);
   return conciseDetail ? `The local coding agent did not complete the work packet. Review its redacted output, resolve the issue, and retry. Details: ${conciseDetail}` : 'The local coding agent did not complete the work packet. Review the redacted output and try again.';
 }

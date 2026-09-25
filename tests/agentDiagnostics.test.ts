@@ -25,6 +25,11 @@ test('connector and cancellation failures are made safe and actionable', () => {
   assert.match(agentFailureGuidance('codex', 'Cancelled by the Studio user.'), /partial changes/);
 });
 
+test('connector compatibility and write-scope failures explain the safe recovery', () => {
+  assert.match(agentFailureGuidance('codex', 'Your local connector needs an update before it can safely generate Spec-Kit artifacts.'), /newer local connector/);
+  assert.match(agentFailureGuidance('codex', 'Codex is configured for read-only planning only.'), /cannot create this official artifact/);
+});
+
 test('unknown diagnostic output is bounded before it is displayed', () => {
   const guidance = agentFailureGuidance('codex', 'x'.repeat(900));
   assert.ok(guidance.length < 700);

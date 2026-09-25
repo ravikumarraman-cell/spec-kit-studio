@@ -18,6 +18,9 @@ export function agentFailureGuidance(agent: LocalAgentStatus['id'], output: stri
   if (agent === 'codex' && /not logged in|run\s+\/login|authentication required|login required/i.test(detail)) {
     return 'Codex CLI needs a local sign-in. Open a Terminal in the connected repository, run `codex`, complete the sign-in flow, then return to Studio and retry this task.';
   }
+  if (agent === 'codex' && /failed to load (?:models cache|skill)|missing YAML frontmatter|reading additional input from stdin/i.test(detail)) {
+    return 'Codex started with unrelated local-session configuration and stopped before it received the Studio work packet. Update and restart the local connector; it now launches Codex in an isolated session while preserving your normal local sign-in.';
+  }
   if (/no (?:supported npm test script|declared automated test command) was detected/i.test(detail)) {
     return 'This repository does not declare an automated test command. Use its documented verification command, inspect the result, and only record the implementation when you are satisfied.';
   }

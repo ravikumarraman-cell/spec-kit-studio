@@ -7,6 +7,9 @@ test('connector isolates non-interactive Codex runs from user configuration by d
   assert.match(source, /CODEX_IGNORE_USER_CONFIG = process\.env\.STUDIO_CODEX_IGNORE_USER_CONFIG !== 'false'/);
   assert.match(source, /\['--ignore-user-config'\]/);
   assert.match(source, /STUDIO_CODEX_IGNORE_USER_CONFIG/);
+  assert.match(source, /function localAgentEnvironment\(agent\)/);
+  assert.match(source, /key\.startsWith\('CODEX_'\)/);
+  assert.match(source, /STUDIO_CODEX_HOME/);
 });
 
 test('connector separates evidence-only planning from artifact-producing planning', async () => {

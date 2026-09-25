@@ -11,6 +11,6 @@ test('recognizes only newer stable connector releases', () => {
 });
 
 test('validates the public connector release manifest', () => {
-  assert.equal(isConnectorRelease({ packageName: '@spec-kit-studio/local-connector', version: '0.1.2', apiVersion: 3, downloadPath: '/downloads/spec-kit-studio-local-connector-0.1.2.tgz' }), true);
-  assert.equal(isConnectorRelease({ version: '0.1.2', apiVersion: 3, downloadPath: '/outside.tgz' }), false);
+  assert.equal(isConnectorRelease({ packageName: '@spec-kit-studio/local-connector', version: '0.1.3', apiVersion: 3, downloadPath: '/downloads/spec-kit-studio-local-connector-0.1.3.tgz' }), true);
+  assert.equal(isConnectorRelease({ version: '0.1.3', apiVersion: 3, downloadPath: '/outside.tgz' }), false);
 });

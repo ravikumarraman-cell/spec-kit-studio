@@ -21,7 +21,7 @@ You need Node `22.12` through `22.x`, a repository clone, and the exact HTTPS ad
 In Studio, go to **Connected Workspace → Install the local connector** and select **Download the local connector package**. In a terminal, install it directly from your Studio site:
 
 ```bash
-npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.2.tgz
+npm install --global https://studio.example.com/downloads/spec-kit-studio-local-connector-0.1.3.tgz
 ```
 
 Replace `https://studio.example.com` with your exact Studio address. This downloads the standalone connector, not the Studio application source. If your organization later publishes the package to npm, it may give you the shorter equivalent:
@@ -80,6 +80,14 @@ STUDIO_ALLOWED_ROOTS="/Users/your-name/studio-repositories"
 STUDIO_ALLOWED_ORIGINS="https://studio.example.com"
 STUDIO_CONNECTOR_TOKEN="paste-the-long-random-value-here"
 ```
+
+If you normally run Codex with a non-default `CODEX_HOME`, set its absolute path explicitly rather than relying on variables inherited from an IDE terminal:
+
+```env
+STUDIO_CODEX_HOME="/Users/your-name/.codex"
+```
+
+Studio removes transient `CODEX_*` session variables from child Codex runs. This prevents a parent IDE/Codex session and its unrelated skills from being injected into your repository workflow, while retaining the normal local Codex sign-in.
 
 `STUDIO_ALLOWED_ROOTS` must be an absolute path. `STUDIO_ALLOWED_ORIGINS` must be the exact HTTPS Studio origin—no trailing slash, path, wildcard, or credentials. Never commit or upload this file, and never put these settings in Vercel environment variables. On Windows, use a private folder such as `%USERPROFILE%\\.spec-kit-studio-connector` and an absolute path such as `C:\\Users\\your-name\\studio-repositories`.
 

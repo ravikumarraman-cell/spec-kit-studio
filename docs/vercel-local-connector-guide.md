@@ -163,6 +163,8 @@ STUDIO_CONNECTOR_TOKEN="paste-your-long-random-token-here"
 
 # Optional: choose the local Codex model only when your Codex account supports it.
 STUDIO_CODEX_MODEL="gpt-5.6-luna"
+# Optional only for a deliberate non-default Codex auth home:
+# STUDIO_CODEX_HOME="/absolute/path/to/.codex"
 
 # Optional advanced override. Defaults to true: connector-launched Codex runs
 # ignore user-level Codex configuration so unrelated plugins and skills cannot

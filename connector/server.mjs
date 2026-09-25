@@ -28,7 +28,7 @@ const STORY_EXTRACTION_TIMEOUT_MS = 90_000;
 // default. Keep the connector self-contained while allowing a deliberate
 // per-machine override for accounts with different model availability.
 const CODEX_MODEL = process.env.STUDIO_CODEX_MODEL || 'gpt-5.6-luna';
-const CONNECTOR_VERSION = '0.1.2';
+const CONNECTOR_VERSION = '0.1.3';
 // Studio launches Codex non-interactively. User-level plugins, skills, and
 // configuration can inject an unbounded amount of unrelated context into
 // every request, so isolate connector runs by default. Authentication remains
@@ -38,6 +38,24 @@ const CODEX_IGNORE_USER_CONFIG = process.env.STUDIO_CODEX_IGNORE_USER_CONFIG !==
 const AGENT_ID = /^[a-z][a-z0-9-]{0,63}$/;
 const SAFE_EXECUTABLE = /^[A-Za-z0-9._-]+$/;
 const PROMPT_TOKEN = '$PROMPT';
+
+/**
+ * A connector can be started from an IDE terminal which itself is running
+ * inside Codex. Do not leak that parent session into a new non-interactive
+ * Codex invocation: it can make the child resume managed context or discover
+ * unrelated skills before it ever receives Studio's work packet. Normal CLI
+ * sign-in stays in the user's default ~/.codex home. A non-default home is an
+ * explicit connector setting, never inherited ambient state.
+ */
+function localAgentEnvironment(agent) {
+  const environment = { ...process.env };
+  if (agent !== 'codex') return environment;
+  for (const key of Object.keys(environment)) {
+    if (key === 'CODEX_HOME' || key.startsWith('CODEX_')) delete environment[key];
+  }
+  if (process.env.STUDIO_CODEX_HOME) environment.CODEX_HOME = process.env.STUDIO_CODEX_HOME;
+  return environment;
+}
 
 // Adapters make the connector extensible without accepting an executable or
 // arguments from the browser. A machine owner may add a CLI with
@@ -171,7 +189,7 @@ async function resolveExecutable(commandName) {
   }
   return commandName;
 }
-async function command(command, args, cwd, timeout = 30_000) {
+async function command(command, args, cwd, timeout = 30_000, environment = process.env) {
   const executable = await resolveExecutable(command);
   // Always close stdin. A number of agent CLIs treat any open pipe as a second
   // prompt stream; leaving it open makes a command with a perfectly valid
@@ -187,7 +205,7 @@ async function command(command, args, cwd, timeout = 30_000) {
     };
     let child;
     try {
-      child = spawn(executable, args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(executable, args, { cwd, env: environment, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       finish(false, error instanceof Error ? error.message : String(error));
       return;
@@ -437,7 +455,7 @@ function stopProcess(job, child, reason) {
     }
   }, 10_000).unref();
 }
-function startCommandJob({ label, commandName, args, cwd, timeout, captureEvidence = false }) {
+function startCommandJob({ label, commandName, args, cwd, timeout, captureEvidence = false, environment = process.env }) {
   const activeId = activeJobByRepository.get(cwd);
   if (activeId) {
     const active = jobs.get(activeId);
@@ -460,7 +478,7 @@ function startCommandJob({ label, commandName, args, cwd, timeout, captureEviden
   jobs.set(id, job);
   // Agent work packets are passed as command arguments. Explicitly close stdin so
   // non-interactive CLIs such as `codex exec` do not wait indefinitely for more input.
-  const child = spawn(commandName, args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(commandName, args, { cwd, env: environment, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
   runningProcesses.set(id, child);
   activeJobByRepository.set(cwd, id);
   const timeoutHandle = setTimeout(() => {
@@ -524,7 +542,7 @@ function startSpecKitAgent(root, agent, prompt, writeScope = 'workspace-write') 
   // run can leave an official template untouched.
   const operation = writeScope === 'workspace-write' ? 'planning-write' : 'planning';
   const selected = agentAdapter(agent, operation);
-  return startCommandJob({ commandName: selected.commandName, args: adapterArgs(selected, operation, prompt), label: `${selected.label} · Spec-Kit ${writeScope === 'workspace-write' ? 'artifact generation' : 'read-only planning'}`, cwd: root, timeout: 600_000, captureEvidence: writeScope === 'workspace-write' });
+  return startCommandJob({ commandName: selected.commandName, args: adapterArgs(selected, operation, prompt), label: `${selected.label} · Spec-Kit ${writeScope === 'workspace-write' ? 'artifact generation' : 'read-only planning'}`, cwd: root, timeout: 600_000, captureEvidence: writeScope === 'workspace-write', environment: localAgentEnvironment(agent) });
 }
 function storyExtractionPrompt(storyContent, storyTitle, sourceType) {
   return `Prepare exactly one independently deliverable user story. This is read-only: do not create, edit, commit, or delete files.\n\nSource type: ${sourceType}\n${storyTitle ? `Suggested title: ${storyTitle}\n` : ''}Source:\n---\n${storyContent}\n---\n\nReturn ONLY valid JSON, no markdown or commentary: {"story":{"id":"US-101","title":"...","priority":"High|Medium|Low","asA":"...","iWantTo":"...","soThat":"...","acceptanceCriteria":["..."],"requirementIds":["FR-101"]},"functionalRequirements":[{"id":"FR-101","title":"...","description":"...","category":"Core|UI/UX|API|Database|Security|Performance|Integration","priority":"High|Medium|Low"}],"nonFunctionalRequirements":[],"compatibilityConstraints":[],"sourceSummary":"..."}. Choose the smallest coherent use case. Return at least one testable acceptance criterion and one functional requirement; every requirementIds item must reference a returned requirement.`;
@@ -599,7 +617,7 @@ async function extractStoryWithAgent(root, payload) {
   const storyTitle = typeof payload.storyTitle === 'string' ? payload.storyTitle.trim().slice(0, 240) : '';
   const sourceType = typeof payload.sourceType === 'string' ? payload.sourceType.trim().slice(0, 80) : 'text';
   const selected = agentAdapter(String(payload.agent || ''), 'story-extraction');
-  const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, STORY_EXTRACTION_TIMEOUT_MS);
+  const result = await command(selected.commandName, adapterArgs(selected, 'story-extraction', storyExtractionPrompt(storyContent, storyTitle, sourceType)), root, STORY_EXTRACTION_TIMEOUT_MS, localAgentEnvironment(String(payload.agent || '')));
   if (!result.ok) {
     const authorizationMessage = localAgentAuthorizationMessage(selected.label, result.output);
     if (authorizationMessage) throw new Error(authorizationMessage);
@@ -622,6 +640,7 @@ function startLocalAgentImplementation(root, agent, prompt, taskId, featureTitle
     cwd: root,
     timeout: 900_000,
     captureEvidence: true,
+    environment: localAgentEnvironment(agent),
   });
 }
 function cancelJob(id) {

@@ -30,6 +30,12 @@ test('connector compatibility and write-scope failures explain the safe recovery
   assert.match(agentFailureGuidance('codex', 'Codex is configured for read-only planning only.'), /cannot create this official artifact/);
 });
 
+test('Codex inherited-session skill failures direct the user to connector isolation', () => {
+  const guidance = agentFailureGuidance('codex', 'ERROR codex_core::session: failed to load skill /tmp/SKILL.md: missing YAML frontmatter');
+  assert.match(guidance, /unrelated local-session configuration/);
+  assert.match(guidance, /Update and restart the local connector/);
+});
+
 test('unknown diagnostic output is bounded before it is displayed', () => {
   const guidance = agentFailureGuidance('codex', 'x'.repeat(900));
   assert.ok(guidance.length < 700);

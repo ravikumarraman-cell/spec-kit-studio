@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleAlert, Play, ShieldCheck } from 'lucide-react';
 import { FeatureJourney as JourneyState, SpecKitProject, ViewTab } from '../../types/speckit';
-import { configuredConnectorClient, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
+import { activeConnectorJob, configuredConnectorClient, configuredConnectorUrl, ConnectorJob, SpecKitArtifact } from '../../lib/connector';
 import { LocalAgentStatus, localAgentLabel } from '../../lib/agentAvailability';
 import { selectedRuntimeAgent } from '../../lib/runtimeAgents';
 import { getConnectorSessionToken, setConnectorSessionToken } from '../../lib/connectorSession';
@@ -68,6 +68,7 @@ interface JourneyNextStepProps {
   safetyMessages: string[];
   hasSelectedAgent: boolean;
   isRunning: boolean;
+  isReconnecting: boolean;
   hasRepository: boolean;
   onStart: () => void;
   onApprove: () => void;
@@ -77,7 +78,7 @@ interface JourneyNextStepProps {
 
 function JourneyNextStep({
   stage, title, outcome, action, canApprove, readinessHint, engineAction, evidence,
-  connectorToken, engineError, safetyMessages, hasSelectedAgent, isRunning, hasRepository,
+  connectorToken, engineError, safetyMessages, hasSelectedAgent, isRunning, isReconnecting, hasRepository,
   onStart, onApprove, onConnectorTokenChange, onOpenWorkspace,
 }: JourneyNextStepProps) {
   return <section className="journey-next-step rounded-2xl border p-5" aria-label="Your one next step">
@@ -100,7 +101,7 @@ function JourneyNextStep({
         {!canApprove && <p className="mt-3 flex items-center gap-2 text-xs text-amber-200"><CircleAlert className="h-4 w-4 shrink-0" />{readinessHint}</p>}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={onStart} disabled={isRunning} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Play className="h-3.5 w-3.5" />{isRunning ? 'Working…' : action}</button>
+          <button type="button" onClick={onStart} disabled={isRunning} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Play className="h-3.5 w-3.5" />{isReconnecting ? 'Reconnecting to saved run…' : isRunning ? 'Working…' : action}</button>
           {canApprove && <button type="button" onClick={onApprove} className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-4 py-2.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20"><CheckCircle2 className="h-3.5 w-3.5" />Approve this stage and continue</button>}
         </div>
 
@@ -131,9 +132,17 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
   const [deliveryPlanMode, setDeliveryPlanMode] = useState<DeliveryPlanMode>('detailed');
   const [isReplacingDeliveryPlan, setIsReplacingDeliveryPlan] = useState(false);
+  const [isRestoringJourneyRun, setIsRestoringJourneyRun] = useState(true);
   const activeFeature = activeFeatureForProject(project);
   const storyScope = Boolean(activeFeature && deliveryScope(activeFeature) === 'user-story');
-  const agentRunIsActive = isRunningEngine || agentJob?.status === 'running';
+  const pendingJourneyRun = activeFeature && project.importedRepo?.repoUrl
+    ? readConnectorRunReference(project.id, 'journey-stage', activeFeature.id, project.importedRepo.repoUrl)
+    : null;
+  const isReconnectingJourneyRun = Boolean(
+    !agentJob && activeFeature && engineInstructionForStage(current.id, project, deliveryPlanMode)
+    && ((pendingJourneyRun?.stageId === current.id) || isRestoringJourneyRun),
+  );
+  const agentRunIsActive = isRunningEngine || agentJob?.status === 'running' || isReconnectingJourneyRun;
   const pendingImplementationJob = activeFeatureForProject(project)?.worktreePath
     ? readLocalAgentJobReference(project.id, activeFeatureForProject(project)!.id, activeFeatureForProject(project)!.worktreePath!)
     : null;
@@ -274,22 +283,30 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
     // and a completed, not-yet-reviewed result so navigation never becomes an
     // invitation to run the same agent work twice.
     const repositoryPath = project.importedRepo?.repoUrl;
-    if (agentJob || !activeFeature || !repositoryPath) return;
+    if (agentJob || !activeFeature || !repositoryPath) { setIsRestoringJourneyRun(false); return; }
     const reference = readConnectorRunReference(project.id, 'journey-stage', activeFeature.id, repositoryPath);
-    if (!reference?.stageId) return;
-    if (reference.stageId < 2 || reference.stageId > 5 || reference.stageId !== current.id) return;
+    const stageId = reference?.stageId || current.id;
+    if (stageId < 2 || stageId > 5 || stageId !== current.id || !engineInstructionForStage(stageId, project, deliveryPlanMode)) { setIsRestoringJourneyRun(false); return; }
     let disposed = false;
     void (async () => {
       try {
-        const recovered = await configuredConnectorClient(connectorToken).getJob(reference.jobId);
-        const hydrated = await hydrateJourneyJob(recovered, reference.stageId!, repositoryPath);
+        // New runs have an exact reference. The fallback is deliberately only
+        // for an already-running single connector writer created by an older
+        // Studio build, before durable references existed.
+        const recovered = reference
+          ? await configuredConnectorClient(connectorToken).getJob(reference.jobId)
+          : await activeConnectorJob(configuredConnectorUrl(), connectorToken, repositoryPath);
+        if (!recovered) return;
+        if (!reference && recovered.status !== 'running') return;
+        if (!reference) saveConnectorRunReference({ jobId: recovered.id, projectId: project.id, repositoryPath, scope: 'journey-stage', ownerId: activeFeature.id, stageId });
+        const hydrated = await hydrateJourneyJob(recovered, stageId, repositoryPath);
         if (disposed) return;
-        setAgentStageId(reference.stageId!);
+        setAgentStageId(stageId);
         setAgentJob(hydrated);
         setIsRunningEngine(false);
         setAcceptedNotice(hydrated.status === 'running'
-          ? `Reconnected to the Stage ${reference.stageId} agent run. You can safely leave this screen while it continues.`
-          : `Your earlier Stage ${reference.stageId} agent run is ready for review. Studio did not run it again.`);
+          ? `Reconnected to the Stage ${stageId} agent run. You can safely leave this screen while it continues.`
+          : `Your earlier Stage ${stageId} agent run is ready for review. Studio did not run it again.`);
         if (!hydrated.ok && hydrated.status !== 'running') setEngineError(agentFailureGuidance(selectedAgent()?.id || 'copilot', hydrated.output));
       } catch (error) {
         if (disposed) return;
@@ -300,7 +317,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
         } else {
           setEngineError('Studio cannot reconnect to the saved local-agent run yet. Start the same local connector again; this screen will restore the run when you return.');
         }
-      }
+      } finally { if (!disposed) setIsRestoringJourneyRun(false); }
     })();
     return () => { disposed = true; };
   }, [activeFeature, agentJob, connectorToken, project]);
@@ -532,6 +549,7 @@ export function FeatureJourney({ project, onNavigate, onOpenFeatureImport, onSav
       safetyMessages={safetyIssues.map((issue) => issue.message)}
       hasSelectedAgent={Boolean(selectedAgent())}
       isRunning={agentRunIsActive}
+      isReconnecting={isReconnectingJourneyRun}
       hasRepository={Boolean(project.importedRepo?.repoUrl)}
       onStart={() => startStage(current)}
       onApprove={() => complete(current)}

@@ -11,10 +11,8 @@ import {
   Plus,
   Trash2,
   Code2,
-  Zap,
   CheckCircle2,
   RefreshCw,
-  FolderGit2,
   Globe,
   Database,
   Shield,
@@ -25,6 +23,12 @@ import {
 } from 'lucide-react';
 import { ImportedRepository, DetectedTech, SpecKitProject, FeatureSpec, ImplementationPlan, TaskBreakdown, ProjectConstitution } from '../../types/speckit';
 import { importSpecKitZip } from '../../lib/export';
+import { ImportNotice } from './ImportNotice';
+import { importApi } from '../../lib/api/imports';
+import { createImportedRepository } from '../../lib/repositoryImportFactory';
+import { repositoryPresets } from './repositoryPresets';
+import { RepositoryImportHeader } from './RepositoryImportHeader';
+import { RepositoryImportMode, RepositoryImportModeSelector } from './RepositoryImportModeSelector';
 
 interface RepoImportStudioProps {
   onImportComplete: (project: SpecKitProject) => void;
@@ -35,7 +39,7 @@ export const RepoImportStudio: React.FC<RepoImportStudioProps> = ({
   onImportComplete,
   isDarkMode = true,
 }) => {
-  const [importMode, setImportMode] = useState<'preset' | 'url' | 'paste' | 'zip'>('preset');
+  const [importMode, setImportMode] = useState<RepositoryImportMode>('preset');
   const [githubUrl, setGithubUrl] = useState('');
   const [pastedManifest, setPastedManifest] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -50,80 +54,6 @@ export const RepoImportStudio: React.FC<RepoImportStudioProps> = ({
   const [isGeneratingFeatureSpec, setIsGeneratingFeatureSpec] = useState(false);
   const [customTechInput, setCustomTechInput] = useState('');
 
-  // Sample Preset Repositories for instant testing
-  const samplePresets = [
-    {
-      name: 'Next.js 15 Full-Stack SaaS',
-      url: 'https://github.com/vercel/next.js',
-      lang: 'TypeScript',
-      desc: 'Modern full-stack App Router codebase with React 19, Server Actions, Prisma ORM, PostgreSQL, and Tailwind v4.',
-      manifest: `{
-  "name": "nextjs-saas-starter",
-  "dependencies": {
-    "next": "^15.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@prisma/client": "^6.0.0",
-    "@tanstack/react-query": "^5.60.0",
-    "tailwindcss": "^4.0.0",
-    "lucide-react": "^0.460.0",
-    "zod": "^3.23.0"
-  },
-  "devDependencies": {
-    "prisma": "^6.0.0",
-    "typescript": "^5.7.0"
-  }
-}`
-    },
-    {
-      name: 'Python FastAPI Microservice',
-      url: 'https://github.com/fastapi/fastapi',
-      lang: 'Python',
-      desc: 'High performance async REST API backend using FastAPI, Pydantic, SQLAlchemy 2.0, PostgreSQL, and Redis.',
-      manifest: `[tool.poetry.dependencies]
-python = "^3.11"
-fastapi = "^0.115.0"
-uvicorn = "^0.32.0"
-pydantic = "^2.9.0"
-sqlalchemy = "^2.0.35"
-asyncpg = "^0.29.0"
-redis = "^5.0.0"
-celery = "^5.4.0"`
-    },
-    {
-      name: 'Rust Actix-Web High-Throughput Engine',
-      url: 'https://github.com/actix/actix-web',
-      lang: 'Rust',
-      desc: 'Ultra-fast asynchronous API engine in Rust with Actix-web, Diesel ORM, PostgreSQL, and Tokio.',
-      manifest: `[package]
-name = "rust-actix-engine"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-actix-web = "4.9"
-tokio = { version = "1.40", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-diesel = { version = "2.2", features = ["postgres", "r2d2"] }
-tracing = "0.1"`
-    },
-    {
-      name: 'Go Fiber Microservice',
-      url: 'https://github.com/gofiber/fiber',
-      lang: 'Go',
-      desc: 'Lightweight, Express-inspired Go backend service with Fiber v2, GORM, and PostgreSQL.',
-      manifest: `module my-go-service
-
-go 1.22
-
-require (
-	github.com/gofiber/fiber/v2 v2.52.5
-	gorm.io/gorm v1.25.12
-	gorm.io/driver/postgres v1.5.9
-	github.com/redis/go-redis/v9 v9.6.1
-)`
-    }
-  ];
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -161,41 +91,9 @@ require (
       const manifestToSend = overrideManifest || pastedManifest;
       const urlToSend = overrideUrl || githubUrl;
 
-      const res = await fetch('/api/repo/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repoUrl: urlToSend,
-          manifestContent: manifestToSend,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.data) {
-        const repoData: ImportedRepository = {
-          repoUrl: urlToSend || 'https://github.com/imported-project/repo',
-          repoName: data.data.repoName || 'Imported Codebase',
-          description: data.data.description || 'Imported repository for feature extension.',
-          primaryLanguage: data.data.primaryLanguage || 'TypeScript',
-          detectedTechStack: (data.data.detectedTechStack || []).map((t: any, index: number) => ({
-            id: `TECH-${index + 1}`,
-            category: t.category || 'Other',
-            name: t.name || 'Technology',
-            version: t.version || '',
-            confidence: t.confidence || 'High',
-            fileEvidence: t.fileEvidence || 'Manifest file',
-            selectedForNewFeature: true,
-          })),
-          architectureSummary: data.data.architectureSummary || 'Standard layered architecture.',
-          keyDirectories: data.data.keyDirectories || ['/src', '/api', '/components'],
-          suggestedNewFeatures: data.data.suggestedNewFeatures || [
-            'Add Role-Based Access Control (RBAC) & OAuth 2.0',
-            'Add Real-time WebSockets Live Notifications',
-            'Add AI Model Integration & Vector Search',
-            'Add Stripe Billing & Subscription Management',
-          ],
-          importedAt: new Date().toISOString(),
-        };
+      const data = await importApi.analyzeRepository({ repoUrl: urlToSend, manifestContent: manifestToSend });
+      if (data.data) {
+        const repoData = createImportedRepository(data.data, urlToSend);
 
         setAnalyzedRepo(repoData);
         if (repoData.suggestedNewFeatures.length > 0) {
@@ -245,19 +143,13 @@ require (
     try {
       const selectedTechStack = analyzedRepo.detectedTechStack.filter((t) => t.selectedForNewFeature);
 
-      const res = await fetch('/api/repo/generate-feature-for-imported', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          importedRepo: analyzedRepo,
-          selectedTechStack,
-          newFeatureTitle,
-          newFeatureGoal,
-        }),
+      const result = await importApi.generateFeatureForImportedRepository({
+        importedRepo: analyzedRepo,
+        selectedTechStack,
+        newFeatureTitle,
+        newFeatureGoal,
       });
-
-      const result = await res.json();
-      if (result.success && result.data) {
+      if (result.data) {
         const d = result.data;
 
         // Construct complete SpecKitProject
@@ -359,64 +251,12 @@ require (
 
   return (
     <div className="space-y-6 pb-12 max-w-6xl mx-auto">
-      {/* Header Bar */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-zinc-900 to-indigo-950/60 border border-cyan-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <FolderGit2 className="w-6 h-6 text-cyan-400" />
-            <h2 className="text-xl font-bold text-zinc-100">Import Existing Project / GitHub Repository</h2>
-            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              Universal Tech Stack AI Parser
-            </span>
-          </div>
-          <p className="text-xs text-zinc-300 mt-1 max-w-2xl leading-relaxed">
-            Import any existing repository (Node.js, Python, Rust, Go, Java, Docker, etc.). Spec-Kit Studio automatically extracts all technologies used, lets you pick technology choices, and generates feature specifications and plans matched to the codebase!
-          </p>
-        </div>
-      </div>
+      <RepositoryImportHeader />
 
       {/* Step 1: Repository Input Options */}
       {!analyzedRepo ? (
         <div className="space-y-6">
-          {/* Input Mode Selector */}
-          <div className="p-1 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-wrap items-center text-xs">
-            <button
-              onClick={() => setImportMode('preset')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'preset' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>Preset Repos</span>
-            </button>
-            <button
-              onClick={() => setImportMode('url')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'url' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Github className="w-3.5 h-3.5" />
-              <span>GitHub URL</span>
-            </button>
-            <button
-              onClick={() => setImportMode('paste')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'paste' ? 'bg-zinc-800 text-cyan-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Paste Code</span>
-            </button>
-            <button
-              onClick={() => setImportMode('zip')}
-              className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                importMode === 'zip' ? 'bg-zinc-800 text-purple-300 shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <FileArchive className="w-3.5 h-3.5 text-purple-400" />
-              <span>Spec-Kit Package (.zip/.json)</span>
-            </button>
-          </div>
+          <RepositoryImportModeSelector value={importMode} onChange={setImportMode} />
 
           {/* Mode 1: Preset Real-World Repos */}
           {importMode === 'preset' && (
@@ -425,7 +265,7 @@ require (
                 Select a Real-World Repository Architecture to Test
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {samplePresets.map((preset) => (
+                {repositoryPresets.map((preset) => (
                   <div
                     key={preset.name}
                     className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-cyan-500/40 transition-all space-y-3 flex flex-col justify-between group"
@@ -545,11 +385,7 @@ require (
                 className="hidden"
               />
 
-              {zipError && (
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 font-semibold text-xs">
-                  {zipError}
-                </div>
-              )}
+              <ImportNotice message={zipError} />
 
               <button
                 onClick={() => fileInputRef.current?.click()}

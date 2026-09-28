@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Sparkles, X, RefreshCw, CheckCircle2, Zap, Layers } from 'lucide-react';
 import { SpecKitProject, FeatureSpec } from '../../types/speckit';
+import { generationApi } from '../../lib/api/generation';
+import { Modal } from './Modal';
 
 interface AiSpecModalProps {
   isOpen: boolean;
@@ -23,8 +25,10 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  if (!isOpen) return null;
+  const requestClose = () => {
+    if (isGenerating) { setErrorMsg('Generation is still running. Keep this dialog open until it finishes.'); return; }
+    onClose();
+  };
 
   const toggleFocusArea = (area: string) => {
     if (focusAreas.includes(area)) {
@@ -43,46 +47,14 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
 
     try {
       // 1. Generate Spec
-      const specRes = await fetch('/api/spec/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          existingSpec: project.spec.markdown,
-          focusAreas,
-        }),
-      });
-
-      const specData = await specRes.json();
-      if (!specData.success || !specData.data) {
-        throw new Error(specData.error || 'Failed to generate specification.');
-      }
-
+      const specData = await generationApi.generateSpec({ topic, existingSpec: project.spec.markdown, focusAreas });
       const generatedSpecPayload = specData.data;
 
       // 2. Generate Plan
-      const planRes = await fetch('/api/plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          specTitle: generatedSpecPayload.title || topic,
-          specSummary: generatedSpecPayload.summary,
-          requirements: generatedSpecPayload.functionalRequirements,
-        }),
-      });
-      const planData = await planRes.json();
+      const planData = await generationApi.generatePlan({ specTitle: generatedSpecPayload.title || topic, specSummary: generatedSpecPayload.summary, requirements: generatedSpecPayload.functionalRequirements || [] });
 
       // 3. Generate Tasks
-      const tasksRes = await fetch('/api/tasks/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          specTitle: generatedSpecPayload.title || topic,
-          functionalRequirements: generatedSpecPayload.functionalRequirements,
-          techStack: planData.data?.techStack || [],
-        }),
-      });
-      const tasksData = await tasksRes.json();
+      const tasksData = await generationApi.generateTasks({ specTitle: generatedSpecPayload.title || topic, functionalRequirements: generatedSpecPayload.functionalRequirements || [], techStack: planData.data.techStack || [] });
 
       const newSpecObj: FeatureSpec = {
         id: project.spec.id,
@@ -118,7 +90,7 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <Modal isOpen={isOpen} onClose={requestClose} ariaLabel="AI Spec Generator" className="items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-6 space-y-5 text-xs">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
@@ -130,7 +102,7 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
               <p className="text-[11px] text-zinc-400">Powered by Gemini 3.8 Flash Server Proxy</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-500 hover:text-zinc-200">
+          <button type="button" onClick={requestClose} disabled={isGenerating} className="p-1 text-zinc-500 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -181,8 +153,9 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
           <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-zinc-200 font-medium"
+              onClick={requestClose}
+              disabled={isGenerating}
+              className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-zinc-200 font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               Cancel
             </button>
@@ -197,6 +170,6 @@ export const AiSpecModal: React.FC<AiSpecModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

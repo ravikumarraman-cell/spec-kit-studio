@@ -1,38 +1,58 @@
 {
-  "name": "react-example",
+  "name": "spec-kit-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.14",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "connector": "node connector/server.mjs",
+    "package:connector": "node scripts/package-local-connector.mjs",
+    "check:public-deps": "node scripts/check-public-package-sources.mjs",
+    "build": "npm run check:public-deps && npm run package:connector && vite build && npm run check:bundle && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/vercel.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/vercel.cjs",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "verify": "npm run lint && npm test && npm run build",
+    "smoke:production": "node scripts/smoke-production-server.mjs",
+    "verify:production": "node scripts/check-production-runtime.mjs && npm run verify && npm run smoke:production"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
+    "@google/genai": "^2.23.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.103.1",
+    "@tanstack/react-table": "8.20.6",
     "@vitejs/plugin-react": "^6.1.1",
+    "compression": "^1.8.2",
     "dotenv": "^17.2.3",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
+    "helmet": "^8.3.0",
     "jszip": "^3.10.2",
     "lucide-react": "^0.546.0",
-    "mermaid": "^12.0.0",
-    "motion": "^12.23.24",
+    "mermaid": "^11.17.2",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-error-boundary": "^6.1.5",
     "vite": "^8.3.0"
   },
+  "overrides": {
+    "lodash-es": "4.17.23"
+  },
   "devDependencies": {
-    "@types/node": "^22.14.0",
+    "@types/compression": "^1.8.1",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.20.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "autoprefixer": "^10.6.1",
+    "esbuild": "^0.28.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "vitest": "^5.0.0"
   }
 }

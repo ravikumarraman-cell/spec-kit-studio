@@ -1,5 +1,156 @@
 import JSZip from 'jszip';
-import { SpecKitProject } from '../types/speckit';
+import { FeatureInboxItem, SpecKitProject, StudioProcessCase } from '../types/speckit';
+import { featureArtifactRoot, slugify } from './projectIdentity';
+import { resolveStackProfile } from './stackProfiles';
+import { processDefinitions } from './processCases';
+import { deliveryScope, primaryStoryForItem } from './deliveryItems';
+
+function featureSpecMarkdown(project: SpecKitProject, feature: FeatureInboxItem): string {
+  const stories = project.spec.userStories.filter((story) => feature.userStoryIds.includes(story.id));
+  const requirements = project.spec.functionalRequirements.filter((requirement) => feature.requirementIds.includes(requirement.id));
+  const storyScope = deliveryScope(feature) === 'user-story';
+  if (storyScope) {
+    const story = primaryStoryForItem(project, feature);
+    if (!story) return '';
+    const priority = story.priority === 'High' ? 'P1' : story.priority === 'Medium' ? 'P2' : 'P3';
+    const narrative = `As a ${story.asA}, I want to ${story.iWantTo}, so that ${story.soThat}.`;
+    const scenarios = story.acceptanceCriteria.map((criterion, index) => `${index + 1}. **Given** the existing application is available, **When** the ${story.title.toLowerCase()} behavior is exercised, **Then** ${criterion.replace(/[.]$/, '').replace(/^./, (value) => value.toLowerCase())}.`).join('\n');
+    const outcomes = story.acceptanceCriteria.map((criterion, index) => `- **SC-${String(index + 1).padStart(3, '0')}**: ${criterion}`).join('\n');
+    return feature.specification?.content || `# Feature Specification: ${story.title}
+
+**Feature Branch**: \`${feature.slug}\`
+**Created**: ${feature.importedAt.slice(0, 10)}
+**Status**: Draft
+**Input**: User description: "${narrative}"
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - ${story.title} (Priority: ${priority})
+
+${narrative}
+
+**Why this priority**: This delivery item was explicitly selected for independent implementation.
+
+**Independent Test**: ${story.acceptanceCriteria[0] || `Verify ${story.title} independently.`}
+
+**Acceptance Scenarios**:
+
+${scenarios || '1. **Given** the existing application is available, **When** the story is completed, **Then** its stated user outcome is independently verifiable.'}
+
+### Edge Cases
+
+- Behavior outside this selected story remains unchanged.
+- Invalid or unavailable dependencies fail without partially completing the story.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+${requirements.map((requirement) => `- **${requirement.id}**: System MUST ${requirement.description.replace(/[.]$/, '')}.`).join('\n') || `- **FR-001**: System MUST deliver the selected user outcome described by User Story 1.`}
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+${outcomes || `- **SC-001**: User Story 1 passes its independent acceptance test.`}
+
+## Assumptions
+
+- Existing behavior, interfaces, and data outside this story remain backward compatible.
+- The connected repository and its constitution are authoritative for implementation constraints.
+`;
+  }
+  return `# ${feature.featureKey || feature.title} — ${feature.title}\n\n> Scope: ${storyScope ? 'One user story' : 'Feature'}\n\n${feature.summary}\n\n## ${storyScope ? 'User story in focus' : 'User stories'}\n${stories.map((story) => `### ${story.id}: ${story.title}\nAs a ${story.asA}, I want to ${story.iWantTo}, so that ${story.soThat}.\n\n${story.acceptanceCriteria.map((criterion) => `- [ ] ${criterion}`).join('\n')}`).join('\n\n') || 'No linked user stories.'}\n\n## Scoped functional requirements\n${requirements.map((requirement) => `- **${requirement.id}**: ${requirement.title} — ${requirement.description}`).join('\n') || 'No linked functional requirements.'}\n`;
+}
+
+/** A portable, feature-owned package. Its paths are safe to commit directly to a feature branch. */
+export function createFeaturePackageFiles(project: SpecKitProject, feature: FeatureInboxItem): Array<{ path: string; content: string }> {
+  const root = featureArtifactRoot(feature);
+  const storyScope = deliveryScope(feature) === 'user-story';
+  const story = storyScope ? primaryStoryForItem(project, feature) : undefined;
+  const studioRoot = storyScope ? `.specify/studio/delivery/${feature.slug || slugify(feature.title)}` : root;
+  const manifest = {
+    schemaVersion: storyScope ? 2 : 1,
+    ...(storyScope ? { scope: 'user-story', deliveryKey: feature.featureKey || null, primaryStoryId: feature.primaryStoryId || null, parentFeatureId: feature.parentFeatureId || null, acceptanceCriteriaCount: story?.acceptanceCriteria.length || 0 } : {}),
+    featureKey: feature.featureKey || null,
+    slug: feature.slug || slugify(feature.title),
+    studioProjectId: project.id,
+    canonicalRemote: project.repositoryIdentity?.canonicalRemote || null,
+    branch: feature.branch || null,
+    worktreePath: feature.worktreePath || null,
+    baselineCommit: feature.baselineCommit || null,
+    exportedAt: new Date().toISOString(),
+    source: feature.source,
+    status: feature.implementationReceipts?.length ? 'implementing' : feature.deliveryPlan?.acceptedAt ? 'planned' : 'draft',
+    stackProfile: resolveStackProfile(project),
+    governance: { dependencies: feature.dependencies || [], prohibitedPaths: feature.prohibitedPaths || resolveStackProfile(project).prohibitedPaths },
+  };
+  const files = [
+    { path: `${studioRoot}/manifest.json`, content: JSON.stringify(manifest, null, 2) },
+    { path: `${root}/spec.md`, content: featureSpecMarkdown(project, feature) },
+    ...(storyScope
+      ? feature.impactMap?.content ? [{ path: `${studioRoot}/impact-map.md`, content: feature.impactMap.content }] : []
+      : [{ path: `${root}/impact-map.md`, content: feature.impactMap?.content || '# Impact map\n\nNot accepted yet.' }]),
+    ...(storyScope
+      ? feature.architecturePlan?.content ? [{ path: `${root}/plan.md`, content: feature.architecturePlan.content }] : []
+      : [{ path: `${root}/plan.md`, content: feature.architecturePlan?.content || '# Feature plan\n\nNot accepted yet.' }]),
+    ...(storyScope
+      ? feature.deliveryPlan?.content ? [{ path: `${root}/tasks.md`, content: feature.deliveryPlan.content }] : []
+      : [{ path: `${root}/tasks.md`, content: feature.deliveryPlan?.content || '# Feature tasks\n\nNot accepted yet.' }]),
+    { path: `${studioRoot}/implementation-receipts.json`, content: JSON.stringify(feature.implementationReceipts || [], null, 2) },
+    { path: `${studioRoot}/superseded-implementation-receipts.json`, content: JSON.stringify(feature.supersededImplementationReceipts || [], null, 2) },
+    { path: `${studioRoot}/ci-pr-template.md`, content: `# ${feature.featureKey || feature.title} handoff\n\n- [ ] ${storyScope ? 'Story' : 'Feature'} package committed from ${root}/\n- [ ] Required checks: ${resolveStackProfile(project).testCommands.join(', ') || 'repository-defined'}\n- [ ] Acceptance criteria and rollback impact reviewed\n- [ ] No unresolved delivery-item conflict\n- [ ] Environment deployment uses repository-scoped concurrency\n` },
+  ];
+  return files;
+}
+
+export async function generateFeaturePackageZip(project: SpecKitProject, feature: FeatureInboxItem): Promise<Blob> {
+  const zip = new JSZip();
+  const root = deliveryScope(feature) === 'user-story' ? zip : zip.folder(feature.slug || slugify(feature.title)) || zip;
+  for (const file of createFeaturePackageFiles(project, feature)) root.file(file.path, file.content);
+  return zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * A portable, workflow-owned package for Bug Fix and Idea Assessment. It
+ * mirrors the feature-package contract: immutable reviewed artifacts plus a
+ * manifest, without copying application source out of its repository.
+ */
+export function createProcessCasePackageFiles(project: SpecKitProject, item: StudioProcessCase, artifacts: Array<{ path: string; content: string }>): Array<{ path: string; content: string }> {
+  const flow = processDefinitions[item.kind];
+  const root = flow.root(item.slug);
+  const artifactByPath = new Map(artifacts.map((artifact) => [artifact.path, artifact.content]));
+  const changedFiles = [...new Set((item.stepReceipts || []).flatMap((receipt) => receipt.changedFiles || []))];
+  const manifest = {
+    schemaVersion: 1,
+    packageType: `${item.kind}-workflow-handoff`,
+    studioProjectId: project.id,
+    workspace: project.name,
+    title: item.title,
+    slug: item.slug,
+    process: flow.label,
+    decision: item.kind === 'assessment' ? item.verdict || null : null,
+    sourceArtifactRoot: root,
+    exportedAt: new Date().toISOString(),
+    reviewedSteps: item.completedSteps,
+    executionReceipts: item.stepReceipts || [],
+    changedSourceFiles: changedFiles,
+    sourceCodePolicy: 'Source code remains in the connected repository. Review it through Studio’s local read-only code viewer or in the repository; it is intentionally not copied into this evidence package.',
+  };
+  const handoff = `# ${flow.label} handoff\n\n## Case\n${item.title}\n\n## Status\n${item.kind === 'assessment' ? `Decision: ${item.verdict}` : 'Complete and reviewed.'}\n\n## Included evidence\n${flow.steps.map((step) => `- ${root}${step.artifact}`).join('\n')}\n\n## Changed source files\n${changedFiles.map((path) => `- \`${path}\``).join('\n') || 'No source-code changes were recorded.'}\n\n## Source code\nSource files remain in the connected repository. Use Studio’s local read-only code review to inspect the exact diff and source.\n`;
+  return [
+    { path: 'manifest.json', content: JSON.stringify(manifest, null, 2) },
+    { path: 'HANDOFF.md', content: handoff },
+    ...flow.steps.map((step) => ({ path: `${root}${step.artifact}`, content: artifactByPath.get(`${root}${step.artifact}`) || `# ${step.artifact}\n\nArtifact was not available when the package was created.` })),
+  ];
+}
+
+export async function generateProcessCasePackageZip(project: SpecKitProject, item: StudioProcessCase, artifacts: Array<{ path: string; content: string }>): Promise<Blob> {
+  const zip = new JSZip();
+  const packageRoot = zip.folder(`${item.slug}-${item.kind}-handoff`) || zip;
+  for (const file of createProcessCasePackageFiles(project, item, artifacts)) packageRoot.file(file.path, file.content);
+  return zip.generateAsync({ type: 'blob' });
+}
 
 export async function generateSpecKitZip(project: SpecKitProject): Promise<Blob> {
   const zip = new JSZip();

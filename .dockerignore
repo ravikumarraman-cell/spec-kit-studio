@@ -1,0 +1,24 @@
+# Local dependencies and generated output
+node_modules
+dist
+.vite
+.cache
+.next
+.turbo
+coverage
+playwright-report
+test-results
+
+# Secrets, local state, and editor data
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+*.log
+
+# VCS and local agent state
+.git
+.agents
+.codex
+*.tgz

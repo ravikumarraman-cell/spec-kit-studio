@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use Spec-Kit Studio, please cite the software using this metadata."
+type: software
+title: "Spec-Kit Studio"
+abstract: "A local-first workspace for reviewable specification-driven development with GitHub Spec-Kit and coding agents."
+authors:
+  - name: "Tenant Compass Team"
+version: 0.1.20
+date-released: 2026-09-29
+license: Apache-2.0
+repository-code: "https://github.com/rraviku2_uhg/spec-kit-studio"
+url: "https://rraviku2-uhg.github.io/spec-kit-studio/"
+keywords:
+  - specification-driven development
+  - GitHub Spec-Kit
+  - coding agents
+  - AI-assisted software development
+  - software delivery evidence

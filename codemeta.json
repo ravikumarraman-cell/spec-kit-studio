@@ -1,0 +1,27 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "Spec-Kit Studio",
+  "description": "A local-first workspace for reviewable specification-driven development with GitHub Spec-Kit and coding agents.",
+  "version": "0.1.20",
+  "datePublished": "2026-09-29",
+  "codeRepository": "https://github.com/rraviku2_uhg/spec-kit-studio",
+  "issueTracker": "https://github.com/rraviku2_uhg/spec-kit-studio/issues",
+  "license": "https://spdx.org/licenses/Apache-2.0",
+  "url": "https://rraviku2-uhg.github.io/spec-kit-studio/",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": ["Windows", "macOS", "Linux"],
+  "runtimePlatform": "Node.js 22",
+  "programmingLanguage": ["TypeScript", "JavaScript", "HTML", "CSS"],
+  "author": {
+    "@type": "Organization",
+    "name": "Tenant Compass Team"
+  },
+  "keywords": [
+    "specification-driven development",
+    "GitHub Spec-Kit",
+    "coding agents",
+    "AI-assisted software development",
+    "software delivery evidence"
+  ]
+}

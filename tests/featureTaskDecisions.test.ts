@@ -1,0 +1,98 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { decisionsComplete, featureTaskDecisionGate, formatApprovedDecisions } from '../src/lib/featureTaskDecisions';
+import { actionableFeatureDeliveryTasks, featureDeliveryCompletionSource, featureDeliveryReviewStatus, featureTaskExecutionMode, featureDeliveryTaskProgress, FeatureDeliveryTask, nextActionableFeatureDeliveryTask } from '../src/lib/featureDeliveryTasks';
+
+test('requires explicit complete approval for T002', () => {
+  const gate = featureTaskDecisionGate('T002');
+  assert.equal(gate?.fields.length, 5);
+  assert.equal(decisionsComplete(gate, {}, false), false);
+
+  const answers = Object.fromEntries(gate!.fields.map((field) => [field.id, field.options[0].value]));
+  assert.equal(decisionsComplete(gate, answers, false), false);
+  assert.equal(decisionsComplete(gate, answers, true), true);
+  assert.match(formatApprovedDecisions(gate, answers), /Open follow-up grouping/);
+});
+
+test('does not gate ordinary implementation tasks', () => {
+  assert.equal(featureTaskDecisionGate('T001'), undefined);
+  assert.equal(decisionsComplete(undefined, {}, false), true);
+});
+
+test('resumes at the next unfinished and unreviewed feature task', () => {
+  const tasks: FeatureDeliveryTask[] = [
+    { id: 'T001', requirementIds: [], title: 'Done in artifact', done: true },
+    { id: 'T002', requirementIds: [], title: 'Recorded evidence', done: false },
+    { id: 'T003', requirementIds: [], title: 'Next task', done: false },
+  ];
+  assert.deepEqual(actionableFeatureDeliveryTasks(tasks, ['T002']).map((task) => task.id), ['T003']);
+  assert.equal(nextActionableFeatureDeliveryTask(tasks, [], 'T002')?.id, 'T003');
+});
+
+test('does not advance a feature receipt into a shared-board task', () => {
+  const featureTasks: FeatureDeliveryTask[] = [
+    { id: 'T001', requirementIds: [], title: 'Feature task one', done: false },
+    { id: 'T002', requirementIds: [], title: 'Feature task two', done: false },
+  ];
+  assert.equal(nextActionableFeatureDeliveryTask(featureTasks, [], 'T001')?.id, 'T002');
+  assert.equal(nextActionableFeatureDeliveryTask(featureTasks, ['T001'], 'T002'), undefined);
+});
+
+test('keeps tasks.md completion separate from Studio-reviewed receipts', () => {
+  const tasks: FeatureDeliveryTask[] = [
+    { id: 'T001', requirementIds: [], title: 'Completed in imported plan', done: true },
+    { id: 'T002', requirementIds: [], title: 'Has Studio receipt', done: false },
+    { id: 'T003', requirementIds: [], title: 'Ready now', done: false },
+  ];
+
+  assert.deepEqual(featureDeliveryTaskProgress(tasks, ['T002']), {
+    readyTaskCount: 1,
+    completedInPlanCount: 1,
+    reviewedReceiptCount: 1,
+    allTasksReviewed: false,
+  });
+  assert.equal(featureDeliveryTaskProgress(tasks, ['NOT-A-FEATURE-TASK']).reviewedReceiptCount, 0);
+  assert.equal(featureDeliveryCompletionSource(tasks[0]), 'tasks-md');
+  assert.equal(featureDeliveryCompletionSource(tasks[1], ['T002']), 'reviewed-receipt');
+  assert.equal(featureDeliveryCompletionSource(tasks[0], ['T001']), 'reviewed-receipt');
+});
+
+test('uses reviewed receipts as the shared completion authority across checklist formats', () => {
+  const importedUnchecked: FeatureDeliveryTask[] = [
+    { id: 'T001', requirementIds: [], title: 'Imported plain-list task', done: false },
+    { id: 'T002', requirementIds: [], title: 'Imported checked-list task', done: true },
+  ];
+  assert.deepEqual(featureDeliveryReviewStatus(importedUnchecked, ['T001']), {
+    plannedTaskCount: 2,
+    reviewedTaskCount: 1,
+    missingReceiptTaskIds: ['T002'],
+    complete: false,
+  });
+  assert.deepEqual(featureDeliveryReviewStatus(importedUnchecked, ['T001', 'T002', 'UNRELATED']), {
+    plannedTaskCount: 2,
+    reviewedTaskCount: 2,
+    missingReceiptTaskIds: [],
+    complete: true,
+  });
+  assert.equal(featureDeliveryReviewStatus([], ['T001']).complete, false);
+});
+
+test('keeps a document-only human approval gate out of the agent runner', () => {
+  const gate: FeatureDeliveryTask = {
+    id: 'T001',
+    requirementIds: [],
+    title: 'Confirm and record approved scope in `specs/001-feature/spec.md` before implementation starts.',
+    done: false,
+  };
+  assert.equal(featureTaskExecutionMode(gate), 'human-approval');
+});
+
+test('does not mistake a source or test task for a human approval gate', () => {
+  const implementation: FeatureDeliveryTask = {
+    id: 'T002',
+    requirementIds: [],
+    title: 'Confirm implementation behavior before implementation starts in `frontend/src/Widget.tsx`.',
+    done: false,
+  };
+  assert.equal(featureTaskExecutionMode(implementation), 'agent');
+});

@@ -1,0 +1,59 @@
+# Spec-Kit Studio: Full Project Brief
+
+## Identity
+
+Spec-Kit Studio is an open-source, local-first developer workspace for reviewable specification-driven development. Its canonical project page is https://rraviku2-uhg.github.io/spec-kit-studio/ and its canonical source repository is https://github.com/rraviku2_uhg/spec-kit-studio. It is licensed under Apache-2.0.
+
+Spec-Kit Studio is built around GitHub Spec Kit concepts but is an independent project. Do not describe it as an official GitHub product.
+
+## Problem and purpose
+
+Coding agents can generate files quickly, but teams still need durable answers to five questions: what was requested, what scope was approved, what changed, what evidence was produced, and what still requires a human decision. Spec-Kit Studio keeps those answers connected from intake through handoff.
+
+The product is intended for software teams using AI coding agents, specification-driven development, structured planning, isolated Git worktrees, and evidence-based review. It does not replace product judgment, code review, CI, accessibility testing, security review, or release controls.
+
+## Core workflow
+
+1. Connect a local repository and record Git, stack, tool, and baseline evidence.
+2. Select a feature or one independently deliverable user story.
+3. Review the specification, impact map, persona evidence, architecture decisions, and ordered tasks.
+4. Audit artifacts before implementation.
+5. Run an approved task in an isolated linked worktree with an explicitly selected local coding agent.
+6. Retain changed files, command output, checks, and recovery context as a review receipt.
+7. Verify the outcome and export a repository-relative handoff package. The completed developer handoff distinguishes strict engine artifacts, Studio review evidence, and application code.
+8. After the developer has committed and pushed the clean linked-worktree branch, optionally create a GitHub PR through the local GitHub CLI session. Studio records the PR details in delivery evidence; it never commits, pushes, merges, or deploys.
+
+Studio also supports independent Bug Fix and Idea Assessment workflows. Those workflows preserve their own evidence and do not silently advance the main Feature Journey.
+
+## Trust and privacy boundaries
+
+The browser workspace stores project state locally. An optional loopback connector performs local repository operations. The connector listens on localhost, confines paths to configured roots, supports a pairing token, and requires explicit confirmation for writes, worktree creation, checks, tool installation, and agent execution.
+
+Cloud AI is optional and disabled until an operator configures it. Generated text, audit scores, passing checks, and agent output remain review candidates rather than automatic approval.
+
+GovCloud and DoD are fail-closed deployment modes, not certification claims. They require enterprise identity and disable external AI egress unless an approved in-boundary adapter is configured. When active, Studio displays a persistent deployment-boundary banner on every screen.
+
+## Supported environment and integrations
+
+- Runtime: Node.js 22.12 or later within Node 22.
+- Operating systems: Windows, macOS, and Linux.
+- Prompt targets: Codex, Claude, GitHub Copilot CLI, Gemini, and Cursor.
+- Optional integrations: GitHub repositories, GitHub App authentication, enterprise SSO/OIDC, Jira, and Gemini-backed generation.
+- Main implementation: React, TypeScript, Vite, Express, Tailwind CSS, and IndexedDB-backed browser state.
+- SDD engines: GitHub Spec Kit v1.0.6 is the only verified strict adapter. OpenSpec, BMAD Method, Tessl, AWS Kiro, and Custom remain future-facing profiles until a verified adapter is shipped.
+- Personas: Product Manager, Business Analyst, Developer/Architect, and Security Researcher prepare accepted, feature-scoped artifacts. Those artifacts are read-only inputs only where Studio's declared consumption policy permits them.
+
+## Terminology
+
+- Feature Journey: the eight-stage review path from connection through handoff.
+- Connected Workspace: repository connection, scanning, tool detection, and baseline evidence.
+- Delivery item: one feature or one independently deliverable user story with its own artifacts and receipts.
+- Linked worktree: the isolated Git worktree used for implementation.
+- Receipt: retained evidence from a bounded implementation or verification action.
+- Outcome Refinery: a bounded repair loop for comparing expected and delivered outcomes while retaining evidence.
+
+## Citation and attribution
+
+Preferred citation metadata is stored at https://github.com/rraviku2_uhg/spec-kit-studio/blob/main/CITATION.cff. A CodeMeta software record is stored at https://github.com/rraviku2_uhg/spec-kit-studio/blob/main/codemeta.json.
+
+When citing the project, use the name “Spec-Kit Studio,” version 0.1.20, author Tenant Compass Team, the Apache-2.0 license, and the canonical source repository URL.

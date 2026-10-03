@@ -1,0 +1,58 @@
+name: Mirror Studio to Cloud Asset Inventory
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Source Studio branch to mirror
+        required: true
+        type: choice
+        options: [main, develop]
+
+# The source repository token is intentionally read-only. A separate,
+# fine-grained target-repository credential is required for the push.
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-mirror-${{ github.ref_name || inputs.source_branch }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Publish protected Studio mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_branch || github.ref_name }}
+          fetch-depth: 1
+
+      - name: Resolve approved destination
+        shell: bash
+        run: |
+          case "${{ inputs.source_branch || github.ref_name }}" in
+            main) echo "TARGET_BRANCH=skstudio/main" >> "$GITHUB_ENV" ;;
+            develop) echo "TARGET_BRANCH=skstudio/develop" >> "$GITHUB_ENV" ;;
+            *) echo "Only main and develop may be mirrored." >&2; exit 1 ;;
+          esac
+
+      - name: Require target-repository credential
+        env:
+          MIRROR_TOKEN: ${{ secrets.CLOUD_ASSET_INVENTORY_MIRROR_TOKEN }}
+        run: |
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "CLOUD_ASSET_INVENTORY_MIRROR_TOKEN is required. Configure a fine-grained token or GitHub App installation token with Contents: Read and write on optum-eeps/cloud-asset-inventory only." >&2
+            exit 1
+          fi
+
+      - name: Push fast-forward mirror
+        env:
+          MIRROR_TOKEN: ${{ secrets.CLOUD_ASSET_INVENTORY_MIRROR_TOKEN }}
+          TARGET_REPOSITORY: optum-eeps/cloud-asset-inventory
+        run: |
+          git remote add cloud-asset-inventory "https://x-access-token:${MIRROR_TOKEN}@github.com/${TARGET_REPOSITORY}.git"
+          git push cloud-asset-inventory "HEAD:refs/heads/${TARGET_BRANCH}"

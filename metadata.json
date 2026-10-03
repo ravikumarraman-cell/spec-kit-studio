@@ -1,0 +1,17 @@
+{
+  "name": "Spec-Kit Studio",
+  "description": "A local-first workspace for reviewable specification-driven development with GitHub Spec-Kit and coding agents.",
+  "homepage": "https://rraviku2-uhg.github.io/spec-kit-studio/",
+  "repository": "https://github.com/rraviku2_uhg/spec-kit-studio",
+  "license": "Apache-2.0",
+  "platforms": ["Windows", "macOS", "Linux"],
+  "keywords": [
+    "specification-driven development",
+    "GitHub Spec-Kit",
+    "coding agents",
+    "AI-assisted software development",
+    "software delivery evidence"
+  ],
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,4 @@
+import type { DeliverySummary } from './dashboardTypes';
+import { DeliveryQueueItem } from './DeliveryQueueItem';
+interface Props { items: DeliverySummary[]; onOpen: () => void; }
+export function DeliveryQueue({ items, onOpen }: Props) { if (!items.length) return null; return <section aria-labelledby="delivery-queue-title" className="workspace-hub-surface rounded-2xl border p-4 shadow-xs"><div className="flex items-center justify-between gap-3"><div><h2 id="delivery-queue-title" className="workspace-hub-title text-base font-bold">Delivery queue</h2><p className="workspace-hub-muted mt-1 text-xs">Your active item first, followed by the next available work.</p></div><span className="workspace-hub-muted text-xs font-medium">{items.length} shown</span></div><ul className="mt-4 grid gap-3 lg:grid-cols-3">{items.map((item) => <DeliveryQueueItem key={item.id} item={item} onOpen={onOpen} />)}</ul></section>; }

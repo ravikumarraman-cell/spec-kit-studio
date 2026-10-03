@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rraviku2-uhg.github.io/spec-kit-studio/sitemap.xml

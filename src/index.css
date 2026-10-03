@@ -1,0 +1,1624 @@
+@import "tailwindcss";
+
+@keyframes workspace-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-view-enter {
+  animation: workspace-view-enter 150ms ease-out;
+}
+
+/* Desktop navigation takes space when open and releases it when collapsed.
+   It remains mounted so journey state and the user's scroll position survive
+   the toggle; `inert` removes hidden controls from keyboard navigation. */
+@media (min-width: 768px) {
+  .studio-sidebar {
+    transform: translateX(0);
+    transition: width 220ms ease, padding 220ms ease, border-width 220ms ease, transform 220ms ease;
+    will-change: width, transform;
+  }
+
+  .studio-sidebar--collapsed {
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-right-width: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateX(-100%);
+  }
+}
+
+/* Shared premium-interaction contract. It applies to every current and future
+   screen, including lazy views and portals, so keyboard, touch, scroll, and
+   motion behavior cannot drift page-by-page. */
+:root {
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+}
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+button,
+[role="button"],
+a,
+input,
+select,
+textarea,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary {
+  touch-action: manipulation;
+}
+
+:where(button, [role="button"], a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--theme-primary, #0067b9) 70%, transparent);
+  outline-offset: 3px;
+}
+
+:where(button, [role="button"]):disabled {
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(button, [role="button"], a[href], summary) {
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  }
+
+  :where(button, [role="button"]):not(:disabled):active {
+    transform: translateY(1px);
+  }
+}
+
+* {
+  scrollbar-color: color-mix(in srgb, var(--theme-border, #94a3b8) 82%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--theme-border, #94a3b8) 82%, transparent); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--theme-border-strong, var(--theme-border, #64748b)); }
+
+.workspace-loading-state {
+  background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised));
+  border-color: color-mix(in srgb, var(--theme-primary) 26%, var(--theme-border));
+  min-height: 15rem;
+}
+
+.workspace-loading-state__line,
+.workspace-loading-state__card {
+  background: linear-gradient(90deg, var(--theme-raised) 25%, var(--theme-surface) 50%, var(--theme-raised) 75%);
+  background-size: 240% 100%;
+  border-radius: 0.625rem;
+  animation: workspace-loading-shimmer 1.4s ease-in-out infinite;
+}
+
+.workspace-loading-state__line--title { width: min(20rem, 68%); height: 1.25rem; }
+.workspace-loading-state__line--body { width: min(34rem, 94%); height: 0.875rem; margin-top: 0.875rem; }
+.workspace-loading-state__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.workspace-loading-state__card { height: 6.5rem; border: 1px solid var(--theme-border); }
+
+@keyframes workspace-loading-shimmer { to { background-position: -140% 0; } }
+
+/* Source and context disclosures are interactive document surfaces, not dark
+   terminal panels. Explicit semantic roles prevent a new opacity variant from
+   silently escaping the theme bridge and degrading contrast. */
+.feature-artifact-source,
+.plan-shared-architecture {
+  background-color: var(--theme-surface);
+  border-color: var(--theme-border);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--theme-text) 4%, transparent);
+}
+
+.feature-artifact-source__summary,
+.plan-shared-architecture__summary { color: var(--theme-text); }
+.feature-artifact-source__summary:hover,
+.plan-shared-architecture__summary:hover { background-color: var(--theme-raised); color: var(--theme-primary-strong); }
+.feature-artifact-source__content { background-color: var(--theme-inset); color: var(--theme-muted); border: 1px solid var(--theme-border); }
+.plan-shared-architecture__copy { color: var(--theme-muted); }
+
+/* Delivery-item intake is used on the Journey view in every palette. It must
+   not inherit the old dark Zinc empty-state treatment in light themes. */
+.feature-inbox {
+  background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface) 60%, color-mix(in srgb, var(--theme-secondary) 8%, var(--theme-surface)));
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+}
+.feature-inbox__icon { background: color-mix(in srgb, var(--theme-primary) 13%, var(--theme-surface)); color: var(--theme-primary); }
+.feature-inbox__eyebrow { color: var(--theme-primary); }
+.feature-inbox__title { color: var(--theme-text); }
+.feature-inbox__copy { color: var(--theme-muted); }
+.feature-inbox__start { background: var(--theme-primary); color: var(--theme-on-primary); }
+.feature-inbox__start:hover { background: color-mix(in srgb, var(--theme-primary) 86%, var(--theme-text)); }
+.feature-inbox__empty { background: var(--theme-raised); border-color: color-mix(in srgb, var(--theme-primary) 30%, var(--theme-border)); color: var(--theme-muted); }
+.feature-inbox__empty-icon { color: var(--theme-primary); }
+
+/* Persistent local-first assistant. These styles deliberately use the semantic
+   palette so the drawer preserves contrast in every Studio theme. */
+.studio-guide-trigger { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 35; display: inline-flex; align-items: center; gap: .55rem; border: 1px solid color-mix(in srgb, var(--theme-primary) 48%, var(--theme-border)); border-radius: 999px; padding: .72rem 1rem; background: var(--theme-primary); color: var(--theme-on-primary); font-size: .8rem; font-weight: 800; box-shadow: 0 12px 32px color-mix(in srgb, var(--theme-primary) 28%, transparent); }
+.studio-guide-trigger:hover { background: color-mix(in srgb, var(--theme-primary) 86%, var(--theme-text)); transform: translateY(-1px); }
+.studio-guide { position: fixed; right: 1rem; bottom: 1rem; z-index: 45; display: flex; flex-direction: column; width: min(26.5rem, calc(100vw - 2rem)); height: min(42rem, calc(100dvh - 2rem)); overflow: hidden; border: 1px solid color-mix(in srgb, var(--theme-primary) 42%, var(--theme-border)); border-radius: 1.25rem; background: var(--theme-surface); color: var(--theme-text); box-shadow: 0 24px 64px color-mix(in srgb, var(--theme-text) 25%, transparent); }
+.studio-guide__header { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid var(--theme-border); background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface)); }
+.studio-guide__identity { display: flex; align-items: center; gap: .7rem; }.studio-guide__identity strong,.studio-guide__identity span { display: block; }.studio-guide__identity strong { font-size: .9rem; }.studio-guide__identity span { margin-top: .15rem; color: var(--theme-muted); font-size: .7rem; }.studio-guide__mark { display: grid !important; width: 2.2rem; height: 2.2rem; place-items: center; border-radius: .7rem; background: var(--theme-primary); color: var(--theme-on-primary); }.studio-guide__header button { padding: .35rem; color: var(--theme-muted); border-radius: .5rem; }.studio-guide__header button:hover { background: var(--theme-raised); color: var(--theme-text); }
+.studio-guide__trust { display: flex; align-items: center; gap: .4rem; padding: .55rem 1rem; color: var(--theme-success-strong, #067647); background: var(--theme-success-tint); border-bottom: 1px solid color-mix(in srgb, var(--theme-success, #0f9f6e) 24%, var(--theme-border)); font-size: .68rem; font-weight: 700; }.studio-guide__messages { flex: 1; min-height: 0; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }.studio-guide__message { max-width: 92%; padding: .75rem .85rem; border-radius: .9rem; border: 1px solid var(--theme-border); font-size: .78rem; line-height: 1.5; }.studio-guide__message-content { display: grid; gap: .55rem; }.studio-guide__message p { margin: 0; }.studio-guide__message strong { color: var(--theme-text); font-weight: 800; }.studio-guide__message code { border-radius: .25rem; padding: .05rem .2rem; background: var(--theme-inset); color: var(--theme-primary-strong); font-size: .92em; }.studio-guide__message ol { display: grid; gap: .42rem; margin: 0; padding-left: 1.2rem; }.studio-guide__message li { padding-left: .12rem; }.studio-guide__message li::marker { color: var(--theme-primary); font-weight: 800; }.studio-guide__message small { display: block; margin-top: .6rem; padding-top: .45rem; border-top: 1px solid var(--theme-border); color: var(--theme-muted); font-size: .63rem; }.studio-guide__message--guide { align-self: flex-start; background: var(--theme-raised); }.studio-guide__message--user { align-self: flex-end; background: var(--theme-info-tint); border-color: color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)); }.studio-guide__thinking { display: flex; align-items: center; gap: .45rem; color: var(--theme-muted); font-size: .72rem; }.studio-guide__thinking svg { animation: studio-guide-spin 1s linear infinite; } @keyframes studio-guide-spin { to { transform: rotate(360deg); } }
+.studio-guide__providers { display: flex; align-items: center; gap: .35rem; padding: .55rem 1rem; border-bottom: 1px solid var(--theme-border); background: var(--theme-inset); font-size: .67rem; }.studio-guide__providers span { margin-right: .15rem; color: var(--theme-muted); font-weight: 700; }.studio-guide__providers button { border: 1px solid var(--theme-border); border-radius: .45rem; padding: .3rem .48rem; color: var(--theme-muted); background: var(--theme-surface); font-weight: 700; }.studio-guide__providers button.is-selected { border-color: color-mix(in srgb, var(--theme-primary) 60%, var(--theme-border)); color: var(--theme-primary-strong); background: var(--theme-info-tint); }
+.studio-guide__refinery { display: inline-flex; align-items: center; gap: .4rem; width: calc(100% - 2rem); margin: .65rem 1rem 0; border: 1px solid color-mix(in srgb, var(--theme-primary) 35%, var(--theme-border)); border-radius: .6rem; padding: .5rem .65rem; color: var(--theme-primary-strong); background: var(--theme-info-tint); font-size: .7rem; font-weight: 800; text-align: left; }.studio-guide__refinery:hover { border-color: var(--theme-primary); background: color-mix(in srgb, var(--theme-info-tint) 72%, var(--theme-surface)); }
+.studio-guide__prompts { display: flex; gap: .4rem; overflow-x: auto; padding: .6rem 1rem; border-top: 1px solid var(--theme-border); }.studio-guide__prompts button { display: inline-flex; white-space: nowrap; align-items: center; gap: .15rem; flex: 0 0 auto; padding: .38rem .55rem; border: 1px solid var(--theme-border); border-radius: 999px; color: var(--theme-primary-strong); background: var(--theme-surface); font-size: .66rem; font-weight: 700; }.studio-guide__prompts button:hover { background: var(--theme-info-tint); }.studio-guide__composer { display: flex; gap: .5rem; padding: .8rem 1rem 1rem; background: var(--theme-surface); }.studio-guide__composer textarea { flex: 1; resize: none; border: 1px solid var(--theme-border); border-radius: .75rem; padding: .6rem; color: var(--theme-text); background: var(--theme-inset); font-size: .76rem; line-height: 1.4; }.studio-guide__composer button { align-self: end; display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border-radius: .7rem; background: var(--theme-primary); color: var(--theme-on-primary); }.studio-guide__composer button:disabled { opacity: .46; }
+.studio-guide__visual-review { border-top: 1px solid var(--theme-border); background: var(--theme-inset); }.studio-guide__visual-review > summary { display: flex; align-items: center; justify-content: space-between; gap: .7rem; cursor: pointer; padding: .7rem 1rem; list-style: none; }.studio-guide__visual-review > summary::-webkit-details-marker { display: none; }.studio-guide__visual-review > summary > span { display: grid; gap: .08rem; min-width: 0; }.studio-guide__visual-review strong { color: var(--theme-text); font-size: .71rem; }.studio-guide__visual-review small { color: var(--theme-muted); font-size: .61rem; }.studio-guide__visual-review > summary > svg { flex: 0 0 auto; color: var(--theme-primary); transition: transform 150ms ease; }.studio-guide__visual-review[open] > summary > svg { transform: rotate(90deg); }.studio-guide__visual-review-content { padding: 0 1rem .7rem; }.studio-guide__visual-review-content > p { margin: 0; color: var(--theme-muted); font-size: .61rem; line-height: 1.35; }.studio-guide__visual-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-top: .55rem; }.studio-guide__visual-slot { position: relative; min-height: 4.8rem; display: grid; place-items: center; overflow: hidden; border: 1px dashed color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)); border-radius: .65rem; background: var(--theme-surface); }.studio-guide__visual-slot > button:first-child { display: inline-flex; align-items: center; gap: .3rem; color: var(--theme-primary-strong); font-size: .65rem; font-weight: 800; }.studio-guide__visual-slot img { width: 100%; height: 4.8rem; object-fit: cover; }.studio-guide__visual-slot span { position: absolute; right: .25rem; bottom: .2rem; max-width: calc(100% - .5rem); overflow: hidden; color: white; font-size: .55rem; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px black; }.studio-guide__visual-slot img + span + button { position: absolute; top: .2rem; right: .2rem; display: grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: .35rem; background: rgba(0, 0, 0, .65); color: white; }.studio-guide__visual-review-content > p[role="alert"] { margin-top: .45rem; color: var(--theme-danger-strong, #b42318); }.studio-guide__visual-review-content > button { margin-top: .55rem; width: 100%; border-radius: .55rem; padding: .45rem .6rem; background: var(--theme-primary); color: var(--theme-on-primary); font-size: .67rem; font-weight: 800; }.studio-guide__visual-review-content > button:disabled { opacity: .45; }
+.studio-guide__mismatch-handoff { display: grid; gap: .45rem; margin-top: .65rem; border: 1px solid color-mix(in srgb, var(--theme-primary) 42%, var(--theme-border)); border-radius: .65rem; padding: .65rem; background: var(--theme-surface); }.studio-guide__mismatch-handoff strong { color: var(--theme-text); font-size: .67rem; }.studio-guide__mismatch-handoff p { margin: 0; color: var(--theme-text); font-size: .65rem; line-height: 1.4; }.studio-guide__mismatch-handoff > div { display: flex; flex-wrap: wrap; gap: .4rem; }.studio-guide__mismatch-handoff button { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--theme-border); border-radius: .5rem; padding: .4rem .5rem; color: var(--theme-primary-strong); background: var(--theme-inset); font-size: .62rem; font-weight: 800; }.studio-guide__mismatch-handoff button:last-child { border-color: var(--theme-primary); background: var(--theme-primary); color: var(--theme-on-primary); }
+.studio-guide__use-retained-reference { display: inline-flex; align-items: center; gap: .35rem; margin-top: .55rem; border: 1px solid color-mix(in srgb, var(--theme-primary) 42%, var(--theme-border)); border-radius: .55rem; padding: .42rem .55rem; background: var(--theme-surface); color: var(--theme-primary-strong); font-size: .64rem; font-weight: 800; }.studio-guide__use-retained-reference:hover { background: var(--theme-raised); }.studio-guide__use-retained-reference:disabled { opacity: .5; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .workspace-view-enter {
+    animation: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .workspace-loading-state { min-height: 12rem; }
+  .workspace-loading-state__grid { grid-template-columns: 1fr; }
+  .studio-guide-trigger { right: .8rem; bottom: .8rem; width: 2.75rem; height: 2.75rem; justify-content: center; padding: 0; }
+  .studio-guide-trigger span { display: none; }
+  .studio-guide { right: .5rem; bottom: .5rem; width: calc(100vw - 1rem); height: min(42rem, calc(100dvh - 1rem)); }
+}
+
+@layer base {
+  /* Default / Obsidian Dark (GitHub / Linear dark standard) */
+  :root[data-theme="obsidian"], :root.dark {
+    --bg-canvas: #090d16;
+    --bg-surface: #0f172a;
+    --bg-surface-hover: #1e293b;
+    --bg-card: #0f172a;
+    --bg-input: #0b0f19;
+    --border-subtle: #1e293b;
+    --border-strong: #334155;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --accent-primary: #06b6d4;
+    --accent-indigo: #6366f1;
+    --accent-purple: #a855f7;
+    --accent-emerald: #10b981;
+
+    color-scheme: dark;
+  }
+
+  /* Nordic Light (GitHub / Stripe clean light standard) */
+  :root[data-theme="nordic-light"], :root:not(.dark):not([data-theme="warm-paper"]) {
+    --bg-canvas: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-input: #f8fafc;
+    --border-subtle: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --text-faint: #64748b;
+    --accent-primary: #0284c7;
+    --accent-indigo: #4338ca;
+    --accent-purple: #6d28d9;
+    --accent-emerald: #059669;
+
+    color-scheme: light;
+  }
+
+  /* Warm Paper (Substack / Notion Editorial warm paper standard) */
+  :root[data-theme="warm-paper"] {
+    --bg-canvas: #faf8f5;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #f5f0e8;
+    --bg-card: #ffffff;
+    --bg-input: #f5f0e8;
+    --border-subtle: #e7decb;
+    --border-strong: #d5c8b2;
+    --text-main: #1c1917;
+    --text-muted: #57534e;
+    --text-faint: #78716c;
+    --accent-primary: #c2410c;
+    --accent-indigo: #3730a3;
+    --accent-purple: #7e22ce;
+    --accent-emerald: #047857;
+
+    color-scheme: light;
+  }
+
+  /* Optum-inspired: a bright, humane product surface with a deep-blue
+     information hierarchy, blue actions, and restrained orange emphasis. */
+  :root[data-theme="optum"] {
+    --bg-canvas: #f5f8fa;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #edf5f8;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --border-subtle: #cbdbe5;
+    --border-strong: #7892a8;
+    --text-main: #002677;
+    --text-muted: #334e68;
+    --text-faint: #526d82;
+    --accent-primary: #0067b9;
+    --accent-indigo: #002677;
+    --accent-purple: #5d3f95;
+    --accent-emerald: #147a56;
+    --accent-warm: #f58220;
+    color-scheme: light;
+  }
+
+  html, body {
+    background-color: var(--bg-canvas);
+    color: var(--text-main);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+}
+
+/* Light Mode Overrides */
+:root:not(.dark) {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) {
+  background-color: #faf8f5 !important;
+  color: #1c1917 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) {
+  background-color: #f5f8fa !important;
+  color: #002677 !important;
+}
+
+/* Optum's public experience is light, open, and legible. The Studio uses
+   utility classes from its original dark console, so map every shared surface
+   token here instead of letting isolated Zinc or Slate utilities leak through.
+   These rules intentionally apply only to the Optum preset. */
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/75,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-950\/90,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/30,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/40,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/50,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-900\/90,
+:root[data-theme="optum"]:not(.dark) .bg-slate-50,
+:root[data-theme="optum"]:not(.dark) .bg-white {
+  background-color: #ffffff !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/50,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/60,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-800\/80,
+:root[data-theme="optum"]:not(.dark) .bg-slate-100,
+:root[data-theme="optum"]:not(.dark) .bg-slate-100\/90 {
+  background-color: #edf5f8 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .bg-slate-200,
+:root[data-theme="optum"]:not(.dark) .bg-slate-200\/70,
+:root[data-theme="optum"]:not(.dark) .bg-zinc-100 {
+  background-color: #dcecf2 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) aside.bg-slate-50 {
+  background-color: #edf5f8 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .border-zinc-950,
+:root[data-theme="optum"]:not(.dark) .border-zinc-900,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800\/80,
+:root[data-theme="optum"]:not(.dark) .border-zinc-800\/60,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700\/60,
+:root[data-theme="optum"]:not(.dark) .border-zinc-700\/80,
+:root[data-theme="optum"]:not(.dark) .border-slate-300,
+:root[data-theme="optum"]:not(.dark) .border-slate-200 {
+  border-color: #c4d6e0 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .text-zinc-50,
+:root[data-theme="optum"]:not(.dark) .text-zinc-100,
+:root[data-theme="optum"]:not(.dark) .text-zinc-200,
+:root[data-theme="optum"]:not(.dark) .text-zinc-300,
+:root[data-theme="optum"]:not(.dark) .text-zinc-800,
+:root[data-theme="optum"]:not(.dark) .text-zinc-900,
+:root[data-theme="optum"]:not(.dark) .text-slate-950,
+:root[data-theme="optum"]:not(.dark) .text-slate-900,
+:root[data-theme="optum"]:not(.dark) .text-slate-800 {
+  color: #002677 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .text-zinc-400,
+:root[data-theme="optum"]:not(.dark) .text-zinc-500,
+:root[data-theme="optum"]:not(.dark) .text-zinc-600,
+:root[data-theme="optum"]:not(.dark) .text-zinc-700,
+:root[data-theme="optum"]:not(.dark) .text-slate-700,
+:root[data-theme="optum"]:not(.dark) .text-slate-600,
+:root[data-theme="optum"]:not(.dark) .text-slate-500,
+:root[data-theme="optum"]:not(.dark) .text-slate-400 {
+  color: #36546a !important;
+}
+
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-900\/80:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-slate-200:hover,
+:root[data-theme="optum"]:not(.dark) .hover\:bg-slate-200\/70:hover {
+  background-color: #d5e9f1 !important;
+}
+
+:root[data-theme="optum"]:not(.dark) input,
+:root[data-theme="optum"]:not(.dark) textarea,
+:root[data-theme="optum"]:not(.dark) select {
+  background-color: #ffffff !important;
+  color: #002677 !important;
+  border-color: #9bb5c5 !important;
+}
+
+/* Replace the former charcoal hero gradients with an airy blue information
+   gradient. The deep navy remains reserved for text, focus, and key actions. */
+:root[data-theme="optum"]:not(.dark) .from-zinc-900 { --tw-gradient-from: #e2f3f5 var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(226 243 245 / 0) var(--tw-gradient-to-position) !important; }
+:root[data-theme="optum"]:not(.dark) .via-zinc-900 { --tw-gradient-via: #f5fafb var(--tw-gradient-via-position) !important; }
+:root[data-theme="optum"]:not(.dark) .to-zinc-900 { --tw-gradient-to: #ffffff var(--tw-gradient-to-position) !important; }
+
+:root[data-theme="optum"]:not(.dark) .selection\:bg-cyan-500\/30::selection { background-color: #b7e3ee !important; color: #002677 !important; }
+
+/* Universal High Contrast Card, Border & Background Rules for Light Mode */
+:root:not(.dark) .border-zinc-800,
+:root:not(.dark) .border-zinc-800\/80,
+:root:not(.dark) .border-zinc-800\/60,
+:root:not(.dark) .border-zinc-700,
+:root:not(.dark) .border-zinc-700\/60,
+:root:not(.dark) .border-zinc-700\/80,
+:root:not(.dark) .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800\/80,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-800\/60,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700\/60,
+:root[data-theme="warm-paper"]:not(.dark) .border-zinc-700\/80 {
+  border-color: #e5dec9 !important;
+}
+
+/* Cards & Surfaces in Light Mode (Crisp white with sharp contrast against background) */
+:root:not(.dark) .bg-zinc-900,
+:root:not(.dark) .bg-zinc-900\/60,
+:root:not(.dark) .bg-zinc-900\/80,
+:root:not(.dark) .bg-zinc-900\/90 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-900\/90 {
+  background-color: #ffffff !important;
+  color: #1c1917 !important;
+}
+
+/* Secondary Inset Surface / Badges / Input fields in Light Mode */
+:root:not(.dark) .bg-zinc-950,
+:root:not(.dark) .bg-zinc-950\/60,
+:root:not(.dark) .bg-zinc-950\/80,
+:root:not(.dark) .bg-zinc-950\/90 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme="warm-paper"]:not(.dark) .bg-zinc-950\/90 {
+  background-color: #f5f0e8 !important;
+  color: #1c1917 !important;
+}
+
+/* Interactive Hover States in Light Mode */
+:root:not(.dark) .hover\:bg-zinc-800:hover,
+:root:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root:not(.dark) .hover\:bg-zinc-800\/90:hover,
+:root:not(.dark) .hover\:bg-zinc-900:hover,
+:root:not(.dark) .hover\:bg-zinc-900\/80:hover {
+  background-color: #e2e8f0 !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-800\/90:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme="warm-paper"]:not(.dark) .hover\:bg-zinc-900\/80:hover {
+  background-color: #ece4d5 !important;
+}
+
+/* Text Contrast Corrections in Light Mode (Deep high contrast charcoal/navy) */
+:root:not(.dark) .text-zinc-100,
+:root:not(.dark) .text-zinc-200 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-100,
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-200 {
+  color: #1c1917 !important;
+}
+
+:root:not(.dark) .text-zinc-300 {
+  color: #1e293b !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-300 {
+  color: #292524 !important;
+}
+
+:root:not(.dark) .text-zinc-400 {
+  color: #475569 !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-400 {
+  color: #57534e !important;
+}
+
+:root:not(.dark) .text-zinc-500 {
+  color: #64748b !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) .text-zinc-500 {
+  color: #78716c !important;
+}
+
+/* Light Theme Accent Color Fixes (High Contrast AAA) */
+:root:not(.dark) .text-cyan-300,
+:root:not(.dark) .text-cyan-400 {
+  color: #0e7490 !important;
+}
+
+:root:not(.dark) .text-indigo-300,
+:root:not(.dark) .text-indigo-400 {
+  color: #3730a3 !important;
+}
+
+:root:not(.dark) .text-purple-300,
+:root:not(.dark) .text-purple-400 {
+  color: #6b21a8 !important;
+}
+
+:root:not(.dark) .text-emerald-300,
+:root:not(.dark) .text-emerald-400 {
+  color: #065f46 !important;
+}
+
+:root:not(.dark) .text-amber-300,
+:root:not(.dark) .text-amber-400 {
+  color: #92400e !important;
+}
+
+:root:not(.dark) .text-red-300,
+:root:not(.dark) .text-red-400 {
+  color: #991b1b !important;
+}
+
+/* Light Theme Background Tints for Badges & Buttons */
+:root:not(.dark) .bg-purple-600\/20,
+:root:not(.dark) .bg-purple-500\/10,
+:root:not(.dark) .bg-purple-500\/20 {
+  background-color: #f3e8ff !important;
+  color: #581c87 !important;
+  border-color: #d8b4fe !important;
+}
+
+:root:not(.dark) .bg-cyan-600\/20,
+:root:not(.dark) .bg-cyan-500\/10,
+:root:not(.dark) .bg-cyan-500\/20,
+:root:not(.dark) .bg-cyan-400\/20 {
+  background-color: #cffafe !important;
+  color: #164e63 !important;
+  border-color: #a5f3fc !important;
+}
+
+:root:not(.dark) .bg-indigo-600\/20,
+:root:not(.dark) .bg-indigo-500\/10,
+:root:not(.dark) .bg-indigo-500\/20 {
+  background-color: #e0e7ff !important;
+  color: #1e1b4b !important;
+  border-color: #c7d2fe !important;
+}
+
+:root:not(.dark) .bg-emerald-500\/10,
+:root:not(.dark) .bg-emerald-500\/20 {
+  background-color: #d1fae5 !important;
+  color: #064e3b !important;
+  border-color: #a7f3d0 !important;
+}
+
+:root:not(.dark) .bg-amber-500\/10,
+:root:not(.dark) .bg-amber-500\/20 {
+  background-color: #fef3c7 !important;
+  color: #78350f !important;
+  border-color: #fde68a !important;
+}
+
+:root:not(.dark) .bg-red-500\/10,
+:root:not(.dark) .bg-red-500\/20 {
+  background-color: #fee2e2 !important;
+  color: #7f1d1d !important;
+  border-color: #fca5a5 !important;
+}
+
+/* Inputs in Light Mode */
+:root:not(.dark) input,
+:root:not(.dark) textarea,
+:root:not(.dark) select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+:root[data-theme="warm-paper"]:not(.dark) input,
+:root[data-theme="warm-paper"]:not(.dark) textarea,
+:root[data-theme="warm-paper"]:not(.dark) select {
+  background-color: #ffffff !important;
+  color: #1c1917 !important;
+  border-color: #e5dec9 !important;
+}
+
+/* Utility Classes */
+.theme-canvas {
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+}
+
+.theme-card {
+  background-color: var(--bg-surface);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+.theme-border {
+  border-color: var(--border-subtle);
+}
+
+.theme-text-main {
+  color: var(--text-main);
+}
+
+.theme-text-muted {
+  color: var(--text-muted);
+}
+
+/* The persistent header must never choose a dark utility independently of the
+   active palette. Keeping it on the same surface token as menus and cards
+   preserves blue/navy contrast in Optum and still gives dark mode a coherent
+   navy header. */
+.studio-header {
+  background-color: color-mix(in srgb, var(--theme-surface, var(--bg-surface)) 96%, transparent) !important;
+  border-color: var(--theme-border, var(--border-subtle)) !important;
+  color: var(--theme-text, var(--text-main));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--theme-text, #002677) 10%, transparent);
+}
+
+/* Header controls intentionally do not use `dark:` utilities. A theme can be
+   changed while the application is open, and these controls must always take
+   their foreground and surface from the currently published palette. */
+.studio-header-control {
+  background-color: var(--theme-inset, var(--bg-input)) !important;
+  border-color: var(--theme-border, var(--border-subtle)) !important;
+  color: var(--theme-text, var(--text-main)) !important;
+}
+
+.studio-header-control:hover,
+.studio-header-control-active {
+  background-color: var(--theme-raised, var(--bg-surface-hover)) !important;
+  color: var(--theme-primary, var(--accent)) !important;
+}
+
+.studio-header-brand-mark {
+  background-color: var(--theme-inset, var(--bg-input)) !important;
+}
+
+.studio-header-title {
+  color: var(--theme-text, var(--text-main)) !important;
+}
+
+.studio-header-divider {
+  background-color: var(--theme-border, var(--border-subtle)) !important;
+}
+
+/* The Connected Workspace hand-off is a light information surface in light
+   themes and a legible navy surface in dark themes. It deliberately avoids
+   the former fixed Zinc gradient, which could leave navy copy on charcoal. */
+.workspace-next-step {
+  background: linear-gradient(
+    135deg,
+    var(--theme-info-tint, var(--bg-surface)) 0%,
+    var(--theme-surface, var(--bg-surface)) 62%,
+    var(--theme-inset, var(--bg-input)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--theme-primary, var(--accent)) 32%, var(--theme-border, var(--border-subtle))) !important;
+}
+
+.workspace-next-step .text-zinc-100 { color: var(--theme-text, var(--text-main)) !important; }
+.workspace-next-step .text-zinc-400 { color: var(--theme-muted, var(--text-muted)) !important; }
+
+/* Warm is intentionally rare: it identifies one high-value creative action
+   instead of competing with the blue primary actions used for navigation and
+   workflow progression. In Optum-inspired mode this makes the orange token
+   visible without presenting the product as an official Optum experience. */
+.studio-warm-action {
+  background-color: var(--theme-warm) !important;
+  border-color: color-mix(in srgb, var(--theme-warm) 78%, var(--theme-text)) !important;
+  color: var(--theme-warm-foreground) !important;
+}
+
+.studio-warm-action:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--theme-warm) 86%, var(--theme-text)) !important;
+}
+
+/* Accepted feature artifacts appear on the Design Safely screen. Their old
+   dark Zinc gradient was independent of theme state, making palette-navy text
+   unreadable in every light scheme. */
+.feature-artifact-summary {
+  background: linear-gradient(
+    135deg,
+    var(--theme-info-tint) 0%,
+    var(--theme-surface) 58%,
+    var(--theme-raised) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 30%, var(--theme-border)) !important;
+}
+
+.feature-artifact-summary-copy {
+  color: var(--theme-text) !important;
+}
+
+.feature-artifact-summary-stat {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-artifact-summary-stat strong { color: var(--theme-text) !important; }
+.feature-artifact-summary-stat span { color: var(--theme-muted) !important; }
+
+.feature-artifact-evidence-chip {
+  background-color: var(--theme-inset);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text);
+}
+
+.feature-artifact-summary-meta {
+  background-color: color-mix(in srgb, var(--theme-inset) 80%, transparent) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-muted) !important;
+}
+
+/* Feature delivery is a semantic board, not a dark-only Kanban. Every board
+   layer is resolved here from the active palette so components never need to
+   decide which Zinc shade works with a particular theme. */
+.feature-delivery-board {
+  background-color: var(--theme-surface) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 28%, var(--theme-border)) !important;
+}
+
+.feature-delivery-board-header {
+  background: linear-gradient(90deg, var(--theme-info-tint), var(--theme-surface) 58%, color-mix(in srgb, var(--theme-secondary) 8%, var(--theme-surface))) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-header .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-delivery-board-header .text-zinc-400 { color: var(--theme-muted) !important; }
+
+.feature-delivery-board-title,
+.feature-delivery-board-card-title { color: var(--theme-text) !important; }
+.feature-delivery-board-title svg,
+.feature-delivery-board-task-id { color: var(--theme-primary) !important; }
+.feature-delivery-board-copy { color: var(--theme-muted) !important; }
+.feature-delivery-board-note { color: var(--theme-primary-strong) !important; }
+
+.feature-delivery-board-tabs {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-tab { color: var(--theme-muted) !important; }
+.feature-delivery-board-tab:hover,
+.feature-delivery-board-tab--active {
+  background-color: var(--theme-info-tint) !important;
+  color: var(--theme-primary-strong) !important;
+}
+
+.feature-delivery-board-column {
+  background-color: var(--theme-raised) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-column--todo { border-color: var(--theme-border) !important; }
+.feature-delivery-board-column--active {
+  background-color: color-mix(in srgb, var(--theme-warning-tint) 34%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 48%, var(--theme-border)) !important;
+}
+.feature-delivery-board-column--complete {
+  background-color: color-mix(in srgb, var(--theme-success-tint) 30%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 44%, var(--theme-border)) !important;
+}
+
+.feature-delivery-board-column-label { color: var(--theme-muted) !important; }
+.feature-delivery-board-column--active .feature-delivery-board-column-label { color: var(--theme-warning) !important; }
+.feature-delivery-board-column--active .feature-delivery-board-dot { background-color: var(--theme-warning) !important; }
+.feature-delivery-board-column--complete .feature-delivery-board-column-label,
+.feature-delivery-board-column--complete .feature-delivery-board-icon { color: var(--theme-success) !important; }
+.feature-delivery-board-column--todo .feature-delivery-board-dot { background-color: var(--theme-faint) !important; }
+
+.feature-delivery-board-count {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-muted) !important;
+}
+
+.feature-delivery-board-card {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-delivery-board-card .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-delivery-board-card .text-zinc-400,
+.feature-delivery-board-card .text-zinc-500 { color: var(--theme-muted) !important; }
+.feature-delivery-board-card .border-zinc-800 { border-color: var(--theme-border) !important; }
+
+.feature-delivery-board-card:hover {
+  border-color: color-mix(in srgb, var(--theme-primary) 45%, var(--theme-border)) !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--theme-primary) 10%, transparent) !important;
+}
+.feature-delivery-board-card-footer { border-color: var(--theme-border) !important; }
+.feature-delivery-board-requirements {
+  background-color: color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-secondary) 35%, var(--theme-border)) !important;
+  color: var(--theme-secondary) !important;
+}
+.feature-delivery-board-status { font-weight: 600; }
+.feature-delivery-board-status--planned { background-color: var(--theme-inset) !important; color: var(--theme-muted) !important; }
+.feature-delivery-board-status--active { background-color: var(--theme-warning-tint) !important; color: var(--theme-warning) !important; }
+.feature-delivery-board-status--tasks-md { background-color: var(--theme-info-tint) !important; color: var(--theme-primary-strong) !important; }
+.feature-delivery-board-status--reviewed-receipt { background-color: var(--theme-success-tint) !important; color: var(--theme-success) !important; }
+
+.feature-delivery-board-matrix { color: var(--theme-muted) !important; }
+.feature-delivery-board-matrix thead { color: var(--theme-faint) !important; }
+.feature-delivery-board-matrix tbody tr { border-top: 1px solid var(--theme-border) !important; }
+.feature-delivery-board-matrix-requirements { color: var(--theme-secondary) !important; }
+.feature-delivery-board-source {
+  background-color: var(--theme-inset) !important;
+  color: var(--theme-muted) !important;
+}
+
+.feature-delivery-board-empty {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border-strong, var(--theme-border)) !important;
+  color: var(--theme-muted) !important;
+}
+
+/* Implementation handoffs share the same palette roles as the rest of the
+   workflow. Their earlier black gradients made the locally-run safety copy
+   unreadable in light themes. */
+.feature-execution-focus {
+  background: linear-gradient(90deg, var(--theme-info-tint), var(--theme-surface) 56%, color-mix(in srgb, var(--theme-secondary) 9%, var(--theme-surface))) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 30%, var(--theme-border)) !important;
+}
+
+.feature-execution-focus .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-execution-focus .text-zinc-400,
+.feature-execution-focus .text-zinc-300 { color: var(--theme-muted) !important; }
+
+.implementation-handoff {
+  background-color: var(--theme-surface) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+}
+
+.implementation-handoff-header {
+  background: linear-gradient(105deg, var(--theme-info-tint), var(--theme-surface) 60%, color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-surface))) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.implementation-handoff-header .text-zinc-100 { color: var(--theme-text) !important; }
+.implementation-handoff-header .text-zinc-400 { color: var(--theme-muted) !important; }
+
+.implementation-handoff-safety,
+.implementation-handoff-context {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary) !important;
+}
+
+.implementation-handoff-safety span { color: var(--theme-muted) !important; }
+.implementation-handoff-context .text-zinc-200 { color: var(--theme-text) !important; }
+.implementation-handoff-context .text-zinc-400 { color: var(--theme-muted) !important; }
+
+/* Recovery is supporting, reversible evidence work. It needs a quieter
+   surface than the primary execution action, but still has to meet contrast
+   requirements in every theme. */
+.implementation-recovery {
+  background-color: var(--theme-inset);
+  border-color: var(--theme-border);
+  color: var(--theme-muted);
+}
+.implementation-recovery__summary { color: var(--theme-primary-strong); }
+.implementation-recovery__summary:hover { background-color: var(--theme-raised); color: var(--theme-primary); }
+.implementation-recovery__content { border-color: var(--theme-border); }
+.implementation-recovery__task { color: var(--theme-text); }
+.implementation-recovery__button {
+  background-color: var(--theme-surface);
+  border-color: color-mix(in srgb, var(--theme-primary) 42%, var(--theme-border));
+  color: var(--theme-primary-strong);
+}
+.implementation-recovery__button:hover { background-color: var(--theme-raised); border-color: var(--theme-primary); color: var(--theme-primary); }
+
+/* Implementation is intentionally a one-decision screen. The compact setup
+   and optional disclosures use the same semantic palette as the journey,
+   preventing dark utility colors from leaking into a selected theme. */
+.implementation-setup {
+  background: linear-gradient(105deg, var(--theme-info-tint), var(--theme-surface) 58%) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)) !important;
+}
+.implementation-setup-eyebrow { color: var(--theme-primary) !important; }
+.implementation-setup-title { color: var(--theme-text) !important; }
+.implementation-setup-copy { color: var(--theme-muted) !important; }
+.implementation-setup-summary {
+  background-color: var(--theme-success-tint) !important;
+  color: var(--theme-success) !important;
+}
+.implementation-setup-label { color: var(--theme-text) !important; }
+.implementation-setup-select {
+  background-color: var(--theme-surface) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.implementation-setup-select:focus { border-color: var(--theme-primary) !important; }
+.implementation-setup-details,
+.implementation-handoff-details,
+.implementation-prompt {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-muted) !important;
+}
+.implementation-setup-details summary,
+.implementation-handoff-details summary,
+.implementation-prompt summary { color: var(--theme-primary-strong) !important; }
+.implementation-setup-details > div,
+.implementation-handoff-details > div,
+.implementation-prompt-content { border-color: var(--theme-border) !important; }
+.implementation-setup-details strong,
+.implementation-handoff-details strong { color: var(--theme-text) !important; }
+.implementation-setup-alert { background-color: var(--theme-warning-tint) !important; color: var(--theme-warning) !important; }
+.implementation-setup-success { background-color: var(--theme-success-tint) !important; color: var(--theme-success) !important; }
+.implementation-prompt-content { background-color: var(--theme-inset) !important; }
+.implementation-prompt-content textarea {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary-strong) !important;
+}
+
+.task-decision-gate {
+  background-color: var(--theme-success-tint) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 35%, var(--theme-border)) !important;
+}
+.task-decision-gate-icon { color: var(--theme-success) !important; }
+.task-decision-gate-title { color: var(--theme-text) !important; }
+.task-decision-gate-copy { color: var(--theme-muted) !important; }
+.task-decision-gate-details,
+.task-decision-gate-field {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.task-decision-gate-details summary { color: var(--theme-success) !important; }
+.task-decision-gate-details > div { border-color: var(--theme-border) !important; }
+.task-decision-gate-select {
+  background-color: var(--theme-inset) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.task-decision-gate-select:focus { border-color: var(--theme-success) !important; }
+
+/* Credentials remain local-only, but their integration dialog is a regular
+   application surface and must follow the selected palette just like every
+   other workflow screen. Scope these normalizations to the modal so they do
+   not change third-party content or generic dialogs. */
+.integration-modal-overlay {
+  background-color: color-mix(in srgb, var(--theme-text) 46%, transparent) !important;
+}
+
+.integration-modal {
+  background-color: var(--theme-surface) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+.integration-modal-header,
+.integration-modal-tabs,
+.integration-modal-footer {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.integration-modal-footer { color: var(--theme-muted) !important; }
+.integration-modal-done { background-color: var(--theme-raised) !important; color: var(--theme-text) !important; }
+.integration-modal-done:hover { background-color: var(--theme-border) !important; }
+
+.integration-modal .bg-slate-950,
+.integration-modal .bg-slate-950\/30,
+.integration-modal .bg-slate-950\/50,
+.integration-modal .bg-slate-950\/70 { background-color: var(--theme-inset) !important; }
+.integration-modal .bg-slate-900 { background-color: var(--theme-surface) !important; }
+.integration-modal .bg-slate-800 { background-color: var(--theme-raised) !important; }
+.integration-modal .border-slate-800,
+.integration-modal .border-slate-700,
+.integration-modal .border-slate-600 { border-color: var(--theme-border) !important; }
+
+.integration-modal .text-slate-100,
+.integration-modal .text-slate-200,
+.integration-modal .text-slate-300 { color: var(--theme-text) !important; }
+.integration-modal .text-slate-400,
+.integration-modal .text-slate-500 { color: var(--theme-muted) !important; }
+
+/* The recovery path in Start Delivery is intentionally quiet but must never
+   become a dark bar under a light modal. */
+.feature-import-recovery {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.feature-import-recovery .text-zinc-100 { color: var(--theme-text) !important; }
+.feature-import-recovery .text-zinc-400 { color: var(--theme-muted) !important; }
+
+/* Delivery intake is a product workflow, not a dark developer console. These
+   scoped mappings let its older utility-based child components inherit every
+   selected Studio palette while the outer progress/action components express
+   the semantic roles directly. */
+.delivery-intake-modal { background-color: var(--theme-surface) !important; border-color: var(--theme-border) !important; color: var(--theme-text) !important; }
+.delivery-intake-modal > div:first-child { background-color: var(--theme-inset) !important; border-color: var(--theme-border) !important; }
+.delivery-intake-modal .bg-zinc-950, .delivery-intake-modal .bg-zinc-950\/60, .delivery-intake-modal .bg-zinc-950\/70, .delivery-intake-modal .bg-zinc-950\/80 { background-color: var(--theme-inset) !important; }
+.delivery-intake-modal .bg-zinc-900, .delivery-intake-modal .bg-zinc-900\/50 { background-color: var(--theme-surface) !important; }
+.delivery-intake-modal .bg-zinc-800 { background-color: var(--theme-raised) !important; }
+.delivery-intake-modal .border-zinc-800, .delivery-intake-modal .border-zinc-700 { border-color: var(--theme-border) !important; }
+.delivery-intake-modal .text-zinc-100, .delivery-intake-modal .text-zinc-200, .delivery-intake-modal .text-zinc-300 { color: var(--theme-text) !important; }
+.delivery-intake-modal .text-zinc-400, .delivery-intake-modal .text-zinc-500 { color: var(--theme-muted) !important; }
+.delivery-intake-badge { background-color: var(--theme-info-tint); border-color: color-mix(in srgb, var(--theme-primary) 35%, var(--theme-border)); color: var(--theme-primary); }
+.delivery-intake-progress { background-color: var(--theme-inset); border-color: var(--theme-border); }
+.delivery-intake-progress-step { color: var(--theme-muted); }
+.delivery-intake-progress-step--active { background-color: var(--theme-info-tint); color: var(--theme-text); }
+.delivery-intake-progress-done { background-color: var(--theme-success); color: var(--theme-surface); }
+.delivery-intake-progress-current { background-color: var(--theme-primary); color: var(--theme-on-primary); }
+.delivery-intake-progress-upcoming { background-color: var(--theme-raised); color: var(--theme-muted); }
+.delivery-intake-action { background: linear-gradient(105deg, var(--theme-info-tint), var(--theme-surface) 68%); border-color: color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)); }
+.delivery-intake-eyebrow { color: var(--theme-primary); }
+.delivery-intake-title { color: var(--theme-text); }
+.delivery-intake-copy { color: var(--theme-muted); }
+.delivery-intake-primary { background-color: var(--theme-primary); color: var(--theme-on-primary); }
+.delivery-intake-primary:hover { background-color: var(--theme-primary-strong); }
+.delivery-intake-reassurance { background-color: var(--theme-success-tint); color: var(--theme-success); }
+
+/* Extraction preview is shown inside a modal, but it is an ordinary product
+   surface—not a dark hero. Resolve every foreground and action from the
+   palette so a light theme never puts navy copy on a dark gradient. */
+.feature-extraction-summary {
+  background: linear-gradient(110deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border)) !important;
+}
+.feature-extraction-summary-icon { color: var(--theme-success) !important; }
+.feature-extraction-summary-title { color: var(--theme-text) !important; }
+.feature-extraction-summary-copy { color: var(--theme-muted) !important; }
+.feature-extraction-reextract {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-primary) !important;
+}
+.feature-extraction-reextract:hover {
+  background-color: var(--theme-raised) !important;
+  color: var(--theme-primary-strong) !important;
+}
+.feature-extraction-primary-action {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--theme-primary) 26%, transparent) !important;
+}
+.feature-extraction-primary-action:hover:not(:disabled) { background-color: var(--theme-primary-strong) !important; }
+:root[data-theme].dark .feature-extraction-primary-action { color: var(--theme-inset) !important; }
+
+/* Supporting Journey information is deliberately quiet until requested. The
+   summary stays readable in every palette while the active action, errors,
+   and live work retain visual priority above it. */
+.journey-supporting-details {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.journey-supporting-details > summary { color: var(--theme-muted) !important; }
+
+/* The next decision is the Journey's visual anchor. Secondary facts remain
+   available, but do not compete with the action or a real blocker. */
+.journey-next-step {
+  background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--theme-text) 7%, transparent);
+  scroll-margin-top: 5rem;
+}
+.journey-next-step-title { color: var(--theme-text) !important; }
+.journey-next-step-copy { color: var(--theme-muted) !important; }
+.journey-next-step-details {
+  background-color: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+.journey-next-step-details > summary { color: var(--theme-muted) !important; }
+
+/* The local companion is a prerequisite for repository work, so its compact
+   state always exposes an honest connection status instead of hiding setup
+   behind diagnostics. All hues resolve through shared theme roles. */
+.local-connector-setup {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+.local-connector-setup summary::-webkit-details-marker { display: none; }
+.local-connector-setup summary p { color: var(--theme-muted) !important; }
+.local-connector-setup-icon { background: var(--theme-success-tint); color: var(--theme-success); }
+.local-connector-setup-status { background: var(--theme-success-tint); color: var(--theme-success); }
+.local-connector-setup--attention .local-connector-setup-icon,
+.local-connector-setup--attention .local-connector-setup-status { background: var(--theme-warning-tint); color: var(--theme-warning); }
+.local-connector-setup--not-connected .local-connector-setup-icon,
+.local-connector-setup--not-connected .local-connector-setup-status { background: var(--theme-info-tint); color: var(--theme-primary); }
+.local-connector-setup-body { border-color: var(--theme-border) !important; color: var(--theme-muted); }
+.local-connector-setup-body > ol {
+  margin-left: 0;
+  padding-left: 0;
+  list-style: none;
+  grid-template-columns: minmax(0, 1fr);
+}
+.local-connector-setup-step { min-width: 0; max-width: 100%; background: var(--theme-raised); border-color: var(--theme-border); color: var(--theme-text); }
+.local-connector-setup-step p { color: var(--theme-muted); }
+.local-connector-setup-command { max-width: 100%; background: var(--theme-inset); color: var(--theme-text); }
+.connector-setup-primary { background: var(--theme-primary); color: #fff; }
+.connector-setup-primary:hover { background: var(--theme-primary-strong); }
+.connector-setup-copy { background: var(--theme-surface); border-color: var(--theme-border); color: var(--theme-primary); }
+.connector-setup-copy:hover { background: var(--theme-raised); color: var(--theme-primary-strong); }
+.local-connector-guide { background: var(--theme-surface); border-color: var(--theme-border); color: var(--theme-text); }
+.local-connector-guide p { color: var(--theme-muted); }
+
+/* Dialogs and the persistent local-agent status use the same semantic layers
+   as every page. They must not inherit a dark-only Zinc surface just because
+   they are rendered through a portal or fixed above the page. */
+.studio-modal-overlay {
+  background-color: rgb(0 0 0 / 48%) !important;
+}
+
+/* The repository browser is rendered through a portal, so it explicitly uses
+   Studio's shared palette instead of inheriting a dark-only utility surface. */
+.repository-directory-picker {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border-strong) !important;
+  color: var(--theme-text) !important;
+}
+.repository-directory-picker header,
+.repository-directory-picker footer { border-color: var(--theme-border) !important; }
+.repository-directory-picker header p:not(:first-child),
+.repository-directory-picker footer { color: var(--theme-muted) !important; }
+.repository-directory-picker header p:first-child { color: var(--theme-primary) !important; }
+.repository-directory-picker header h2 { color: var(--theme-text) !important; }
+.repository-directory-picker header button,
+.repository-directory-picker-row { color: var(--theme-text) !important; }
+.repository-directory-picker-path { background: var(--theme-inset) !important; color: var(--theme-muted) !important; }
+.repository-directory-picker .max-h-72 { background: var(--theme-surface); border-color: var(--theme-border) !important; }
+.repository-directory-picker-row:hover { background: var(--theme-raised) !important; }
+.repository-directory-picker-select { background: var(--theme-primary) !important; color: var(--theme-on-primary) !important; }
+.repository-directory-picker-select:hover { background: var(--theme-primary-strong) !important; }
+.repository-directory-picker-cancel { background: var(--theme-raised) !important; color: var(--theme-text) !important; }
+
+.agent-job-status {
+  background: linear-gradient(135deg, var(--theme-info-tint), var(--theme-surface) 58%, var(--theme-raised)) !important;
+  border-color: color-mix(in srgb, var(--theme-primary) 38%, var(--theme-border)) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--theme-text) 14%, transparent);
+}
+
+.agent-job-status--success {
+  background: linear-gradient(135deg, var(--theme-success-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-success) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status--cancelled {
+  background: linear-gradient(135deg, var(--theme-warning-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status--failed {
+  background: linear-gradient(135deg, var(--theme-danger-tint), var(--theme-surface)) !important;
+  border-color: color-mix(in srgb, var(--theme-danger) 38%, var(--theme-border)) !important;
+}
+
+.agent-job-status-title { color: var(--theme-text) !important; }
+.agent-job-status-muted { color: var(--theme-muted) !important; }
+.agent-job-status-help { color: var(--theme-primary) !important; }
+
+.agent-job-status-icon {
+  background-color: var(--theme-info-tint);
+  color: var(--theme-primary);
+}
+.agent-job-status-icon--success { background-color: var(--theme-success-tint); color: var(--theme-success); }
+.agent-job-status-icon--cancelled { background-color: var(--theme-warning-tint); color: var(--theme-warning); }
+.agent-job-status-icon--failed { background-color: var(--theme-danger-tint); color: var(--theme-danger); }
+.agent-job-status-pulse { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
+
+.agent-job-status-live,
+.agent-job-status-stage--active { background-color: var(--theme-info-tint); color: var(--theme-primary); }
+.agent-job-status-stage--complete { background-color: var(--theme-success-tint); color: var(--theme-success); }
+.agent-job-status-stage--pending { background-color: var(--theme-inset); color: var(--theme-muted); }
+.agent-job-status-progress { background-color: var(--theme-inset); }
+.agent-job-status-progress-value { background: linear-gradient(90deg, var(--theme-primary), var(--theme-secondary), var(--theme-primary)); }
+
+.agent-job-status-result,
+.agent-job-status-inset,
+.agent-job-status-code {
+  background-color: var(--theme-inset) !important;
+  border-color: var(--theme-border) !important;
+}
+.agent-job-status-result-icon,
+.agent-job-status-details { color: var(--theme-primary) !important; }
+.agent-job-status--success .agent-job-status-result-icon { color: var(--theme-success) !important; }
+.agent-job-status--failed .agent-job-status-result-icon { color: var(--theme-danger) !important; }
+.agent-job-status-code { color: var(--theme-text) !important; }
+
+/* The status belongs to the operation that started it. One contextual surface
+   is clearer than a second floating copy of the same live announcement. */
+.agent-job-status-anchor { scroll-margin-top: 6rem; }
+
+/* Local-agent runs own a workflow until their result is available. This shared
+   policy is deliberately selector-free: workflows opt in with one class and
+   the native `inert` attribute blocks pointer, keyboard, and assistive-tech
+   interaction with every action inside the locked surface. */
+.agent-run-locked button,
+.agent-run-locked input,
+.agent-run-locked select,
+.agent-run-locked textarea {
+  cursor: not-allowed !important;
+  filter: grayscale(0.65);
+  opacity: 0.45;
+}
+
+.agent-run-lock-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--text-main);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.75rem;
+}
+
+/* Workspace Hub theme contract
+   -----------------------------
+   The Hub has no theme-specific Tailwind palette. Its components name a
+   semantic product role, and the active ThemePalette supplies the color.
+   Add or tune a theme in ThemeContext.tsx; this contract automatically keeps
+   every Hub state coherent. */
+.workspace-hub-command,
+.workspace-hub-surface,
+.workspace-hub-disclosure {
+  background-color: var(--theme-surface);
+  border-color: var(--theme-border);
+}
+.workspace-hub-command { box-shadow: 0 6px 18px color-mix(in srgb, var(--theme-text) 5%, transparent); }
+.workspace-hub-next-action {
+  background: linear-gradient(120deg, var(--theme-info-tint), var(--theme-surface) 58%, color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-surface)));
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, var(--theme-border));
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--theme-text) 8%, transparent);
+}
+.workspace-hub-empty {
+  background-color: var(--theme-inset);
+  border-color: color-mix(in srgb, var(--theme-primary) 26%, var(--theme-border));
+}
+.workspace-hub-title { color: var(--theme-text); }
+.workspace-hub-muted { color: var(--theme-muted); }
+.workspace-hub-eyebrow { color: var(--theme-primary); }
+.workspace-hub-success { color: var(--theme-success); }
+.workspace-hub-warning { color: var(--theme-warning); }
+.workspace-hub-link { color: var(--theme-primary); }
+.workspace-hub-link:hover { color: var(--theme-primary-strong); text-decoration: underline; }
+.workspace-hub-button { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; }
+.workspace-hub-button:focus-visible { outline-color: var(--theme-primary); }
+.workspace-hub-button--primary {
+  background-color: var(--theme-primary);
+  color: var(--theme-on-primary);
+  border-color: var(--theme-primary);
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--theme-primary) 25%, transparent);
+}
+.workspace-hub-button--primary:hover { background-color: var(--theme-primary-strong); border-color: var(--theme-primary-strong); }
+.workspace-hub-button--secondary {
+  background-color: var(--theme-surface);
+  border-color: var(--theme-border);
+  color: var(--theme-primary);
+}
+.workspace-hub-button--secondary:hover { background-color: var(--theme-raised); border-color: var(--theme-border-strong, var(--theme-border)); color: var(--theme-primary-strong); }
+.workspace-hub-chip--ready { background-color: var(--theme-success-tint); border-color: color-mix(in srgb, var(--theme-success) 38%, var(--theme-border)); color: var(--theme-success); }
+.workspace-hub-chip--attention { background-color: var(--theme-warning-tint); border-color: color-mix(in srgb, var(--theme-warning) 38%, var(--theme-border)); color: var(--theme-warning); }
+.workspace-hub-queue-item { background-color: var(--theme-surface); border-color: var(--theme-border); }
+.workspace-hub-queue-item--active { background-color: color-mix(in srgb, var(--theme-secondary) 9%, var(--theme-surface)); border-color: color-mix(in srgb, var(--theme-secondary) 38%, var(--theme-border)); }
+.workspace-hub-outcome { background-color: var(--theme-surface); border-color: var(--theme-border); }
+.workspace-hub-outcome:hover { background-color: var(--theme-raised); border-color: color-mix(in srgb, var(--theme-primary) 50%, var(--theme-border)); }
+.workspace-hub-outcome:focus-visible { outline-color: var(--theme-primary); }
+.workspace-hub-outcome-icon { background-color: var(--theme-info-tint); color: var(--theme-primary); }
+.workspace-hub-prerequisite { color: var(--theme-primary); }
+.workspace-hub-icon-button { color: var(--theme-muted); }
+.workspace-hub-icon-button:hover { background-color: var(--theme-raised); color: var(--theme-primary); }
+.workspace-hub-inset { background-color: var(--theme-raised); }
+.workspace-hub-delivery-map { overflow: hidden; }
+
+/* Reusable linear workflow map. Its connector and nodes use semantic theme
+   tokens, so it can be placed on any Studio surface and still communicate
+   complete, current, and upcoming states without a theme-specific variant. */
+.workflow-map { margin-top: 1rem; }
+.workflow-map__summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: .45rem; min-width: 0; }
+.workflow-map__summary-kicker { color: var(--theme-primary); font-size: .65rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.workflow-map__summary-title { min-width: 0; overflow: hidden; color: var(--theme-text); font-size: .85rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-map__summary-count { color: var(--theme-muted); font-size: .7rem; font-weight: 600; }
+.workflow-map__viewport { margin: .9rem -.25rem -.15rem; overflow-x: auto; padding: .3rem .25rem .5rem; scrollbar-color: color-mix(in srgb, var(--theme-primary) 40%, transparent) transparent; }
+.workflow-map__track { position: relative; display: flex; min-width: max(100%, 36rem); margin: 0; padding: 0; list-style: none; }
+.workflow-map__track::before,
+.workflow-map__track::after { position: absolute; top: 1rem; left: 1rem; right: 1.6rem; height: 3px; border-radius: 999px; content: ''; }
+.workflow-map__track::before { background: color-mix(in srgb, var(--theme-border) 90%, var(--theme-raised)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-muted) 12%, transparent); }
+/* The filled connector is intentionally success-only. Blue belongs to the
+   current node; green is reserved for work that is actually approved. */
+.workflow-map__track::after { background: var(--theme-success); box-shadow: 0 0 12px color-mix(in srgb, var(--theme-success) 38%, transparent); transform: scaleX(var(--workflow-map-completion)); transform-origin: left center; transition: transform 280ms ease; }
+.workflow-map__step { position: relative; z-index: 1; display: grid; flex: 1 1 0; min-width: 0; justify-items: center; color: var(--theme-muted); text-align: center; }
+.workflow-map__node { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border: 2px solid var(--theme-border); border-radius: 999px; background: var(--theme-surface); color: var(--theme-muted); font-size: .7rem; font-weight: 800; box-shadow: 0 0 0 4px var(--theme-surface); }
+.workflow-map__label { display: block; max-width: 6.5rem; margin-top: .6rem; color: inherit; font-size: .69rem; font-weight: 650; line-height: 1.2; }
+.workflow-map__state { display: inline-flex; margin-top: .3rem; border: 1px solid color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)); border-radius: 999px; padding: .12rem .38rem; background: var(--theme-info-tint); color: var(--theme-primary-strong); font-size: .59rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.workflow-map__step--complete { color: var(--theme-success); }
+.workflow-map__step--complete .workflow-map__node { border-color: var(--theme-success); background: var(--theme-success); color: var(--theme-on-primary); box-shadow: 0 0 0 4px var(--theme-surface), 0 4px 12px color-mix(in srgb, var(--theme-success) 25%, transparent); }
+.workflow-map__step--current { color: var(--theme-primary-strong); }
+.workflow-map__step--current .workflow-map__node { border-color: var(--theme-primary); background: var(--theme-primary); color: var(--theme-on-primary); box-shadow: 0 0 0 4px var(--theme-surface), 0 0 0 8px color-mix(in srgb, var(--theme-primary) 17%, transparent), 0 8px 18px color-mix(in srgb, var(--theme-primary) 26%, transparent); }
+.workflow-map__finish { position: absolute; z-index: 1; top: .38rem; right: 0; display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: var(--theme-raised); color: var(--theme-muted); }
+
+@media (max-width: 639px) {
+  .workflow-map__viewport { margin-right: -.55rem; margin-left: -.55rem; padding-right: .55rem; padding-left: .55rem; }
+  .workflow-map__track { min-width: 34rem; }
+}
+.workspace-hub-disclosure > summary { color: var(--theme-muted); }
+.workspace-hub-running { color: var(--theme-primary); animation: workspace-hub-spin 1.2s linear infinite; }
+.workspace-hub-button--danger { color: var(--theme-danger); border-color: color-mix(in srgb, var(--theme-danger) 45%, var(--theme-border)); background: var(--theme-danger-tint); }
+.workspace-hub-button--danger:hover { border-color: var(--theme-danger); }
+@keyframes workspace-hub-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .workspace-hub-running { animation: none; } }
+
+/* Feature-code evidence must use the same semantic surface as the Journey.
+   It previously embedded a dark Zinc gradient, which leaked a near-black card
+   into the Optum-inspired light experience. */
+.feature-code-changes {
+  background: linear-gradient(135deg, var(--theme-info-tint), var(--theme-surface) 56%, color-mix(in srgb, var(--theme-secondary) 8%, var(--theme-surface)));
+  border-color: color-mix(in srgb, var(--theme-primary) 30%, var(--theme-border));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--theme-text) 7%, transparent);
+}
+.feature-code-changes__icon { background: var(--theme-info-tint); color: var(--theme-primary); }
+.feature-code-changes__eyebrow { color: var(--theme-primary); }
+.feature-code-changes__title { color: var(--theme-text); }
+.feature-code-changes__copy { color: var(--theme-muted); }
+.feature-code-changes__button { background: var(--theme-surface); border-color: color-mix(in srgb, var(--theme-primary) 42%, var(--theme-border)); color: var(--theme-primary); }
+.feature-code-changes__button:hover { background: var(--theme-raised); border-color: var(--theme-primary); color: var(--theme-primary-strong); }
+.feature-code-changes__empty { background: var(--theme-surface); border-color: var(--theme-border); color: var(--theme-muted); }
+
+/* Retained implementation evidence is documentation, not a terminal pane.
+   Keep prose, code-like output, and nested surfaces legible in every theme. */
+.implementation-evidence { background: var(--theme-surface); border-color: var(--theme-border); }
+.implementation-evidence__summary { color: var(--theme-text); }
+.implementation-evidence__summary:hover { color: var(--theme-primary-strong); }
+.implementation-evidence__meta { color: var(--theme-muted); }
+.implementation-evidence__content { border-color: var(--theme-border); }
+.implementation-history { background: var(--theme-inset); border-color: color-mix(in srgb, var(--theme-success) 34%, var(--theme-border)); }
+.implementation-history__title, .implementation-history__task-title, .implementation-history__evidence-title { color: var(--theme-text); }
+.implementation-history__success-icon, .implementation-history__task-id { color: var(--theme-success); }
+.implementation-history__count { background: var(--theme-success-tint); color: var(--theme-success); }
+.implementation-history__meta, .implementation-history__copy, .implementation-history__evidence-body { color: var(--theme-muted); }
+.implementation-history__receipt { background: var(--theme-surface); border-color: var(--theme-border); }
+.implementation-history__evidence, .implementation-history__diff { background: var(--theme-raised); border-color: var(--theme-border); }
+.implementation-history__diff-summary { color: var(--theme-muted); }
+.implementation-history__diff-summary:hover { color: var(--theme-primary); }
+.implementation-history__diff { color: var(--theme-muted); }
+
+/* Legacy utility safety net
+ * -------------------------
+ * The app predates semantic component tokens, so a few screen-level Tailwind
+ * opacity utilities remain. New opacity values must never reintroduce a dark
+ * translucent panel into a light theme. Keep this broad fallback before the
+ * more specific compatibility mappings below: known exceptions retain their
+ * exact treatment, while every future Zinc/Slate opacity variant lands on a
+ * tested semantic role automatically. */
+:root[data-theme]:not(.dark) [class*="bg-zinc-950/"],
+:root[data-theme]:not(.dark) [class*="bg-slate-950/"] { background-color: var(--theme-inset) !important; }
+:root[data-theme]:not(.dark) [class*="bg-zinc-900/"],
+:root[data-theme]:not(.dark) [class*="bg-slate-900/"] { background-color: var(--theme-surface) !important; }
+:root[data-theme]:not(.dark) [class*="bg-zinc-800/"],
+:root[data-theme]:not(.dark) [class*="bg-slate-800/"] { background-color: var(--theme-raised) !important; }
+:root[data-theme]:not(.dark) [class*="bg-zinc-200/"],
+:root[data-theme]:not(.dark) [class*="bg-slate-200/"] { background-color: var(--theme-inset) !important; }
+:root[data-theme]:not(.dark) [class*="border-zinc-"],
+:root[data-theme]:not(.dark) [class*="border-slate-"] { border-color: var(--theme-border) !important; }
+:root[data-theme]:not(.dark) [class*="text-zinc-"],
+:root[data-theme]:not(.dark) [class*="text-slate-"] { color: var(--theme-muted) !important; }
+
+/*
+ * Shared component bridge
+ * -----------------------
+ * Most Studio screens were built with Tailwind's Zinc and Slate utilities.
+ * Keep those implementation details out of individual screens: these
+ * selectors translate them to the active palette's semantic tokens in one
+ * place. This covers ordinary pages, lazy-loaded screens, dialogs, tables,
+ * cards, inputs, and the persistent navigation shell alike.
+ */
+:root[data-theme]:not(.dark) .bg-zinc-950,
+:root[data-theme]:not(.dark) .bg-zinc-950\/60,
+:root[data-theme]:not(.dark) .bg-zinc-950\/70,
+:root[data-theme]:not(.dark) .bg-zinc-950\/75,
+:root[data-theme]:not(.dark) .bg-zinc-950\/80,
+:root[data-theme]:not(.dark) .bg-zinc-950\/90,
+:root[data-theme]:not(.dark) .bg-zinc-900,
+:root[data-theme]:not(.dark) .bg-zinc-900\/30,
+:root[data-theme]:not(.dark) .bg-zinc-900\/40,
+:root[data-theme]:not(.dark) .bg-zinc-900\/50,
+:root[data-theme]:not(.dark) .bg-zinc-900\/60,
+:root[data-theme]:not(.dark) .bg-zinc-900\/70,
+:root[data-theme]:not(.dark) .bg-zinc-900\/80,
+:root[data-theme]:not(.dark) .bg-zinc-900\/90,
+:root[data-theme]:not(.dark) .bg-white {
+  background-color: var(--theme-surface) !important;
+}
+
+:root[data-theme]:not(.dark) .bg-zinc-800,
+:root[data-theme]:not(.dark) .bg-zinc-800\/50,
+:root[data-theme]:not(.dark) .bg-zinc-800\/60,
+:root[data-theme]:not(.dark) .bg-zinc-800\/80,
+:root[data-theme]:not(.dark) .bg-slate-50,
+:root[data-theme]:not(.dark) .bg-slate-100,
+:root[data-theme]:not(.dark) .bg-slate-100\/90 {
+  background-color: var(--theme-raised) !important;
+}
+
+:root[data-theme]:not(.dark) .bg-slate-200,
+:root[data-theme]:not(.dark) .bg-slate-200\/70,
+:root[data-theme]:not(.dark) .bg-zinc-100,
+:root[data-theme]:not(.dark) .bg-zinc-200 {
+  background-color: var(--theme-inset) !important;
+}
+
+:root[data-theme]:not(.dark) .border-zinc-950,
+:root[data-theme]:not(.dark) .border-zinc-900,
+:root[data-theme]:not(.dark) .border-zinc-800,
+:root[data-theme]:not(.dark) .border-zinc-800\/80,
+:root[data-theme]:not(.dark) .border-zinc-800\/60,
+:root[data-theme]:not(.dark) .border-zinc-700,
+:root[data-theme]:not(.dark) .border-zinc-700\/60,
+:root[data-theme]:not(.dark) .border-zinc-700\/80,
+:root[data-theme]:not(.dark) .border-zinc-300,
+:root[data-theme]:not(.dark) .border-slate-300,
+:root[data-theme]:not(.dark) .border-slate-200 {
+  border-color: var(--theme-border) !important;
+}
+
+:root[data-theme]:not(.dark) .text-zinc-50,
+:root[data-theme]:not(.dark) .text-zinc-100,
+:root[data-theme]:not(.dark) .text-zinc-200,
+:root[data-theme]:not(.dark) .text-zinc-300,
+:root[data-theme]:not(.dark) .text-zinc-800,
+:root[data-theme]:not(.dark) .text-zinc-900,
+:root[data-theme]:not(.dark) .text-slate-950,
+:root[data-theme]:not(.dark) .text-slate-900,
+:root[data-theme]:not(.dark) .text-slate-800 {
+  color: var(--theme-text) !important;
+}
+
+:root[data-theme]:not(.dark) .text-zinc-400,
+:root[data-theme]:not(.dark) .text-zinc-500,
+:root[data-theme]:not(.dark) .text-zinc-600,
+:root[data-theme]:not(.dark) .text-zinc-700,
+:root[data-theme]:not(.dark) .text-slate-700,
+:root[data-theme]:not(.dark) .text-slate-600,
+:root[data-theme]:not(.dark) .text-slate-500,
+:root[data-theme]:not(.dark) .text-slate-400 {
+  color: var(--theme-muted) !important;
+}
+
+:root[data-theme]:not(.dark) .text-cyan-300,
+:root[data-theme]:not(.dark) .text-cyan-400,
+:root[data-theme]:not(.dark) .text-sky-600,
+:root[data-theme]:not(.dark) .text-sky-700 {
+  color: var(--theme-primary) !important;
+}
+
+/* A 100–200 Tailwind foreground is intentionally pale. That is useful on a
+   saturated dark surface but fails WCAG on a light document surface, so text
+   hues always resolve to the palette's tested foreground role. */
+:root[data-theme]:not(.dark) [class*="text-cyan-"],
+:root[data-theme]:not(.dark) [class*="text-sky-"],
+:root[data-theme]:not(.dark) [class*="text-blue-"] { color: var(--theme-primary) !important; }
+:root[data-theme]:not(.dark) [class*="text-indigo-"],
+:root[data-theme]:not(.dark) [class*="text-purple-"],
+:root[data-theme]:not(.dark) [class*="text-violet-"] { color: var(--theme-secondary) !important; }
+:root[data-theme]:not(.dark) [class*="text-emerald-"],
+:root[data-theme]:not(.dark) [class*="text-teal-"] { color: var(--theme-success) !important; }
+:root[data-theme]:not(.dark) [class*="text-amber-"],
+:root[data-theme]:not(.dark) [class*="text-orange-"] { color: var(--theme-warning) !important; }
+:root[data-theme]:not(.dark) [class*="text-red-"],
+:root[data-theme]:not(.dark) [class*="text-rose-"] { color: var(--theme-danger) !important; }
+
+:root[data-theme]:not(.dark) .text-indigo-300,
+:root[data-theme]:not(.dark) .text-indigo-400,
+:root[data-theme]:not(.dark) .text-purple-300,
+:root[data-theme]:not(.dark) .text-purple-400 {
+  color: var(--theme-secondary) !important;
+}
+
+:root[data-theme]:not(.dark) .text-emerald-300,
+:root[data-theme]:not(.dark) .text-emerald-400 { color: var(--theme-success) !important; }
+:root[data-theme]:not(.dark) .text-amber-300,
+:root[data-theme]:not(.dark) .text-amber-400 { color: var(--theme-warning) !important; }
+:root[data-theme]:not(.dark) .text-red-300,
+:root[data-theme]:not(.dark) .text-red-400,
+:root[data-theme]:not(.dark) .text-rose-300,
+:root[data-theme]:not(.dark) .text-rose-400 { color: var(--theme-danger) !important; }
+
+:root[data-theme]:not(.dark) .bg-cyan-500\/10,
+:root[data-theme]:not(.dark) .bg-cyan-500\/20,
+:root[data-theme]:not(.dark) .bg-cyan-600\/20,
+:root[data-theme]:not(.dark) .bg-cyan-400\/20,
+:root[data-theme]:not(.dark) .bg-sky-50 { background-color: var(--theme-info-tint) !important; }
+:root[data-theme]:not(.dark) .bg-emerald-500\/10,
+:root[data-theme]:not(.dark) .bg-emerald-500\/20 { background-color: var(--theme-success-tint) !important; }
+:root[data-theme]:not(.dark) .bg-amber-500\/10,
+:root[data-theme]:not(.dark) .bg-amber-500\/20 { background-color: var(--theme-warning-tint) !important; }
+:root[data-theme]:not(.dark) .bg-red-500\/10,
+:root[data-theme]:not(.dark) .bg-red-500\/20,
+:root[data-theme]:not(.dark) .bg-rose-500\/10 { background-color: var(--theme-danger-tint) !important; }
+
+:root[data-theme]:not(.dark) .hover\:bg-zinc-900:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-900\/80:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-800:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-800\/80:hover,
+:root[data-theme]:not(.dark) .hover\:bg-slate-200:hover,
+:root[data-theme]:not(.dark) .hover\:bg-slate-200\/70:hover,
+:root[data-theme]:not(.dark) .hover\:bg-zinc-100:hover {
+  background-color: var(--theme-inset) !important;
+}
+
+:root[data-theme]:not(.dark) input,
+:root[data-theme]:not(.dark) textarea,
+:root[data-theme]:not(.dark) select {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+}
+
+:root[data-theme]:not(.dark) .from-zinc-900 { --tw-gradient-from: var(--theme-gradient-start) var(--tw-gradient-from-position) !important; --tw-gradient-to: color-mix(in srgb, var(--theme-gradient-start) 0%, transparent) var(--tw-gradient-to-position) !important; }
+:root[data-theme]:not(.dark) .via-zinc-900 { --tw-gradient-via: var(--theme-gradient-middle) var(--tw-gradient-via-position) !important; }
+:root[data-theme]:not(.dark) .to-zinc-900 { --tw-gradient-to: var(--theme-gradient-end) var(--tw-gradient-to-position) !important; }
+
+:root[data-theme="optum"]:not(.dark) aside.bg-slate-50 {
+  background-color: var(--theme-raised) !important;
+}
+
+/* Dark-mode counterpart to the shared bridge above. Tailwind emits `dark:`
+   classes as literal class names, so attribute selectors keep those variants
+   on the same semantic palette instead of falling back to fixed Zinc shades. */
+:root[data-theme].dark .bg-zinc-950,
+:root[data-theme].dark .bg-zinc-950\/60,
+:root[data-theme].dark .bg-zinc-950\/70,
+:root[data-theme].dark .bg-zinc-950\/75,
+:root[data-theme].dark .bg-zinc-950\/80,
+:root[data-theme].dark .bg-zinc-950\/90 { background-color: var(--theme-inset) !important; }
+:root[data-theme].dark .bg-zinc-900,
+:root[data-theme].dark .bg-zinc-900\/30,
+:root[data-theme].dark .bg-zinc-900\/40,
+:root[data-theme].dark .bg-zinc-900\/50,
+:root[data-theme].dark .bg-zinc-900\/60,
+:root[data-theme].dark .bg-zinc-900\/70,
+:root[data-theme].dark .bg-zinc-900\/80,
+:root[data-theme].dark .bg-zinc-900\/90 { background-color: var(--theme-surface) !important; }
+:root[data-theme].dark .bg-zinc-800,
+:root[data-theme].dark .bg-zinc-800\/50,
+:root[data-theme].dark .bg-zinc-800\/60,
+:root[data-theme].dark .bg-zinc-800\/80 { background-color: var(--theme-raised) !important; }
+:root[data-theme].dark .border-zinc-800,
+:root[data-theme].dark .border-zinc-800\/80,
+:root[data-theme].dark .border-zinc-700,
+:root[data-theme].dark .border-zinc-700\/60 { border-color: var(--theme-border) !important; }
+:root[data-theme].dark .text-zinc-50,
+:root[data-theme].dark .text-zinc-100,
+:root[data-theme].dark .text-zinc-200,
+:root[data-theme].dark .text-zinc-300 { color: var(--theme-text) !important; }
+:root[data-theme].dark .text-zinc-400,
+:root[data-theme].dark .text-zinc-500,
+:root[data-theme].dark .text-zinc-600 { color: var(--theme-muted) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-950"] { background-color: var(--theme-inset) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-900"] { background-color: var(--theme-surface) !important; }
+:root[data-theme].dark [class*="dark:bg-zinc-800"] { background-color: var(--theme-raised) !important; }
+:root[data-theme].dark [class*="dark:bg-slate-"] { background-color: var(--theme-raised) !important; }
+
+:root[data-theme].dark [class*="dark:border-zinc-"],
+:root[data-theme].dark [class*="dark:border-slate-"] { border-color: var(--theme-border) !important; }
+
+:root[data-theme].dark [class*="dark:text-zinc-100"],
+:root[data-theme].dark [class*="dark:text-zinc-200"],
+:root[data-theme].dark [class*="dark:text-zinc-300"],
+:root[data-theme].dark [class*="dark:text-zinc-50"],
+:root[data-theme].dark [class*="dark:text-white"] { color: var(--theme-text) !important; }
+
+:root[data-theme].dark [class*="dark:text-zinc-400"],
+:root[data-theme].dark [class*="dark:text-zinc-500"],
+:root[data-theme].dark [class*="dark:text-zinc-600"] { color: var(--theme-muted) !important; }
+
+:root[data-theme].dark [class*="dark:text-cyan-"],
+:root[data-theme].dark [class*="dark:text-sky-"] { color: var(--theme-primary) !important; }
+:root[data-theme].dark [class*="dark:text-indigo-"],
+:root[data-theme].dark [class*="dark:text-purple-"] { color: var(--theme-secondary) !important; }
+:root[data-theme].dark [class*="dark:text-emerald-"] { color: var(--theme-success) !important; }
+:root[data-theme].dark [class*="dark:text-amber-"] { color: var(--theme-warning) !important; }
+:root[data-theme].dark [class*="dark:text-rose-"],
+:root[data-theme].dark [class*="dark:text-red-"] { color: var(--theme-danger) !important; }
+
+:root[data-theme].dark [class*="text-cyan-"],
+:root[data-theme].dark [class*="text-sky-"],
+:root[data-theme].dark [class*="text-blue-"] { color: var(--theme-primary) !important; }
+:root[data-theme].dark [class*="text-indigo-"],
+:root[data-theme].dark [class*="text-purple-"],
+:root[data-theme].dark [class*="text-violet-"] { color: var(--theme-secondary) !important; }
+:root[data-theme].dark [class*="text-emerald-"],
+:root[data-theme].dark [class*="text-teal-"] { color: var(--theme-success) !important; }
+:root[data-theme].dark [class*="text-amber-"],
+:root[data-theme].dark [class*="text-orange-"] { color: var(--theme-warning) !important; }
+:root[data-theme].dark [class*="text-red-"],
+:root[data-theme].dark [class*="text-rose-"] { color: var(--theme-danger) !important; }
+
+/* Orange is a restrained emphasis colour: never the primary action or a
+   warning substitute. It marks high-value calls to action and small visual
+   moments such as the active palette indicator. */
+:root[data-theme]:not(.dark) [class*="text-orange-"] { color: var(--theme-warm-text) !important; }
+:root[data-theme].dark [class*="text-orange-"] { color: var(--theme-warm-text) !important; }
+:root[data-theme] .bg-amber-300,
+:root[data-theme] .bg-amber-400,
+:root[data-theme] .bg-orange-500,
+:root[data-theme] .bg-orange-600 { background-color: var(--theme-warm) !important; color: var(--theme-warm-foreground) !important; }
+:root[data-theme] :is(.bg-amber-300, .bg-amber-400, .bg-orange-500, .bg-orange-600) [class*="text-"] { color: var(--theme-warm-foreground) !important; }
+
+:root[data-theme].dark [class*="dark:hover:bg-zinc-900"]:hover,
+:root[data-theme].dark [class*="dark:hover:bg-zinc-800"]:hover,
+:root[data-theme].dark [class*="dark:hover:bg-zinc-700"]:hover { background-color: var(--theme-raised) !important; }
+
+:root[data-theme].dark input,
+:root[data-theme].dark textarea,
+:root[data-theme].dark select {
+  background-color: var(--theme-inset) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+}

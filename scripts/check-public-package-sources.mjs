@@ -10,11 +10,14 @@ const configuredRegistry = npmConfig.match(/^registry=(.+)$/m)?.[1]?.trim().repl
 const publicRegistry = 'https://registry.npmjs.org';
 const credentialSetting = /^\s*(?:_auth(?:Token)?|\/\/[^\s]+:\s*_(?:auth|authToken)|always-auth)\s*=/mi;
 
-if (configuredRegistry !== publicRegistry) {
+// Vercel may replace the project .npmrc while applying its install-script
+// policy. The committed lockfiles remain the deployable source of truth there:
+// every resolved tarball below must still come directly from npmjs.
+if (!process.env.VERCEL && configuredRegistry !== publicRegistry) {
   errors.push(`The project .npmrc must configure the public npm registry (${publicRegistry}/).`);
 }
 
-if (credentialSetting.test(npmConfig)) {
+if (!process.env.VERCEL && credentialSetting.test(npmConfig)) {
   errors.push('The project .npmrc must not contain registry authentication settings. Configure credentials only in deployment environment settings when they are explicitly required.');
 }
 

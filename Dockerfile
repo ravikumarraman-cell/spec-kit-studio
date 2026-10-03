@@ -1,15 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# Build with BuildKit when the package registry requires credentials:
-# docker build --secret id=npmrc,src=/path/to/credentialed/.npmrc -t spec-kit-studio .
+# Dependencies are installed exclusively from the public npm registry.
 FROM node:22.6.0-bookworm-slim AS build
 
 WORKDIR /app
 
-# The committed project .npmrc selects the approved registry. A BuildKit
-# secret may add credentials at build time; it is never copied into an image
-# layer or the runtime stage.
+# The committed project .npmrc pins installs to the public npm registry.
 COPY package.json package-lock.json .npmrc ./
-RUN --mount=type=secret,id=npmrc,required=false,target=/root/.npmrc npm ci
+RUN npm ci
 
 COPY . ./
 RUN npm run build && npm prune --omit=dev

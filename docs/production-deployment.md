@@ -12,23 +12,19 @@ assets, runs as the unprivileged `node` user, and exposes an unauthenticated
 `GET /api/health` probe. The health response contains public deployment
 posture only; it does not return secrets, identity claims, or repository data.
 
-Build with Docker BuildKit. If the approved package registry requires
-credentials, pass a credentialed npm configuration as a build secret; do not
-copy a token into the image or use a build argument for it.
+Build the image with the committed public npm registry configuration. No
+registry credential or build secret is required.
 
 ```bash
-DOCKER_BUILDKIT=1 docker build \
-  --secret id=npmrc,src=/absolute/path/to/credentialed/.npmrc \
-  --tag spec-kit-studio:local .
+docker build --tag spec-kit-studio:local .
 
 docker run --rm --init -p 3000:3000 \
   --env-file /absolute/path/to/production.env \
   spec-kit-studio:local
 ```
 
-For a registry that does not require credentials, omit the `--secret` option.
-The repository `.npmrc` selects the approved dependency source but contains no
-credential.
+The repository `.npmrc` pins all dependency installs to the public npm
+registry and contains no credential.
 
 Use `/api/health` for container readiness and liveness. Terminate TLS at the
 ingress/load balancer and expose the service only through that trusted edge.
